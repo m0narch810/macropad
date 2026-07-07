@@ -1,0 +1,67 @@
+export async function fetchYahooPrice(symbol: string): Promise<{ price: number | null; prevClose: number | null }> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`;
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  if (!res.ok) return { price: null, prevClose: null };
+  const data = await res.json();
+  const meta = data?.chart?.result?.[0]?.meta;
+  if (!meta) return { price: null, prevClose: null };
+  return {
+    price: meta.regularMarketPrice ?? null,
+    prevClose: meta.chartPreviousClose ?? meta.previousClose ?? null,
+  };
+}
+
+export interface YahooSeries {
+  timestamps: number[];
+  closes: (number | null)[];
+}
+
+/** Weekly closes over `range` (e.g. "2y"), chronological (oldest -> newest). */
+export async function fetchYahooHistory(symbol: string, range = "2y"): Promise<YahooSeries> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=1wk`;
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  if (!res.ok) return { timestamps: [], closes: [] };
+  const data = await res.json();
+  const result = data?.chart?.result?.[0];
+  if (!result) return { timestamps: [], closes: [] };
+  return {
+    timestamps: result.timestamp ?? [],
+    closes: result.indicators?.quote?.[0]?.close ?? [],
+  };
+}
+
+/** Align two weekly series by nearest timestamp and divide a/b, chronological. */
+export function ratioSeries(a: YahooSeries, b: YahooSeries): number[] {
+  const bByWeek = new Map<number, number>();
+  b.timestamps.forEach((t, i) => {
+    const close = b.closes[i];
+    if (close !== null) bByWeek.set(Math.round(t / 86400), close);
+  });
+  const out: number[] = [];
+  a.timestamps.forEach((t, i) => {
+    const aClose = a.closes[i];
+    const bClose = bByWeek.get(Math.round(t / 86400));
+    if (aClose !== null && bClose) out.push(aClose / bClose);
+  });
+  return out;
+}
+
+export async function fetchYahooHeadline(symbol: string): Promise<string | null> {
+  const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US`;
+  const res = await fetch(url, {
+    cache: "no-store",
+    headers: { "User-Agent": "Mozilla/5.0" },
+  });
+  if (!res.ok) return null;
+  const xml = await res.text();
+  const itemMatch = xml.match(/<item>([\s\S]*?)<\/item>/);
+  if (!itemMatch) return null;
+  const titleMatch = itemMatch[1].match(/<title>([\s\S]*?)<\/title>/);
+  return titleMatch ? titleMatch[1].replace(/^<!\[CDATA\[(.*)\]\]>$/, "$1").trim() : null;
+}

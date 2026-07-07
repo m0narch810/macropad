@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabase";
-import { macroPanels, type MacroPanel, type SeriesStatus, type HistoryPoint, type ExtraStat } from "@/lib/macroData";
+import { macroPanels, type MacroPanel, type SeriesStatus, type HistoryPoint, type ExtraStat, type NewsHeadlinePayload } from "@/lib/macroData";
 
 interface DbRow {
   id: string;
@@ -11,6 +11,7 @@ interface DbRow {
   window_label: string | null;
   history: HistoryPoint[] | null;
   extra_stats: ExtraStat[] | null;
+  payload: { headlines: NewsHeadlinePayload[] } | null;
   updated_at: string;
 }
 
@@ -21,7 +22,7 @@ export async function getPanels(): Promise<{ panels: MacroPanel[]; lastUpdated: 
 
   const { data, error } = await supabase
     .from("macro_series")
-    .select("id, value, status, note, zscore, sparkline, window_label, history, extra_stats, updated_at");
+    .select("id, value, status, note, zscore, sparkline, window_label, history, extra_stats, payload, updated_at");
 
   if (error || !data) {
     return { panels: macroPanels, lastUpdated: null };
@@ -46,6 +47,7 @@ export async function getPanels(): Promise<{ panels: MacroPanel[]; lastUpdated: 
         windowLabel: row.window_label,
         history: row.history,
         extraStats: row.extra_stats,
+        payload: row.payload,
       };
     }),
   }));

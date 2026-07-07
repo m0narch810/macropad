@@ -83,15 +83,17 @@ export default function TopologyGraph({ panels, markets }: { panels: MacroPanel[
         });
         linkList.push({ source: `panel:${panel.id}`, target: s.id, r: null, kind: "panel-membership" });
 
-        const link = MARKET_LINKS[s.id];
-        if (link) {
-          const marketId = `market:${link.symbol}`;
-          const market = marketById.get(marketId);
-          if (market && market.history) {
-            usedMarketIds.add(marketId);
-            const aligned = alignByDate(s.history, market.history, 6);
-            const r = pearson(aligned.a, aligned.b);
-            linkList.push({ source: s.id, target: marketId, r, kind: "market-link" });
+        const links = MARKET_LINKS[s.id];
+        if (links) {
+          for (const link of links) {
+            const marketId = `market:${link.symbol}`;
+            const market = marketById.get(marketId);
+            if (market && market.history) {
+              usedMarketIds.add(marketId);
+              const aligned = alignByDate(s.history, market.history, 6);
+              const r = pearson(aligned.a, aligned.b);
+              linkList.push({ source: s.id, target: marketId, r, kind: "market-link" });
+            }
           }
         }
       }

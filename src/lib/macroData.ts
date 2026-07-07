@@ -16,6 +16,15 @@ export interface ExtraStat {
   windowLabel?: string;
 }
 
+export interface NewsHeadlinePayload {
+  title: string;
+  link: string | null;
+  pubDate: string;
+  source: string;
+  sentimentScore: number;
+  sentimentLabel: "bullish" | "bearish" | "neutral";
+}
+
 export interface MacroSeries {
   id: string;
   name: string;
@@ -27,6 +36,8 @@ export interface MacroSeries {
   windowLabel: string | null;
   history: HistoryPoint[] | null;
   extraStats: ExtraStat[] | null;
+  /** Arbitrary structured payload for non-timeseries content — currently just the news feed's headline list. */
+  payload: { headlines: NewsHeadlinePayload[] } | null;
   source: string;
 }
 
@@ -53,6 +64,7 @@ const blank = (
   windowLabel: null,
   history: null,
   extraStats: null,
+  payload: null,
   source,
 });
 
@@ -72,6 +84,13 @@ export const macroPanels: MacroPanel[] = [
       blank("us-macro:10y-yield", "10y Treasury Yield", "Benchmark long rate", "FRED DGS10"),
       blank("us-macro:industrial-production", "Industrial Production", "Index, 2017=100", "FRED INDPRO"),
       blank("us-macro:consumer-sentiment", "Consumer Sentiment", "U. Michigan index", "FRED UMCSENT"),
+      blank("us-macro:core-pce", "Core PCE Inflation (YoY)", "The Fed's actual preferred inflation gauge", "FRED PCEPILFE"),
+      blank("us-macro:core-cpi", "Core CPI Inflation (YoY)", "CPI ex food & energy", "FRED CPILFESL"),
+      blank("us-macro:jobless-claims", "Initial Jobless Claims", "Weekly layoffs, real-time labor read", "FRED ICSA"),
+      blank("us-macro:gdp", "Real GDP Growth", "QoQ annualized, headline growth", "FRED GDPC1"),
+      blank("us-macro:reverse-repo", "Reverse Repo (ON RRP)", "Fed liquidity-absorption facility", "FRED RRPONTSYD"),
+      blank("us-macro:retail-sales", "Retail Sales (YoY)", "Consumer spending, hard data", "FRED RSAFS"),
+      blank("us-macro:housing-starts", "Housing Starts (YoY)", "Residential construction, cyclical leader", "FRED HOUST"),
     ],
   },
   {
@@ -93,31 +112,40 @@ export const macroPanels: MacroPanel[] = [
   {
     id: "cot-positioning",
     title: "COT Positioning",
-    description: "Net non-commercial positioning across asset classes.",
+    description: "Net non-commercial (speculative) positioning across equities, rates, and commodities.",
     series: [
-      blank("cot:equities", "Equities (NQ / ES Futures)", "Net non-commercial position", "CFTC Legacy COT"),
+      blank("cot:es", "S&P 500 Futures COT", "Net non-commercial position, ES", "CFTC Legacy COT"),
+      blank("cot:nq", "Nasdaq-100 Futures COT", "Net non-commercial position, NQ", "CFTC Legacy COT"),
       blank("cot:treasury", "Treasury (10y, 2y)", "Net non-commercial position", "CFTC Legacy COT"),
       blank("cot:commodities-dxy", "Dollar Index (DXY)", "Net non-commercial position", "CFTC Legacy COT"),
+      blank("cot:gold", "Gold Futures COT", "Net non-commercial position", "CFTC Legacy COT"),
+      blank("cot:crude", "Crude Oil Futures COT", "Net non-commercial position", "CFTC Legacy COT"),
+      blank("cot:silver", "Silver Futures COT", "Net non-commercial position", "CFTC Legacy COT"),
     ],
   },
   {
     id: "transmission",
     title: "Transmission Check",
-    description: "Growth and risk-appetite proxies through commodity ratios.",
+    description: "How growth, inflation, and liquidity impulses show up across commodity markets.",
     series: [
       blank("transmission:copper-crude", "Copper/Crude Ratio", "Growth vs. inflation proxy", "Yahoo Finance HG=F / CL=F"),
       blank("transmission:copper-gold", "Copper/Gold Ratio", "Risk appetite proxy, tracks 10y", "Yahoo Finance HG=F / GC=F"),
+      blank("transmission:gold-silver", "Gold/Silver Ratio", "Safe-haven vs. industrial demand mix", "Yahoo Finance GC=F / SI=F"),
+      blank("transmission:crude-natgas", "Crude/Natural Gas Ratio", "Energy substitution, demand destruction signal", "Yahoo Finance CL=F / NG=F"),
+      blank("transmission:silver", "Silver", "Industrial + monetary metal", "Yahoo Finance SI=F"),
+      blank("transmission:natgas", "Natural Gas", "Energy demand, heating/cooling cycles", "Yahoo Finance NG=F"),
       blank("transmission:walcl", "WALCL", "Fed balance sheet level", "FRED WALCL"),
     ],
   },
   {
     id: "geopolitics",
     title: "Geopolitics",
-    description: "Volatility complex and headline risk.",
+    description: "Volatility complex and headline risk across equities, oil, and gold.",
     series: [
+      blank("geo:vix", "VIX", "Equity volatility / fear gauge", "FRED VIXCLS"),
       blank("geo:ovx", "OVX", "Crude oil volatility index", "FRED OVXCLS"),
       blank("geo:gvz", "GVZ", "Gold volatility index", "FRED GVZCLS"),
-      blank("geo:news", "News Flow", "Latest S&P 500 headline", "Yahoo Finance headlines"),
+      blank("geo:news-feed", "News Sentiment Flow", "Recent market headlines, scored", "Yahoo Finance headlines, keyword sentiment"),
     ],
   },
 ];

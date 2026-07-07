@@ -18,7 +18,7 @@ const HORIZONS: { id: Horizon; label: string }[] = [
   { id: "monthly", label: "Monthly" },
 ];
 
-const DEEP_PANELS = new Set(["us-macro", "yield-rates"]);
+const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics"]);
 const TOPOLOGY_ID = "topology";
 const NET_BIAS_ID = "net-bias";
 

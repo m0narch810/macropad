@@ -35,8 +35,8 @@ export default function SeriesCard({
 }) {
   const hasChart = series.sparkline !== null && series.sparkline.length >= 5;
   const hasZ = series.zscore !== null;
-  const link = MARKET_LINKS[series.id];
-  const isRelevant = !assetFilter || link?.symbol === assetFilter;
+  const links = MARKET_LINKS[series.id];
+  const isRelevant = !assetFilter || (links?.some((l) => l.symbol === assetFilter) ?? false);
 
   return (
     <div

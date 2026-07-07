@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseServer";
 import { fetchFredHistory, statusFromDelta, fmt } from "@/lib/fred";
 import { fetchCftcNet, fetchCftcHistory, fetchCftcHistoryDated, fmtNet } from "@/lib/cftc";
-import { fetchYahooHistory, fetchYahooHeadline, ratioSeries } from "@/lib/yahoo";
+import { fetchYahooHistory, ratioSeries, ratioSeriesDated, toDatedSeries } from "@/lib/yahoo";
+import { fetchNewsFeed } from "@/lib/news";
 import {
   computeStats,
   lastValidPair,
@@ -13,6 +14,7 @@ import {
   annualizedChangeHistory,
   avgChangeHistory,
   subtractHistory,
+  movingAverage,
 } from "@/lib/stats";
 import type { ExtraStat } from "@/lib/macroData";
 import { MARKET_SYMBOLS, marketRowId } from "@/lib/markets";
@@ -32,6 +34,7 @@ interface UpsertRow {
   window_label: string | null;
   history?: { date: string; value: number }[] | null;
   extra_stats?: ExtraStat[] | null;
+  payload?: { headlines?: unknown[]; dailyHistory?: { date: string; value: number }[] } | null;
 }
 
 function toHistory(dates: string[], values: (number | null)[]): { date: string; value: number }[] {
@@ -101,7 +104,7 @@ export async function GET(req: NextRequest) {
       extra_stats: withHistory ? walclExtra : null,
     });
     rows.push(walclRow("us-macro:h41-balance-sheet", "us-macro", "H.4.1 Fed Balance Sheet", "Weekly, Fed H.4.1 release", true));
-    rows.push(walclRow("transmission:walcl", "transmission", "WALCL", "Fed balance sheet level", false));
+    rows.push(walclRow("transmission:walcl", "transmission", "WALCL", "Fed balance sheet level", true));
 
     // ---- Funding rate stack (SOFR / EFFR / IORB) ----
     const [sofrHist, effrHist, iorbHist] = await Promise.all([
@@ -481,6 +484,179 @@ export async function GET(req: NextRequest) {
       ],
     });
 
+    // ---- Core PCE inflation, YoY (Fed's actual preferred gauge) ----
+    const corePceHist = await fetchFredHistory("PCEPILFE", fredKey, 240);
+    const corePceYoy: { date: string; value: number }[] = [];
+    for (let i = 12; i < corePceHist.length; i++) {
+      const cur = corePceHist[i].value;
+      const prior = corePceHist[i - 12].value;
+      if (cur !== null && prior !== null && prior !== 0) {
+        corePceYoy.push({ date: corePceHist[i].date, value: ((cur / prior) - 1) * 100 });
+      }
+    }
+    const corePceStats = computeStats(corePceYoy.map((p): number | null => p.value));
+    const [corePceLatest, corePcePrev] = lastValidPair(corePceYoy.map((p): number | null => p.value));
+    rows.push({
+      id: "us-macro:core-pce",
+      panel_id: "us-macro",
+      name: "Core PCE Inflation (YoY)",
+      note: "The Fed's actual preferred inflation gauge",
+      value: fmt(corePceLatest, { suffix: "%" }),
+      status: statusFromDelta(corePceLatest, corePcePrev),
+      source: "FRED PCEPILFE (derived YoY)",
+      zscore: corePceStats.zscore,
+      sparkline: corePceStats.sparkline,
+      window_label: "15y monthly",
+      history: corePceYoy,
+    });
+
+    // ---- Core CPI inflation, YoY ----
+    const coreCpiHist = await fetchFredHistory("CPILFESL", fredKey, 240);
+    const coreCpiYoy: { date: string; value: number }[] = [];
+    for (let i = 12; i < coreCpiHist.length; i++) {
+      const cur = coreCpiHist[i].value;
+      const prior = coreCpiHist[i - 12].value;
+      if (cur !== null && prior !== null && prior !== 0) {
+        coreCpiYoy.push({ date: coreCpiHist[i].date, value: ((cur / prior) - 1) * 100 });
+      }
+    }
+    const coreCpiStats = computeStats(coreCpiYoy.map((p): number | null => p.value));
+    const [coreCpiLatest, coreCpiPrev] = lastValidPair(coreCpiYoy.map((p): number | null => p.value));
+    rows.push({
+      id: "us-macro:core-cpi",
+      panel_id: "us-macro",
+      name: "Core CPI Inflation (YoY)",
+      note: "CPI ex food & energy",
+      value: fmt(coreCpiLatest, { suffix: "%" }),
+      status: statusFromDelta(coreCpiLatest, coreCpiPrev),
+      source: "FRED CPILFESL (derived YoY)",
+      zscore: coreCpiStats.zscore,
+      sparkline: coreCpiStats.sparkline,
+      window_label: "15y monthly",
+      history: coreCpiYoy,
+    });
+
+    // ---- Initial jobless claims (weekly, real-time labor read) ----
+    const icsaHist = await fetchFredHistory("ICSA", fredKey, 260);
+    const icsaNums = icsaHist.map((p) => p.value);
+    const icsaStats = computeStats(icsaNums);
+    const [icsaLatest, icsaPrev] = lastValidPair(icsaNums);
+    const icsaHistoryPts = toHistory(icsaHist.map((p) => p.date), icsaNums);
+    const icsa4wAvgHist = movingAverage(icsaNums, 4)
+      .map((v, i) => (v === null ? null : { date: icsaHist[i].date, value: v }))
+      .filter((p): p is { date: string; value: number } => p !== null);
+    const icsa4wAvgStats = computeStats(icsa4wAvgHist.map((p) => p.value));
+    rows.push({
+      id: "us-macro:jobless-claims",
+      panel_id: "us-macro",
+      name: "Initial Jobless Claims",
+      note: "Weekly layoffs, real-time labor read",
+      value: fmt(icsaLatest, { decimals: 0 }),
+      status: statusFromDelta(icsaLatest, icsaPrev),
+      source: "FRED ICSA",
+      zscore: icsaStats.zscore,
+      sparkline: icsaStats.sparkline,
+      window_label: "5y weekly",
+      history: icsaHistoryPts,
+      extra_stats: [
+        {
+          label: "4-week average",
+          value: icsa4wAvgHist.length ? icsa4wAvgHist[icsa4wAvgHist.length - 1].value.toFixed(0) : "—",
+          caption: "Smooths single-week noise (holidays, weather) — the standard way claims is actually read.",
+          history: icsa4wAvgHist,
+          zscore: icsa4wAvgStats.zscore,
+          windowLabel: "5y weekly",
+        },
+      ],
+    });
+
+    // ---- Real GDP growth, QoQ annualized ----
+    const gdpHist = await fetchFredHistory("GDPC1", fredKey, 120);
+    const gdpQoqAnn: { date: string; value: number }[] = [];
+    for (let i = 1; i < gdpHist.length; i++) {
+      const cur = gdpHist[i].value;
+      const prior = gdpHist[i - 1].value;
+      if (cur !== null && prior !== null && prior !== 0) {
+        gdpQoqAnn.push({ date: gdpHist[i].date, value: (Math.pow(cur / prior, 4) - 1) * 100 });
+      }
+    }
+    const gdpStats = computeStats(gdpQoqAnn.map((p): number | null => p.value));
+    const [gdpLatest, gdpPrev] = lastValidPair(gdpQoqAnn.map((p): number | null => p.value));
+    rows.push({
+      id: "us-macro:gdp",
+      panel_id: "us-macro",
+      name: "Real GDP Growth",
+      note: "QoQ annualized, headline growth",
+      value: fmt(gdpLatest, { suffix: "%" }),
+      status: statusFromDelta(gdpLatest, gdpPrev),
+      source: "FRED GDPC1 (derived QoQ annualized)",
+      zscore: gdpStats.zscore,
+      sparkline: gdpStats.sparkline,
+      window_label: "30y quarterly",
+      history: gdpQoqAnn,
+    });
+
+    // ---- Reverse repo (Fed liquidity-absorption facility) ----
+    const rrpHist = await fetchFredHistory("RRPONTSYD", fredKey, 750);
+    const rrpNums = rrpHist.map((p) => p.value);
+    const rrpStats = computeStats(rrpNums);
+    const [rrpLatest, rrpPrev] = lastValidPair(rrpNums);
+    rows.push({
+      id: "us-macro:reverse-repo",
+      panel_id: "us-macro",
+      name: "Reverse Repo (ON RRP)",
+      note: "Fed liquidity-absorption facility",
+      value: fmt(rrpLatest, { decimals: 0, suffix: "B" }),
+      status: statusFromDelta(rrpLatest, rrpPrev),
+      source: "FRED RRPONTSYD",
+      zscore: rrpStats.zscore,
+      sparkline: rrpStats.sparkline,
+      window_label: "3y daily",
+      history: toHistory(rrpHist.map((p) => p.date), rrpNums),
+    });
+
+    // ---- Retail sales, YoY ----
+    const retailHist = await fetchFredHistory("RSAFS", fredKey, 240);
+    const retailNums = retailHist.map((p) => p.value);
+    const retailYoy = annualizedChange(retailNums, 12);
+    const retailHistoryPts = toHistory(retailHist.map((p) => p.date), retailNums);
+    const retailYoyHist = annualizedChangeHistory(retailHistoryPts, 12);
+    const retailYoyStats = computeStats(retailYoyHist.map((p) => p.value));
+    rows.push({
+      id: "us-macro:retail-sales",
+      panel_id: "us-macro",
+      name: "Retail Sales (YoY)",
+      note: "Consumer spending, hard data",
+      value: retailYoy === null ? "—" : `${retailYoy > 0 ? "+" : ""}${retailYoy.toFixed(1)}%`,
+      status: statusFromDelta(retailYoy, annualizedChange(retailNums.slice(0, -1), 12)),
+      source: "FRED RSAFS (derived YoY)",
+      zscore: retailYoyStats.zscore,
+      sparkline: retailYoyStats.sparkline,
+      window_label: "20y monthly",
+      history: retailYoyHist,
+    });
+
+    // ---- Housing starts, YoY ----
+    const houstHist = await fetchFredHistory("HOUST", fredKey, 240);
+    const houstNums = houstHist.map((p) => p.value);
+    const houstYoy = annualizedChange(houstNums, 12);
+    const houstHistoryPts = toHistory(houstHist.map((p) => p.date), houstNums);
+    const houstYoyHist = annualizedChangeHistory(houstHistoryPts, 12);
+    const houstYoyStats = computeStats(houstYoyHist.map((p) => p.value));
+    rows.push({
+      id: "us-macro:housing-starts",
+      panel_id: "us-macro",
+      name: "Housing Starts (YoY)",
+      note: "Residential construction, cyclical leader",
+      value: houstYoy === null ? "—" : `${houstYoy > 0 ? "+" : ""}${houstYoy.toFixed(1)}%`,
+      status: statusFromDelta(houstYoy, annualizedChange(houstNums.slice(0, -1), 12)),
+      source: "FRED HOUST (derived YoY)",
+      zscore: houstYoyStats.zscore,
+      sparkline: houstYoyStats.sparkline,
+      window_label: "20y monthly",
+      history: houstYoyHist,
+    });
+
     // ---- 10y-2y spread ----
     const t10y2yHist = await fetchFredHistory("T10Y2Y", fredKey, 750);
     const t10y2yNums = t10y2yHist.map((p) => p.value);
@@ -678,30 +854,45 @@ export async function GET(req: NextRequest) {
       ],
     });
 
-    // ---- CFTC COT: equities (ES + NQ combined) ----
-    const [esNet, nqNet, esHist, nqHist] = await Promise.all([
+    // ---- CFTC COT: equities, ES and NQ as their own cards ----
+    const [esNet, nqNet, esHist, nqHist, esHistDated, nqHistDated] = await Promise.all([
       fetchCftcNet("E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE"),
       fetchCftcNet("NASDAQ-100 STOCK INDEX (MINI) - CHICAGO MERCANTILE EXCHANGE"),
       fetchCftcHistory("E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE"),
       fetchCftcHistory("NASDAQ-100 STOCK INDEX (MINI) - CHICAGO MERCANTILE EXCHANGE"),
+      fetchCftcHistoryDated("E-MINI S&P 500 - CHICAGO MERCANTILE EXCHANGE", 208),
+      fetchCftcHistoryDated("NASDAQ-100 STOCK INDEX (MINI) - CHICAGO MERCANTILE EXCHANGE", 208),
     ]);
-    if (esNet.net !== null || nqNet.net !== null) {
-      const netNow = (esNet.net ?? 0) + (nqNet.net ?? 0);
-      const netPrev = (esNet.prevNet ?? 0) + (nqNet.prevNet ?? 0);
-      const len = Math.min(esHist.length, nqHist.length);
-      const combined = Array.from({ length: len }, (_, i) => esHist[esHist.length - len + i] + nqHist[nqHist.length - len + i]);
-      const stats = computeStats(combined);
+    if (esNet.net !== null) {
+      const stats = computeStats(esHist);
       rows.push({
-        id: "cot:equities",
+        id: "cot:es",
         panel_id: "cot-positioning",
-        name: "Equities (NQ / ES Futures)",
-        note: "Net non-commercial position",
-        value: fmtNet(netNow),
-        status: statusFromDelta(netNow, netPrev),
+        name: "S&P 500 Futures COT",
+        note: "Net non-commercial position, ES",
+        value: fmtNet(esNet.net),
+        status: statusFromDelta(esNet.net, esNet.prevNet),
         source: "CFTC Legacy COT",
         zscore: stats.zscore,
         sparkline: stats.sparkline,
-        window_label: "2y weekly",
+        window_label: "4y weekly",
+        history: esHistDated,
+      });
+    }
+    if (nqNet.net !== null) {
+      const stats = computeStats(nqHist);
+      rows.push({
+        id: "cot:nq",
+        panel_id: "cot-positioning",
+        name: "Nasdaq-100 Futures COT",
+        note: "Net non-commercial position, NQ",
+        value: fmtNet(nqNet.net),
+        status: statusFromDelta(nqNet.net, nqNet.prevNet),
+        source: "CFTC Legacy COT",
+        zscore: stats.zscore,
+        sparkline: stats.sparkline,
+        window_label: "4y weekly",
+        history: nqHistDated,
       });
     }
 
@@ -752,6 +943,11 @@ export async function GET(req: NextRequest) {
       const len = Math.min(t10yHist.length, t2yHist.length);
       const combined = Array.from({ length: len }, (_, i) => t10yHist[t10yHist.length - len + i] + t2yHist[t2yHist.length - len + i]);
       const stats = computeStats(combined);
+      const dateLen = Math.min(t10yHistDated.length, t2yHistDated.length);
+      const combinedDated = Array.from({ length: dateLen }, (_, i) => ({
+        date: t10yHistDated[t10yHistDated.length - dateLen + i].date,
+        value: t10yHistDated[t10yHistDated.length - dateLen + i].value + t2yHistDated[t2yHistDated.length - dateLen + i].value,
+      }));
       rows.push({
         id: "cot:treasury",
         panel_id: "cot-positioning",
@@ -762,15 +958,24 @@ export async function GET(req: NextRequest) {
         source: "CFTC Legacy COT",
         zscore: stats.zscore,
         sparkline: stats.sparkline,
-        window_label: "2y weekly",
+        window_label: "4y weekly",
+        history: combinedDated,
       });
     }
 
-    // ---- CFTC COT: DXY ----
-    const [dxyNet, dxyHist] = await Promise.all([
-      fetchCftcNet("U.S. DOLLAR INDEX - ICE FUTURES U.S."),
-      fetchCftcHistory("U.S. DOLLAR INDEX - ICE FUTURES U.S."),
-    ]);
+    // ---- CFTC COT: DXY, gold, crude, silver ----
+    const [dxyNet, dxyHist, dxyHistDated, goldNet, goldHistDated, crudeNet, crudeHistDated, silverNet, silverHistDated] =
+      await Promise.all([
+        fetchCftcNet("U.S. DOLLAR INDEX - ICE FUTURES U.S."),
+        fetchCftcHistory("U.S. DOLLAR INDEX - ICE FUTURES U.S."),
+        fetchCftcHistoryDated("U.S. DOLLAR INDEX - ICE FUTURES U.S.", 208),
+        fetchCftcNet("GOLD - COMMODITY EXCHANGE INC."),
+        fetchCftcHistoryDated("GOLD - COMMODITY EXCHANGE INC.", 208),
+        fetchCftcNet("CRUDE OIL, LIGHT SWEET - NEW YORK MERCANTILE EXCHANGE"),
+        fetchCftcHistoryDated("CRUDE OIL, LIGHT SWEET - NEW YORK MERCANTILE EXCHANGE", 208),
+        fetchCftcNet("SILVER - COMMODITY EXCHANGE INC."),
+        fetchCftcHistoryDated("SILVER - COMMODITY EXCHANGE INC.", 208),
+      ]);
     if (dxyNet.net !== null) {
       const stats = computeStats(dxyHist);
       rows.push({
@@ -783,12 +988,79 @@ export async function GET(req: NextRequest) {
         source: "CFTC Legacy COT",
         zscore: stats.zscore,
         sparkline: stats.sparkline,
-        window_label: "2y weekly",
+        window_label: "4y weekly",
+        history: dxyHistDated,
+      });
+    }
+    if (goldNet.net !== null) {
+      const stats = computeStats(goldHistDated.map((p) => p.value));
+      rows.push({
+        id: "cot:gold",
+        panel_id: "cot-positioning",
+        name: "Gold Futures COT",
+        note: "Net non-commercial position",
+        value: fmtNet(goldNet.net),
+        status: statusFromDelta(goldNet.net, goldNet.prevNet),
+        source: "CFTC Legacy COT",
+        zscore: stats.zscore,
+        sparkline: stats.sparkline,
+        window_label: "4y weekly",
+        history: goldHistDated,
+      });
+    }
+    if (crudeNet.net !== null) {
+      const stats = computeStats(crudeHistDated.map((p) => p.value));
+      rows.push({
+        id: "cot:crude",
+        panel_id: "cot-positioning",
+        name: "Crude Oil Futures COT",
+        note: "Net non-commercial position",
+        value: fmtNet(crudeNet.net),
+        status: statusFromDelta(crudeNet.net, crudeNet.prevNet),
+        source: "CFTC Legacy COT",
+        zscore: stats.zscore,
+        sparkline: stats.sparkline,
+        window_label: "4y weekly",
+        history: crudeHistDated,
+      });
+    }
+    if (silverNet.net !== null) {
+      const stats = computeStats(silverHistDated.map((p) => p.value));
+      rows.push({
+        id: "cot:silver",
+        panel_id: "cot-positioning",
+        name: "Silver Futures COT",
+        note: "Net non-commercial position",
+        value: fmtNet(silverNet.net),
+        status: statusFromDelta(silverNet.net, silverNet.prevNet),
+        source: "CFTC Legacy COT",
+        zscore: stats.zscore,
+        sparkline: stats.sparkline,
+        window_label: "4y weekly",
+        history: silverHistDated,
       });
     }
 
     // ---- CBOE vol indices via FRED ----
-    const ovxHist = await fetchFredHistory("OVXCLS", fredKey, 260);
+    const vixHist = await fetchFredHistory("VIXCLS", fredKey, 750);
+    const vixNums = vixHist.map((p) => p.value);
+    const vixStats = computeStats(vixNums);
+    const [vixLatest, vixPrev] = lastValidPair(vixNums);
+    rows.push({
+      id: "geo:vix",
+      panel_id: "geopolitics",
+      name: "VIX",
+      note: "Equity volatility / fear gauge",
+      value: fmt(vixLatest),
+      status: statusFromDelta(vixLatest, vixPrev),
+      source: "FRED VIXCLS",
+      zscore: vixStats.zscore,
+      sparkline: vixStats.sparkline,
+      window_label: "3y daily",
+      history: toHistory(vixHist.map((p) => p.date), vixNums),
+    });
+
+    const ovxHist = await fetchFredHistory("OVXCLS", fredKey, 750);
     const ovxNums = ovxHist.map((p) => p.value);
     const ovxStats = computeStats(ovxNums);
     const [ovxLatest, ovxPrev] = lastValidPair(ovxNums);
@@ -802,10 +1074,11 @@ export async function GET(req: NextRequest) {
       source: "FRED OVXCLS",
       zscore: ovxStats.zscore,
       sparkline: ovxStats.sparkline,
-      window_label: "1y daily",
+      window_label: "3y daily",
+      history: toHistory(ovxHist.map((p) => p.date), ovxNums),
     });
 
-    const gvzHist = await fetchFredHistory("GVZCLS", fredKey, 260);
+    const gvzHist = await fetchFredHistory("GVZCLS", fredKey, 750);
     const gvzNums = gvzHist.map((p) => p.value);
     const gvzStats = computeStats(gvzNums);
     const [gvzLatest, gvzPrev] = lastValidPair(gvzNums);
@@ -819,17 +1092,21 @@ export async function GET(req: NextRequest) {
       source: "FRED GVZCLS",
       zscore: gvzStats.zscore,
       sparkline: gvzStats.sparkline,
-      window_label: "1y daily",
+      window_label: "3y daily",
+      history: toHistory(gvzHist.map((p) => p.date), gvzNums),
     });
 
     // ---- Commodity ratios via Yahoo Finance ----
-    const [copperHist, crudeHist, goldHist] = await Promise.all([
+    const [copperHist, crudeHist, goldHist, silverHist, natGasHist] = await Promise.all([
       fetchYahooHistory("HG=F", "2y"),
       fetchYahooHistory("CL=F", "2y"),
       fetchYahooHistory("GC=F", "2y"),
+      fetchYahooHistory("SI=F", "2y"),
+      fetchYahooHistory("NG=F", "2y"),
     ]);
-    const copperCrude = ratioSeries(copperHist, crudeHist);
-    if (copperCrude.length > 0) {
+    const copperCrudeDated = ratioSeriesDated(copperHist, crudeHist);
+    if (copperCrudeDated.length > 0) {
+      const copperCrude = copperCrudeDated.map((p) => p.value);
       const stats = computeStats(copperCrude);
       rows.push({
         id: "transmission:copper-crude",
@@ -842,10 +1119,12 @@ export async function GET(req: NextRequest) {
         zscore: stats.zscore,
         sparkline: stats.sparkline,
         window_label: "2y weekly",
+        history: copperCrudeDated,
       });
     }
-    const copperGold = ratioSeries(copperHist, goldHist);
-    if (copperGold.length > 0) {
+    const copperGoldDated = ratioSeriesDated(copperHist, goldHist);
+    if (copperGoldDated.length > 0) {
+      const copperGold = copperGoldDated.map((p) => p.value);
       const stats = computeStats(copperGold);
       rows.push({
         id: "transmission:copper-gold",
@@ -858,17 +1137,95 @@ export async function GET(req: NextRequest) {
         zscore: stats.zscore,
         sparkline: stats.sparkline,
         window_label: "2y weekly",
+        history: copperGoldDated,
+      });
+    }
+    const goldSilverDated = ratioSeriesDated(goldHist, silverHist);
+    if (goldSilverDated.length > 0) {
+      const goldSilver = goldSilverDated.map((p) => p.value);
+      const stats = computeStats(goldSilver);
+      rows.push({
+        id: "transmission:gold-silver",
+        panel_id: "transmission",
+        name: "Gold/Silver Ratio",
+        note: "Safe-haven vs. industrial demand mix",
+        value: fmt(goldSilver[goldSilver.length - 1], { decimals: 2 }),
+        status: statusFromDelta(goldSilver[goldSilver.length - 1], goldSilver[goldSilver.length - 2] ?? null),
+        source: "Yahoo Finance GC=F / SI=F",
+        zscore: stats.zscore,
+        sparkline: stats.sparkline,
+        window_label: "2y weekly",
+        history: goldSilverDated,
+      });
+    }
+    const crudeNatGasDated = ratioSeriesDated(crudeHist, natGasHist);
+    if (crudeNatGasDated.length > 0) {
+      const crudeNatGas = crudeNatGasDated.map((p) => p.value);
+      const stats = computeStats(crudeNatGas);
+      rows.push({
+        id: "transmission:crude-natgas",
+        panel_id: "transmission",
+        name: "Crude/Natural Gas Ratio",
+        note: "Energy substitution, demand destruction signal",
+        value: fmt(crudeNatGas[crudeNatGas.length - 1], { decimals: 2 }),
+        status: statusFromDelta(crudeNatGas[crudeNatGas.length - 1], crudeNatGas[crudeNatGas.length - 2] ?? null),
+        source: "Yahoo Finance CL=F / NG=F",
+        zscore: stats.zscore,
+        sparkline: stats.sparkline,
+        window_label: "2y weekly",
+        history: crudeNatGasDated,
+      });
+    }
+    const silverDated = toDatedSeries(silverHist);
+    if (silverDated.length > 0) {
+      const silverVals = silverDated.map((p) => p.value);
+      const stats = computeStats(silverVals);
+      rows.push({
+        id: "transmission:silver",
+        panel_id: "transmission",
+        name: "Silver",
+        note: "Industrial + monetary metal",
+        value: fmt(silverVals[silverVals.length - 1], { decimals: 2 }),
+        status: statusFromDelta(silverVals[silverVals.length - 1], silverVals[silverVals.length - 2] ?? null),
+        source: "Yahoo Finance SI=F",
+        zscore: stats.zscore,
+        sparkline: stats.sparkline,
+        window_label: "2y weekly",
+        history: silverDated,
+      });
+    }
+    const natGasDated = toDatedSeries(natGasHist);
+    if (natGasDated.length > 0) {
+      const natGasVals = natGasDated.map((p) => p.value);
+      const stats = computeStats(natGasVals);
+      rows.push({
+        id: "transmission:natgas",
+        panel_id: "transmission",
+        name: "Natural Gas",
+        note: "Energy demand, heating/cooling cycles",
+        value: fmt(natGasVals[natGasVals.length - 1], { decimals: 2 }),
+        status: statusFromDelta(natGasVals[natGasVals.length - 1], natGasVals[natGasVals.length - 2] ?? null),
+        source: "Yahoo Finance NG=F",
+        zscore: stats.zscore,
+        sparkline: stats.sparkline,
+        window_label: "2y weekly",
+        history: natGasDated,
       });
     }
 
     // ---- Market tickers (indices, commodities, rate-sensitive ETFs) ----
     await Promise.all(
       MARKET_SYMBOLS.map(async ({ symbol, label }) => {
-        const series = await fetchYahooHistory(symbol, "2y");
+        const [series, dailySeries] = await Promise.all([
+          fetchYahooHistory(symbol, "2y"),
+          fetchYahooHistory(symbol, "2y", "1d"),
+        ]);
         const closes = series.closes.filter((v): v is number => v !== null);
         if (closes.length < 10) return;
         const dates = series.timestamps.map((t) => new Date(t * 1000).toISOString().slice(0, 10));
         const history = toHistory(dates, series.closes);
+        const dailyDates = dailySeries.timestamps.map((t) => new Date(t * 1000).toISOString().slice(0, 10));
+        const dailyHistory = toHistory(dailyDates, dailySeries.closes);
         const stats = computeStats(series.closes);
         const [latest, prev] = lastValidPair(series.closes);
         rows.push({
@@ -883,24 +1240,42 @@ export async function GET(req: NextRequest) {
           sparkline: stats.sparkline,
           window_label: "2y weekly",
           history,
+          payload: dailyHistory.length > 10 ? { dailyHistory } : null,
         });
       })
     );
 
-    // ---- News headline ----
-    const headline = await fetchYahooHeadline("^GSPC");
-    if (headline) {
+    // ---- News sentiment flow (aggregated headlines, keyword-scored) ----
+    const newsItems = await fetchNewsFeed(100);
+    if (newsItems.length > 0) {
+      const sentimentHistory = newsItems
+        .slice()
+        .reverse() // chronological, oldest -> newest, for the sentiment-over-time chart
+        .map((item) => ({ date: item.pubDate, value: item.sentimentScore }));
+      const sentimentStats = computeStats(sentimentHistory.map((p) => p.value));
+      const avgRecent =
+        newsItems.slice(0, 20).reduce((a, item) => a + item.sentimentScore, 0) / Math.min(20, newsItems.length);
+      const newsStatus: "up" | "down" | "flat" = avgRecent > 0.08 ? "up" : avgRecent < -0.08 ? "down" : "flat";
       rows.push({
-        id: "geo:news",
+        id: "geo:news-feed",
         panel_id: "geopolitics",
-        name: "News Flow",
-        note: headline.length > 90 ? headline.slice(0, 87) + "…" : headline,
-        value: "Latest",
-        status: "flat",
-        source: "Yahoo Finance headlines",
-        zscore: null,
-        sparkline: null,
-        window_label: null,
+        name: "News Sentiment Flow",
+        note: "Recent market headlines, scored",
+        value: avgRecent > 0.08 ? "Bullish tilt" : avgRecent < -0.08 ? "Bearish tilt" : "Neutral",
+        status: newsStatus,
+        source: "Yahoo Finance headlines, keyword sentiment",
+        zscore: sentimentStats.zscore,
+        sparkline: sentimentStats.sparkline,
+        window_label: `${newsItems.length} headlines`,
+        history: sentimentHistory,
+        payload: { headlines: newsItems.map((item) => ({
+          title: item.title,
+          link: item.link,
+          pubDate: item.pubDate,
+          source: item.source,
+          sentimentScore: item.sentimentScore,
+          sentimentLabel: item.sentimentLabel,
+        })) },
       });
     }
 

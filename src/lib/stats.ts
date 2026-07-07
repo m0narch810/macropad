@@ -420,3 +420,118 @@ export function subtractHistory(a: HistPoint[], b: HistPoint[], toleranceDays = 
   }
   return out;
 }
+
+function median(sorted: number[]): number {
+  const n = sorted.length;
+  const mid = Math.floor(n / 2);
+  return n % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
+}
+
+/**
+ * Robust z-score: (latest - median) / (1.4826 * MAD), instead of
+ * (latest - mean) / std. Median/MAD is far less distorted by the fat tails
+ * and occasional extreme prints common in macro data (a single COT spike or
+ * a 2020-style outlier shouldn't blow out the "normal" baseline the way it
+ * does with mean/std). 1.4826 is the standard scale factor that makes MAD
+ * comparable to std under a normal distribution.
+ */
+export function robustZScore(values: number[]): number | null {
+  if (values.length < 5) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const med = median(sorted);
+  const absDevs = values.map((v) => Math.abs(v - med)).sort((a, b) => a - b);
+  const mad = median(absDevs);
+  const robustStd = mad * 1.4826;
+  const latest = values[values.length - 1];
+  if (robustStd === 0) return 0;
+  return (latest - med) / robustStd;
+}
+
+/** Non-parametric percentile rank (0-100) of the latest value within the given window. */
+export function percentileRankOf(values: number[]): number | null {
+  if (values.length < 5) return null;
+  const latest = values[values.length - 1];
+  const below = values.filter((v) => v <= latest).length;
+  return (below / values.length) * 100;
+}
+
+/** How many trailing observations count as "recent regime" for a given cadence — roughly 2 years. */
+export function windowSizeForCadence(cadence: Cadence): number {
+  switch (cadence) {
+    case "daily":
+      return 504;
+    case "weekly":
+      return 104;
+    case "monthly":
+      return 24;
+    case "quarterly":
+      return 8;
+  }
+}
+
+export interface WindowedBias {
+  robustZ: number | null;
+  percentile: number | null;
+  /** -1..1, blends robust z (60%) and percentile rank (40%) so no single distributional assumption dominates. */
+  blended: number | null;
+}
+
+/**
+ * The core fix over a naive full-history mean/std z-score: (1) uses only a
+ * trailing ~2y window so a decade-old regime doesn't distort what "normal"
+ * means today for a non-stationary series (WALCL, unemployment, etc.), and
+ * (2) is robust-statistic based (median/MAD) with a non-parametric
+ * percentile-rank cross-check blended in, so outliers and fat tails don't
+ * dominate the read the way a mean/std z-score does.
+ */
+export function computeWindowedBias(historyValues: number[], cadence: Cadence): WindowedBias {
+  const window = historyValues.slice(-windowSizeForCadence(cadence));
+  const robustZ = robustZScore(window);
+  const percentile = percentileRankOf(window);
+  if (robustZ === null || percentile === null) return { robustZ, percentile, blended: null };
+  const zComponent = Math.max(-1, Math.min(1, robustZ / 2));
+  const pComponent = (percentile - 50) / 50;
+  const blended = 0.6 * zComponent + 0.4 * pComponent;
+  return { robustZ, percentile, blended };
+}
+
+function mean(values: number[]): number {
+  return values.reduce((a, b) => a + b, 0) / values.length;
+}
+
+function stdDev(values: number[]): number {
+  const m = mean(values);
+  return Math.sqrt(values.reduce((a, b) => a + (b - m) ** 2, 0) / values.length);
+}
+
+/**
+ * For indicators where the LEVEL is arbitrary/structurally-shifting but the
+ * TREND is the actual signal — payrolls, WALCL pace, claims, M2, yields as a
+ * financial-conditions read. Compares the average of the most recent
+ * `window` observations against the average of the `window` before that,
+ * normalized by the series' own period-over-period volatility (so a "big"
+ * move means something different for a low-vol series like a policy rate
+ * vs. a high-vol one like weekly claims).
+ */
+export function momentumSignal(values: number[], window: number): number | null {
+  if (values.length < window * 2) return null;
+  const recent = values.slice(-window);
+  const prior = values.slice(-window * 2, -window);
+  const change = mean(recent) - mean(prior);
+  const diffs: number[] = [];
+  for (let i = 1; i < values.length; i++) diffs.push(values[i] - values[i - 1]);
+  const diffStd = stdDev(diffs) || 1;
+  const raw = change / (diffStd * Math.sqrt(window));
+  return Math.max(-1, Math.min(1, raw / 2));
+}
+
+/**
+ * For indicators with a real economic reference point — inflation vs. the
+ * Fed's 2% target, unemployment vs. NAIRU, a spread vs. its 0 inversion
+ * line. `band` sets how many units away from `reference` counts as a "full"
+ * ±1 read (e.g. inflation: reference=2, band=1 means 3% inflation reads as
+ * +1, not "however many standard deviations that happens to be").
+ */
+export function distanceSignal(latest: number, reference: number, band: number): number {
+  return Math.max(-1, Math.min(1, (latest - reference) / band));
+}

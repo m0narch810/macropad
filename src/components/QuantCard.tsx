@@ -5,16 +5,17 @@ import {
   ComposedChart,
   Area,
   Line,
-  BarChart,
   Bar,
+  BarChart,
   ReferenceLine,
+  ReferenceArea,
   ResponsiveContainer,
   XAxis,
   YAxis,
   Tooltip,
   Cell,
 } from "recharts";
-import type { MacroSeries } from "@/lib/macroData";
+import type { MacroSeries, HistoryPoint } from "@/lib/macroData";
 import {
   computeDistStats,
   rollingZScore,
@@ -29,8 +30,10 @@ import Sparkline from "@/components/Sparkline";
 import ZScoreSurface3D from "@/components/ZScoreSurface3D";
 import MarketLink from "@/components/MarketLink";
 import SpecializedStatChart from "@/components/SpecializedStatChart";
+import NewsFeedCard from "@/components/NewsFeedCard";
 import { getBias, getDirectionTone, getSignTone } from "@/lib/bias";
 import { MARKET_LINKS } from "@/lib/markets";
+import { computeIndicatorSignal, getSignalConfig, type SignalMethod } from "@/lib/indicatorSignal";
 import type { MarketRow } from "@/lib/getMarkets";
 
 const chipClasses: Record<MacroSeries["status"], string> = {
@@ -47,8 +50,16 @@ function zTone(seriesId: string, z: number) {
   return t === "up" ? "var(--up)" : t === "down" ? "var(--down)" : "var(--accent)";
 }
 
+function toneColorFor(tone: "up" | "down" | "flat"): string {
+  return tone === "up" ? "var(--up)" : tone === "down" ? "var(--down)" : "var(--flat)";
+}
+
 function fmtDate(d: string) {
   return new Date(d).toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+}
+
+function daysBetween(a: string, b: string): number {
+  return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
 }
 
 function SectionHead({ title, caption }: { title: string; caption: string }) {
@@ -109,28 +120,24 @@ function Chevron({ open }: { open: boolean }) {
   );
 }
 
-export default function QuantCard({
-  series,
-  markets,
-  assetFilter = null,
-  assetLabel = null,
-}: {
-  series: MacroSeries;
-  markets: MarketRow[];
-  assetFilter?: string | null;
-  assetLabel?: string | null;
-}) {
-  const [open, setOpen] = useState(false);
-  const history = series.history;
-  const link = MARKET_LINKS[series.id];
-  const isRelevant = !assetFilter || link?.symbol === assetFilter;
-  if (!history || history.length < 20) {
-    return <SeriesCard series={series} assetFilter={assetFilter} assetLabel={assetLabel} />;
-  }
+function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
+  return (
+    <div>
+      <div className="font-sans text-[0.66rem] uppercase tracking-wide text-[var(--text-faint)]">{label}</div>
+      <div style={color ? { color } : undefined}>{value}</div>
+    </div>
+  );
+}
 
-  const linkedMarket = link ? markets.find((m) => m.id === `market:${link.symbol}`) : null;
+const methodLabel: Record<SignalMethod, string> = {
+  positioning: "Positioning read",
+  momentum: "Momentum read",
+  anchor: "Anchor read",
+  threshold: "Threshold read",
+};
 
-  const values = history.map((h) => h.value);
+/** ---------------- Positioning layout: genuinely mean-reverting series (COT, sentiment, ratios) ---------------- */
+function PositioningBody({ series, history, values }: { series: MacroSeries; history: HistoryPoint[]; values: number[] }) {
   const dist = computeDistStats(values);
   const { cadence, periodsPerYear } = inferCadence(history);
   const zWindow = Math.min(60, Math.floor(values.length / 2));
@@ -146,32 +153,456 @@ export default function QuantCard({
   const dist52 = computeDistStats(values.slice(-Math.min(values.length, lookbackPoints)));
   const hist = histogram(values, 14);
 
-  const chartData = history.map((h, i) => ({
-    date: h.date,
-    value: h.value,
-    ma20: ma20[i],
-    ma50: ma50[i],
-    z: zSeries[i],
-    vol: vol[i],
-  }));
-
+  const chartData = history.map((h, i) => ({ date: h.date, value: h.value, ma20: ma20[i], ma50: ma50[i], z: zSeries[i], vol: vol[i] }));
   const annVolMultiplier = Math.sqrt(periodsPerYear);
   const annVol = dist && vol[vol.length - 1] !== null ? (vol[vol.length - 1] as number) * annVolMultiplier : null;
+
+  return (
+    <>
+      <div className="mt-6">
+        <SectionHead
+          title="History"
+          caption={`Raw series with ${maShortWindow}- and ${maLongWindow}-period moving averages overlaid — crossovers flag trend shifts.`}
+        />
+        <div className="h-[240px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
+              <defs>
+                <linearGradient id={`q-hist-${series.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.3} />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
+              <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} domain={["auto", "auto"]} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), name]} />
+              <Area type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} fill={`url(#q-hist-${series.id})`} dot={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="ma20" stroke="var(--up)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
+              <Line type="monotone" dataKey="ma50" stroke="var(--down)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-1 flex gap-4 font-sans text-[0.72rem] text-[var(--text-faint)]">
+          <span><span className="text-[var(--accent)]">■</span> value</span>
+          <span><span className="text-[var(--up)]">■</span> MA{maShortWindow}</span>
+          <span><span className="text-[var(--down)]">■</span> MA{maLongWindow}</span>
+        </div>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div>
+          <SectionHead title={`Rolling z-score (window ${zWindow})`} caption="σ from the trailing mean at every point — dashed lines mark the ±2σ tail." />
+          <div className="h-[130px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
+                <XAxis dataKey="date" hide />
+                <YAxis domain={[-3, 3]} tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={false} width={26} ticks={[-2, 0, 2]} />
+                <ReferenceLine y={0} stroke="var(--border)" />
+                <ReferenceLine y={2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
+                <ReferenceLine y={-2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(2) + "σ", "z"]} />
+                <Line type="monotone" dataKey="z" stroke={dist ? zTone(series.id, dist.zscore) : "var(--accent)"} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div>
+          <SectionHead title={`Rolling volatility (${volWindow}p std dev)`} caption="Realized dispersion — rising means choppier, not a direction." />
+          <div className="h-[130px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
+                <XAxis dataKey="date" hide />
+                <YAxis tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={false} width={38} domain={[0, "auto"]} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(4), "σ"]} />
+                <Area type="monotone" dataKey="vol" stroke="var(--flat)" strokeWidth={1.25} fill="var(--flat)" fillOpacity={0.18} dot={false} isAnimationActive={false} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <ZScoreSurface3D history={history} seriesName={series.name} />
+        <p className="mt-1.5 font-sans text-[0.74rem] leading-snug text-[var(--text-faint)] opacity-90">
+          Same rolling z-score, swept across 8 lookback windows at once. A signal that stays tall across every row is
+          robust to window choice; one tall in a single row is likely a lookback artifact.
+        </p>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
+        <div>
+          <SectionHead title={`Distribution (${series.windowLabel})`} caption="Historical values by bucket — accent bar is where today sits." />
+          <div className="h-[90px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={hist} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
+                <XAxis dataKey="bucket" hide />
+                <YAxis hide />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(b) => `≈ ${Number(b).toFixed(3)}`} formatter={(v) => [v, "count"]} />
+                <Bar dataKey="count" radius={[2, 2, 0, 0]}>
+                  {hist.map((h, i) => (
+                    <Cell key={i} fill={dist && Math.abs(h.bucket - dist.latest) < (dist.max - dist.min) / 14 ? "var(--accent)" : "var(--border)"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {dist52 && (
+          <div>
+            <SectionHead title={cadence === "daily" || cadence === "weekly" ? "52w range" : cadence === "monthly" ? "12m range" : "4q range"} caption="Dot marks where today's value sits in the recent range." />
+            <div className="mt-3">
+              <div className="mb-1.5 flex justify-between font-mono text-[0.72rem] text-[var(--text-faint)]">
+                <span>{dist52.min.toFixed(3)}</span>
+                <span>{dist52.max.toFixed(3)}</span>
+              </div>
+              <div className="relative h-2 rounded-full bg-[var(--border)]">
+                <div
+                  className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-[var(--panel)] bg-[var(--accent)]"
+                  style={{ left: `${dist52.max === dist52.min ? 50 : ((dist52.latest - dist52.min) / (dist52.max - dist52.min)) * 100}%` }}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — absolute change vs. N periods ago</div>
+        <div className="grid grid-cols-4 gap-2">
+          {(() => {
+            const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
+            return momentum.map((m) => <MomentumBadge key={m.label} seriesId={series.id} label={m.label} value={m.value} maxAbs={maxAbs} />);
+          })()}
+        </div>
+      </div>
+
+      {dist && (
+        <div className="mt-6 border-t border-[var(--border)] pt-4">
+          <div className="mb-1.5 flex justify-between font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">
+            <span>Full-history range</span>
+            <span className="font-mono normal-case">{dist.percentile.toFixed(0)}th percentile</span>
+          </div>
+          <div className="relative h-2 rounded-full bg-[var(--border)]">
+            <div className="absolute top-1/2 h-1 w-1 -translate-y-1/2 rounded-full bg-[var(--text-faint)]" style={{ left: `${((dist.mean - dist.min) / (dist.max - dist.min || 1)) * 100}%` }} />
+            <div className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-[var(--panel)]" style={{ left: `${((dist.latest - dist.min) / (dist.max - dist.min || 1)) * 100}%`, background: zTone(series.id, dist.zscore) }} />
+          </div>
+          <div className="mt-1 flex justify-between font-mono text-[0.7rem] text-[var(--text-faint)]">
+            <span>{dist.min.toFixed(3)}</span>
+            <span>mean {dist.mean.toFixed(3)}</span>
+            <span>{dist.max.toFixed(3)}</span>
+          </div>
+          <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-5">
+            <Stat label="Std Dev" value={dist.std.toFixed(3)} />
+            <Stat label="Ann. Vol" value={annVol !== null ? annVol.toFixed(3) : "—"} />
+            <Stat label="Z-score" value={`${dist.zscore > 0 ? "+" : ""}${dist.zscore.toFixed(2)}σ`} color={zTone(series.id, dist.zscore)} />
+            <Stat label="N obs" value={String(values.length)} />
+            <Stat label="Cadence" value={cadence} />
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** ---------------- Momentum layout: level is arbitrary/structurally drifting, pace is the signal ---------------- */
+function MomentumBody({ series, history, values, momentumWindow }: { series: MacroSeries; history: HistoryPoint[]; values: number[]; momentumWindow: number }) {
+  const { cadence } = inferCadence(history);
+  const trendWindow = Math.min(momentumWindow, Math.floor(values.length / 2));
+  const trend = movingAverage(values, Math.max(2, trendWindow));
+  const momentum = momentumForCadence(history, cadence);
+
+  const chartData = history.map((h, i) => ({ date: h.date, value: h.value, trend: trend[i] }));
+
+  const window = Math.min(momentumWindow, Math.floor(values.length / 2));
+  const recent = values.slice(-window);
+  const prior = values.slice(-window * 2, -window);
+  const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length : null);
+  const recentAvg = avg(recent);
+  const priorAvg = avg(prior);
+  const paceDelta = recentAvg !== null && priorAvg !== null ? recentAvg - priorAvg : null;
+  const paceTone = paceDelta === null ? "flat" : getSignTone(series.id, paceDelta);
+  const paceColor = toneColorFor(paceTone);
+
+  const paceData = [
+    { label: `Prior ${window}p`, avg: priorAvg },
+    { label: `Recent ${window}p`, avg: recentAvg },
+  ];
+
+  return (
+    <>
+      <div className="mt-6">
+        <SectionHead title="History" caption={`The raw level is arbitrary for this series — the ${trendWindow}-period trend line is what carries the signal.`} />
+        <div className="h-[240px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
+              <defs>
+                <linearGradient id={`q-mom-${series.id}`} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
+              <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} domain={["auto", "auto"]} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), name]} />
+              <Area type="monotone" dataKey="value" stroke="var(--text-faint)" strokeWidth={1.25} fill={`url(#q-mom-${series.id})`} dot={false} isAnimationActive={false} />
+              <Line type="monotone" dataKey="trend" stroke="var(--accent)" strokeWidth={2.25} dot={false} isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-1 flex gap-4 font-sans text-[0.72rem] text-[var(--text-faint)]">
+          <span><span className="text-[var(--text-faint)]">■</span> raw value</span>
+          <span><span className="text-[var(--accent)]">■</span> {trendWindow}p trend</span>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <SectionHead title="Pace — this is exactly what drives the bias score" caption={`Average of the most recent ${window} periods vs. the ${window} before that. This comparison, normalized by the series' own volatility, is the momentum signal.`} />
+        <div className="h-[110px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={paceData} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 4 }}>
+              <XAxis type="number" domain={["auto", "auto"]} tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} />
+              <YAxis type="category" dataKey="label" tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={90} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "avg"]} />
+              <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
+                <Cell fill="var(--text-faint)" />
+                <Cell fill={paceColor} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+        <div className="mt-2 flex items-baseline gap-2 font-mono text-[0.85rem]" style={{ color: paceColor }}>
+          {paceDelta === null ? "—" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)} pace change`}
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — absolute change vs. N periods ago</div>
+        <div className="grid grid-cols-4 gap-2">
+          {(() => {
+            const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
+            return momentum.map((m) => <MomentumBadge key={m.label} seriesId={series.id} label={m.label} value={m.value} maxAbs={maxAbs} />);
+          })()}
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-[var(--border)] pt-4">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-4">
+          <Stat label="N obs" value={String(values.length)} />
+          <Stat label="Cadence" value={cadence} />
+          <Stat label="Pace window" value={`${window}p`} />
+          <Stat label="Pace delta" value={paceDelta === null ? "—" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)}`} color={paceColor} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** ---------------- Anchor layout: judged against a real economic reference point, not its own history ---------------- */
+function AnchorBody({
+  series,
+  history,
+  values,
+  reference,
+  band,
+}: {
+  series: MacroSeries;
+  history: HistoryPoint[];
+  values: number[];
+  reference: number;
+  band: number;
+}) {
+  const { cadence } = inferCadence(history);
+  const momentum = momentumForCadence(history, cadence);
+  const latest = values[values.length - 1];
+  const distance = latest - reference;
+  const clamped = Math.max(-1, Math.min(1, distance / band));
+  const pct = ((clamped + 1) / 2) * 100;
+  const tone = clamped > 0.15 ? getSignTone(series.id, 1) : clamped < -0.15 ? getSignTone(series.id, -1) : "flat";
+  const toneCol = toneColorFor(tone);
+
+  const withinBand = values.filter((v) => Math.abs(v - reference) <= band).length;
+  const withinBandPct = (withinBand / values.length) * 100;
+
+  const chartData = history.map((h) => ({ date: h.date, value: h.value }));
+  const yMin = Math.min(reference - band, ...values) - Math.abs(band) * 0.15;
+  const yMax = Math.max(reference + band, ...values) + Math.abs(band) * 0.15;
+
+  return (
+    <>
+      <div className="mt-6">
+        <SectionHead title="History vs. target" caption={`Shaded band is the ${reference} ± ${band} range this indicator is judged against — not its own historical range.`} />
+        <div className="h-[240px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
+              <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
+              <YAxis domain={[yMin, yMax]} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "value"]} />
+              <ReferenceArea y1={reference - band} y2={reference + band} fill="var(--accent)" fillOpacity={0.08} />
+              <ReferenceLine y={reference} stroke="var(--accent)" strokeDasharray="4 3" label={{ value: `target ${reference}`, position: "insideTopLeft", fill: "var(--accent)", fontSize: 10 }} />
+              <Line type="monotone" dataKey="value" stroke="var(--text)" strokeWidth={2} dot={false} isAnimationActive={false} />
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <SectionHead title="Distance from target — this is exactly what drives the bias score" caption="Position within the reference band, not percentile of its own history." />
+        <div className="mt-3">
+          <div className="mb-1.5 flex justify-between font-mono text-[0.72rem] text-[var(--text-faint)]">
+            <span>{(reference - band).toFixed(2)}</span>
+            <span className="text-[var(--text)]">target {reference}</span>
+            <span>{(reference + band).toFixed(2)}</span>
+          </div>
+          <div className="relative h-2.5 rounded-full bg-[var(--border)]">
+            <div className="absolute left-1/2 top-1/2 h-4 w-px -translate-x-1/2 -translate-y-1/2 bg-[var(--accent)]" />
+            <div className="absolute top-1/2 h-4 w-4 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-[var(--panel)]" style={{ left: `${pct}%`, background: toneCol }} />
+          </div>
+          <div className="mt-2 font-mono text-[0.85rem]" style={{ color: toneCol }}>
+            {distance > 0 ? "+" : ""}
+            {distance.toFixed(3)} from target
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-6">
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — is it moving toward or away from target?</div>
+        <div className="grid grid-cols-4 gap-2">
+          {(() => {
+            const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
+            return momentum.map((m) => <MomentumBadge key={m.label} seriesId={series.id} label={m.label} value={m.value} maxAbs={maxAbs} />);
+          })()}
+        </div>
+      </div>
+
+      <div className="mt-6 border-t border-[var(--border)] pt-4">
+        <div className="grid grid-cols-3 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-5">
+          <Stat label="Latest" value={latest.toFixed(3)} />
+          <Stat label="Target" value={reference.toFixed(2)} />
+          <Stat label="Band" value={`±${band}`} />
+          <Stat label="Time in band" value={`${withinBandPct.toFixed(0)}%`} />
+          <Stat label="Cadence" value={cadence} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+/** ---------------- Threshold layout: a sign flip is the event, not the magnitude on either side of it ---------------- */
+function ThresholdBody({ series, history, values }: { series: MacroSeries; history: HistoryPoint[]; values: number[] }) {
+  const { cadence } = inferCadence(history);
+  const latest = values[values.length - 1];
+  const invertedNow = latest < 0;
+
+  let flipIndex = values.length - 1;
+  for (let i = values.length - 1; i >= 0; i--) {
+    if ((values[i] < 0) !== invertedNow) break;
+    flipIndex = i;
+  }
+  const daysInState = daysBetween(history[flipIndex].date, history[history.length - 1].date);
+
+  let flips = 0;
+  for (let i = 1; i < values.length; i++) {
+    if ((values[i] < 0) !== (values[i - 1] < 0)) flips++;
+  }
+
+  const chartData = history.map((h) => ({ date: h.date, value: h.value }));
+  const stateColor = invertedNow ? "var(--down)" : "var(--up)";
+
+  return (
+    <>
+      <div className="mt-6">
+        <SectionHead title="Sign history" caption="The spread crossing zero is the event this indicator watches for — bars below the line mark inversion." />
+        <div className="h-[220px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
+              <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
+              <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={50} label={{ value: "Spread", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "spread"]} />
+              <ReferenceLine y={0} stroke="var(--text-faint)" />
+              <Bar dataKey="value" radius={[1, 1, 1, 1]}>
+                {chartData.map((d, i) => (
+                  <Cell key={i} fill={d.value < 0 ? "var(--down)" : "var(--up)"} fillOpacity={0.75} />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      <div className="mt-6 rounded-md border p-4" style={{ borderColor: `color-mix(in srgb, ${stateColor} 35%, var(--border))`, background: `color-mix(in srgb, ${stateColor} 7%, transparent)` }}>
+        <div className="font-sans text-[0.68rem] font-bold uppercase tracking-wide" style={{ color: stateColor }}>
+          Current state — this is exactly what drives the bias score
+        </div>
+        <div className="mt-1 font-sans text-[1.05rem] font-semibold" style={{ color: stateColor }}>
+          {invertedNow ? "Inverted" : "Normal"} for {daysInState}d
+        </div>
+        <p className="m-0 mt-1.5 font-sans text-[0.78rem] leading-snug text-[var(--text-faint)]">
+          {flips} sign flip{flips === 1 ? "" : "s"} across the visible history. The magnitude on either side of zero
+          matters far less than which side it's on.
+        </p>
+      </div>
+
+      <div className="mt-6 border-t border-[var(--border)] pt-4">
+        <div className="grid grid-cols-2 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-4">
+          <Stat label="Latest" value={`${latest > 0 ? "+" : ""}${latest.toFixed(3)}`} color={stateColor} />
+          <Stat label="N obs" value={String(values.length)} />
+          <Stat label="Cadence" value={cadence} />
+          <Stat label="Flips" value={String(flips)} />
+        </div>
+      </div>
+    </>
+  );
+}
+
+export default function QuantCard({
+  series,
+  markets,
+  assetFilter = null,
+  assetLabel = null,
+}: {
+  series: MacroSeries;
+  markets: MarketRow[];
+  assetFilter?: string | null;
+  assetLabel?: string | null;
+}) {
+  const [open, setOpen] = useState(false);
+  const history = series.history;
+  const links = MARKET_LINKS[series.id];
+  const isRelevant = !assetFilter || (links?.some((l) => l.symbol === assetFilter) ?? false);
+  if (!history || history.length < 20) {
+    return <SeriesCard series={series} assetFilter={assetFilter} assetLabel={assetLabel} />;
+  }
+
+  if (series.payload?.headlines) {
+    return <NewsFeedCard series={series} />;
+  }
+
+  const linkedMarkets = (links ?? [])
+    .map((link) => ({ link, market: markets.find((m) => m.id === `market:${link.symbol}`) }))
+    .filter((x): x is { link: (typeof links)[number]; market: MarketRow } => !!x.market);
+
+  const values = history.map((h) => h.value);
+  const dist = computeDistStats(values);
+  const { cadence } = inferCadence(history);
+  const signal = computeIndicatorSignal(series.id, values, cadence);
+  const config = getSignalConfig(series.id);
+  const method: SignalMethod = config?.method ?? "positioning";
+
   const bias = getBias(series.id, dist ? dist.zscore : null);
   const biasToneColor = bias ? (bias.tone === "up" ? "var(--up)" : bias.tone === "down" ? "var(--down)" : "var(--text-faint)") : "var(--text-faint)";
   const chipTone = getDirectionTone(series.id, series.status);
 
   return (
-    <div
-      className="rounded-lg border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150"
-      style={!isRelevant ? { opacity: 0.42 } : undefined}
-    >
+    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-4 p-7 text-left">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
-            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipClasses[chipTone]}`}>
-              {series.status}
+            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipClasses[chipTone]}`}>{series.status}</span>
+            <span className="shrink-0 rounded-full border px-2 py-[2px] font-sans text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]" style={{ borderColor: "var(--border)" }} title={config?.rationale}>
+              {methodLabel[method]}
             </span>
             {!isRelevant && (
               <span className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] px-2 py-[3px] font-sans text-[0.62rem] font-semibold text-[var(--text-faint)]">
@@ -195,10 +626,10 @@ export default function QuantCard({
 
         <div className="shrink-0 text-right">
           <div className="font-mono text-[2.1rem] font-semibold leading-none">{series.value}</div>
-          {dist && (
-            <div className="mt-1 font-mono text-[0.8rem]" style={{ color: zTone(series.id, dist.zscore) }}>
-              {dist.zscore > 0 ? "+" : ""}
-              {dist.zscore.toFixed(2)}σ
+          {signal && (
+            <div className="mt-1 font-mono text-[0.8rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
+              {signal.score > 0 ? "+" : ""}
+              {signal.score.toFixed(2)}
             </div>
           )}
         </div>
@@ -207,273 +638,57 @@ export default function QuantCard({
       </button>
 
       {open && (
-      <div className="border-t border-[var(--border)] p-7 pt-6">
-      {bias && (
-        <div className="mt-4 rounded-md border p-3.5" style={{ borderColor: `color-mix(in srgb, ${biasToneColor} 35%, var(--border))`, background: `color-mix(in srgb, ${biasToneColor} 7%, transparent)` }}>
-          <div className="flex items-center gap-2">
-            <span className="font-sans text-[0.68rem] font-bold uppercase tracking-wide" style={{ color: biasToneColor }}>
-              {bias.strength === "strong" ? "Strong read" : bias.strength === "mild" ? "Mild read" : "Neutral"}
-            </span>
-          </div>
-          <div className="mt-0.5 font-sans text-[0.92rem] font-semibold" style={{ color: biasToneColor }}>
-            {bias.label}
-          </div>
-          <p className="m-0 mt-1.5 font-sans text-[0.78rem] leading-snug text-[var(--text-faint)]">{bias.context}</p>
-        </div>
-      )}
-
-      {linkedMarket && link && (
-        <div className="mt-3">
-          <MarketLink market={linkedMarket} rationale={link.rationale} indicatorHistory={history} />
-        </div>
-      )}
-
-      {/* specialized stats — the deepest section, each with its own history + z-score */}
-      {series.extraStats && series.extraStats.length > 0 && (
-        <div className="mt-6">
-          <SectionHead
-            title="Specialized for this indicator"
-            caption="Metrics quants actually use for this specific series, not generic stats — each with its own history and z-score."
-          />
-          <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-            {series.extraStats.map((stat) => (
-              <SpecializedStatChart key={stat.label} stat={stat} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* history + moving averages */}
-      <div className="mt-6">
-        <SectionHead
-          title="History"
-          caption={`Raw series with ${maShortWindow}- and ${maLongWindow}-period moving averages overlaid — crossovers flag trend shifts.`}
-        />
-        <div className="h-[240px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
-              <defs>
-                <linearGradient id={`q-hist-${series.id}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <XAxis
-                dataKey="date"
-                tickFormatter={fmtDate}
-                tick={{ fill: "var(--text-faint)", fontSize: 11 }}
-                tickLine={false}
-                axisLine={{ stroke: "var(--border)" }}
-                minTickGap={70}
-                label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }}
-              />
-              <YAxis
-                tick={{ fill: "var(--text-faint)", fontSize: 11 }}
-                tickLine={false}
-                axisLine={false}
-                width={58}
-                domain={["auto", "auto"]}
-                label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }}
-              />
-              <Tooltip
-                contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }}
-                labelFormatter={(d) => fmtDate(String(d))}
-                formatter={(v, name) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), name]}
-              />
-              <Area type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} fill={`url(#q-hist-${series.id})`} dot={false} isAnimationActive={false} />
-              <Line type="monotone" dataKey="ma20" stroke="var(--up)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
-              <Line type="monotone" dataKey="ma50" stroke="var(--down)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
-            </ComposedChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-1 flex gap-4 font-sans text-[0.72rem] text-[var(--text-faint)]">
-          <span><span className="text-[var(--accent)]">■</span> value</span>
-          <span><span className="text-[var(--up)]">■</span> MA{maShortWindow}</span>
-          <span><span className="text-[var(--down)]">■</span> MA{maLongWindow}</span>
-        </div>
-      </div>
-
-      {/* rolling z-score + volatility, side by side */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div>
-          <SectionHead
-            title={`Rolling z-score (window ${zWindow})`}
-            caption="σ from the trailing mean at every point — dashed lines mark the ±2σ tail."
-          />
-          <div className="h-[130px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
-                <XAxis dataKey="date" hide />
-                <YAxis
-                  domain={[-3, 3]}
-                  tick={{ fill: "var(--text-faint)", fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={false}
-                  width={26}
-                  ticks={[-2, 0, 2]}
-                />
-                <ReferenceLine y={0} stroke="var(--border)" />
-                <ReferenceLine y={2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
-                <ReferenceLine y={-2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
-                <Tooltip
-                  contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}
-                  labelFormatter={(d) => fmtDate(String(d))}
-                  formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(2) + "σ", "z"]}
-                />
-                <Line type="monotone" dataKey="z" stroke={dist ? zTone(series.id, dist.zscore) : "var(--accent)"} strokeWidth={1.5} dot={false} isAnimationActive={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        <div>
-          <SectionHead
-            title={`Rolling volatility (${volWindow}p std dev)`}
-            caption="Realized dispersion — rising means choppier, not a direction."
-          />
-          <div className="h-[130px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
-                <XAxis dataKey="date" hide />
-                <YAxis tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={false} width={38} domain={[0, "auto"]} />
-                <Tooltip
-                  contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}
-                  labelFormatter={(d) => fmtDate(String(d))}
-                  formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(4), "σ"]}
-                />
-                <Area type="monotone" dataKey="vol" stroke="var(--flat)" strokeWidth={1.25} fill="var(--flat)" fillOpacity={0.18} dot={false} isAnimationActive={false} />
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-
-      {/* z-score surface: window x time, 3D — always on */}
-      <div className="mt-6">
-        <ZScoreSurface3D history={history} seriesName={series.name} />
-        <p className="mt-1.5 font-sans text-[0.74rem] leading-snug text-[var(--text-faint)] opacity-90">
-          Same rolling z-score, swept across 8 lookback windows at once. A signal that stays tall across every
-          row is robust to window choice; one tall in a single row is likely a lookback artifact.
-        </p>
-      </div>
-
-      {/* distribution + range, side by side */}
-      <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
-        <div>
-          <SectionHead
-            title={`Distribution (${series.windowLabel})`}
-            caption="Historical values by bucket — accent bar is where today sits."
-          />
-          <div className="h-[90px] w-full">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={hist} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
-                <XAxis dataKey="bucket" hide />
-                <YAxis hide />
-                <Tooltip
-                  contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }}
-                  labelFormatter={(b) => `≈ ${Number(b).toFixed(3)}`}
-                  formatter={(v) => [v, "count"]}
-                />
-                <Bar dataKey="count" radius={[2, 2, 0, 0]}>
-                  {hist.map((h, i) => (
-                    <Cell key={i} fill={dist && Math.abs(h.bucket - dist.latest) < (dist.max - dist.min) / 14 ? "var(--accent)" : "var(--border)"} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-
-        {dist52 && (
-          <div>
-            <SectionHead
-              title={cadence === "daily" || cadence === "weekly" ? "52w range" : cadence === "monthly" ? "12m range" : "4q range"}
-              caption="Dot marks where today's value sits in the recent range."
-            />
-            <div className="mt-3">
-              <div className="mb-1.5 flex justify-between font-mono text-[0.72rem] text-[var(--text-faint)]">
-                <span>{dist52.min.toFixed(3)}</span>
-                <span>{dist52.max.toFixed(3)}</span>
+        <div className="border-t border-[var(--border)] p-7 pt-6">
+          {bias && (
+            <div className="mt-4 rounded-md border p-3.5" style={{ borderColor: `color-mix(in srgb, ${biasToneColor} 35%, var(--border))`, background: `color-mix(in srgb, ${biasToneColor} 7%, transparent)` }}>
+              <div className="flex items-center gap-2">
+                <span className="font-sans text-[0.68rem] font-bold uppercase tracking-wide" style={{ color: biasToneColor }}>
+                  {bias.strength === "strong" ? "Strong read" : bias.strength === "mild" ? "Mild read" : "Neutral"}
+                </span>
               </div>
-              <div className="relative h-2 rounded-full bg-[var(--border)]">
-                <div
-                  className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-[var(--panel)] bg-[var(--accent)]"
-                  style={{
-                    left: `${dist52.max === dist52.min ? 50 : ((dist52.latest - dist52.min) / (dist52.max - dist52.min)) * 100}%`,
-                  }}
-                />
+              <div className="mt-0.5 font-sans text-[0.92rem] font-semibold" style={{ color: biasToneColor }}>
+                {bias.label}
+              </div>
+              <p className="m-0 mt-1.5 font-sans text-[0.78rem] leading-snug text-[var(--text-faint)]">{bias.context}</p>
+              {config && <p className="m-0 mt-2 font-sans text-[0.72rem] leading-snug text-[var(--text-faint)] opacity-80">Method: {config.rationale}</p>}
+            </div>
+          )}
+
+          {linkedMarkets.length > 0 && (
+            <div className="mt-3 flex flex-col gap-2">
+              {linkedMarkets.map(({ link, market }) => (
+                <MarketLink key={link.symbol} market={market} rationale={link.rationale} indicatorHistory={history} />
+              ))}
+            </div>
+          )}
+
+          {series.extraStats && series.extraStats.length > 0 && (
+            <div className="mt-6">
+              <SectionHead title="Specialized for this indicator" caption="Metrics quants actually use for this specific series, not generic stats — each with its own history and z-score." />
+              <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                {series.extraStats.map((stat) => (
+                  <SpecializedStatChart key={stat.label} stat={stat} />
+                ))}
               </div>
             </div>
-          </div>
-        )}
-      </div>
+          )}
 
-      {/* momentum row */}
-      <div className="mt-6">
-        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">
-          Momentum — absolute change vs. N periods ago
-        </div>
-        <div className="grid grid-cols-4 gap-2">
-          {(() => {
-            const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
-            return momentum.map((m) => (
-              <MomentumBadge key={m.label} seriesId={series.id} label={m.label} value={m.value} maxAbs={maxAbs} />
-            ));
-          })()}
-        </div>
-      </div>
+          {method === "momentum" ? (
+            <MomentumBody series={series} history={history} values={values} momentumWindow={config?.momentumWindow ?? 10} />
+          ) : method === "anchor" ? (
+            <AnchorBody series={series} history={history} values={values} reference={config?.reference ?? 0} band={config?.band ?? 1} />
+          ) : method === "threshold" ? (
+            <ThresholdBody series={series} history={history} values={values} />
+          ) : (
+            <PositioningBody series={series} history={history} values={values} />
+          )}
 
-      {/* stats grid, with a range-position visual */}
-      {dist && (
-        <div className="mt-6 border-t border-[var(--border)] pt-4">
-          <div className="mb-1.5 flex justify-between font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">
-            <span>Full-history range</span>
-            <span className="font-mono normal-case">{dist.percentile.toFixed(0)}th percentile</span>
-          </div>
-          <div className="relative h-2 rounded-full bg-[var(--border)]">
-            <div
-              className="absolute top-1/2 h-1 w-1 -translate-y-1/2 rounded-full bg-[var(--text-faint)]"
-              style={{ left: `${((dist.mean - dist.min) / (dist.max - dist.min || 1)) * 100}%` }}
-            />
-            <div
-              className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-[var(--panel)]"
-              style={{
-                left: `${((dist.latest - dist.min) / (dist.max - dist.min || 1)) * 100}%`,
-                background: zTone(series.id, dist.zscore),
-              }}
-            />
-          </div>
-          <div className="mt-1 flex justify-between font-mono text-[0.7rem] text-[var(--text-faint)]">
-            <span>{dist.min.toFixed(3)}</span>
-            <span>mean {dist.mean.toFixed(3)}</span>
-            <span>{dist.max.toFixed(3)}</span>
-          </div>
-
-          <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-5">
-            <Stat label="Std Dev" value={dist.std.toFixed(3)} />
-            <Stat label="Ann. Vol" value={annVol !== null ? annVol.toFixed(3) : "—"} />
-            <Stat label="Z-score" value={`${dist.zscore > 0 ? "+" : ""}${dist.zscore.toFixed(2)}σ`} color={zTone(series.id, dist.zscore)} />
-            <Stat label="N obs" value={String(values.length)} />
-            <Stat label="Cadence" value={cadence} />
+          <div className="mt-5 flex items-center justify-between font-mono text-[0.7rem] text-[var(--text-faint)]">
+            <span>{series.source}</span>
+            {series.windowLabel && <span>{series.windowLabel}</span>}
           </div>
         </div>
       )}
-
-      <div className="mt-5 flex items-center justify-between font-mono text-[0.7rem] text-[var(--text-faint)]">
-        <span>{series.source}</span>
-        {series.windowLabel && <span>{series.windowLabel}</span>}
-      </div>
-      </div>
-      )}
-    </div>
-  );
-}
-
-function Stat({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div>
-      <div className="font-sans text-[0.66rem] uppercase tracking-wide text-[var(--text-faint)]">{label}</div>
-      <div style={color ? { color } : undefined}>{value}</div>
     </div>
   );
 }

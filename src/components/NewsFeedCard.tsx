@@ -2,7 +2,7 @@
 
 import { AreaChart, Area, ReferenceLine, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import type { MacroSeries } from "@/lib/macroData";
-import NewsGlobe from "@/components/NewsGlobe";
+import NewsScatter3D from "@/components/NewsScatter3D";
 
 function fmtDateTime(d: string) {
   return new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -55,7 +55,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
             <p className="m-0 font-sans text-[0.85rem] text-[var(--text-faint)]">No headlines available right now.</p>
           ) : (
             <>
-              <NewsGlobe headlines={headlines} />
+              <NewsScatter3D headlines={headlines} />
 
               <div className="mt-6">
                 <div className="mb-1.5 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">

@@ -31,25 +31,10 @@ import ZHeatmap from "@/components/ZHeatmap";
 import MarketLink from "@/components/MarketLink";
 import SpecializedStatChart from "@/components/SpecializedStatChart";
 import NewsFeedCard from "@/components/NewsFeedCard";
-import { getBias, getDirectionTone, getSignTone } from "@/lib/bias";
+import { getBias, getSignTone } from "@/lib/bias";
 import { IMPACTS, marketRowId } from "@/lib/markets";
 import { computeIndicatorSignal, getSignalConfig, type SignalMethod } from "@/lib/indicatorSignal";
 import type { MarketRow } from "@/lib/getMarkets";
-
-const chipClasses: Record<MacroSeries["status"], string> = {
-  up: "text-[var(--up)] bg-[color-mix(in_srgb,var(--up)_14%,transparent)] border-[color-mix(in_srgb,var(--up)_35%,transparent)]",
-  down: "text-[var(--down)] bg-[color-mix(in_srgb,var(--down)_14%,transparent)] border-[color-mix(in_srgb,var(--down)_35%,transparent)]",
-  flat: "text-[var(--flat)] bg-[color-mix(in_srgb,var(--flat)_14%,transparent)] border-[color-mix(in_srgb,var(--flat)_35%,transparent)]",
-  pending: "text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border-[color-mix(in_srgb,var(--accent)_30%,transparent)]",
-};
-
-/** Chip text reads good/bad (bullish/bearish), not literal direction — a chip that says "up" in red is confusing. */
-const chipLabel: Record<MacroSeries["status"], string> = {
-  up: "bullish",
-  down: "bearish",
-  flat: "flat",
-  pending: "pending",
-};
 
 /** Context-aware z-score color: only paints green/red once |z| clears 2σ, else neutral accent. */
 function zTone(seriesId: string, z: number) {
@@ -131,13 +116,6 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
     </div>
   );
 }
-
-const methodLabel: Record<SignalMethod, string> = {
-  positioning: "Positioning read",
-  momentum: "Momentum read",
-  anchor: "Anchor read",
-  threshold: "Threshold read",
-};
 
 /** ---------------- Positioning layout: genuinely mean-reverting series (COT, sentiment, ratios) ---------------- */
 function PositioningBody({ series, history, values }: { series: MacroSeries; history: HistoryPoint[]; values: number[] }) {
@@ -585,7 +563,6 @@ export default function QuantCard({
 
   const bias = getBias(series.id, signal?.score ?? null);
   const biasToneColor = bias ? (bias.tone === "up" ? "var(--up)" : bias.tone === "down" ? "var(--down)" : "var(--text-faint)") : "var(--text-faint)";
-  const chipTone = getDirectionTone(series.id, series.status);
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
@@ -593,10 +570,18 @@ export default function QuantCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
-            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipClasses[chipTone]}`}>{chipLabel[chipTone]}</span>
-            <span className="shrink-0 rounded-full border px-2 py-[2px] font-sans text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]" style={{ borderColor: "var(--border)" }} title={config?.rationale}>
-              {methodLabel[method]}
-            </span>
+            {bias && bias.tone !== "flat" && (
+              <span
+                className="shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide"
+                style={{
+                  color: biasToneColor,
+                  borderColor: `color-mix(in srgb, ${biasToneColor} 35%, transparent)`,
+                  background: `color-mix(in srgb, ${biasToneColor} 14%, transparent)`,
+                }}
+              >
+                {bias.tone === "up" ? "bullish" : "bearish"}
+              </span>
+            )}
             {!isRelevant && (
               <span className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] px-2 py-[3px] font-sans text-[0.62rem] font-semibold text-[var(--text-faint)]">
                 Not linked to {assetLabel ?? assetFilter}
@@ -634,12 +619,7 @@ export default function QuantCard({
         <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-7 sm:pt-6">
           {bias && (
             <div className="mt-4 rounded-md border p-3.5" style={{ borderColor: `color-mix(in srgb, ${biasToneColor} 35%, var(--border))`, background: `color-mix(in srgb, ${biasToneColor} 7%, transparent)` }}>
-              <div className="flex items-center gap-2">
-                <span className="font-sans text-[0.68rem] font-bold uppercase tracking-wide" style={{ color: biasToneColor }}>
-                  {bias.strength === "strong" ? "Strong read" : bias.strength === "mild" ? "Mild read" : "Neutral"}
-                </span>
-              </div>
-              <div className="mt-0.5 font-sans text-[0.92rem] font-semibold" style={{ color: biasToneColor }}>
+              <div className="font-sans text-[0.92rem] font-semibold" style={{ color: biasToneColor }}>
                 {bias.label}
               </div>
             </div>

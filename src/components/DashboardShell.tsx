@@ -113,7 +113,7 @@ export default function DashboardShell({
           </svg>
         </button>
         <div className="font-display text-[1.05rem] uppercase leading-none tracking-[-0.01em]">
-          MACRO<span style={{ color: "var(--accent)" }}>PAD</span>
+          MACRO<span className="glow-accent" style={{ color: "var(--accent)" }}>PAD</span>
         </div>
       </div>
 
@@ -127,9 +127,9 @@ export default function DashboardShell({
             navOpen ? "translate-x-0" : ""
           }`}
         >
-          <div className="hidden border-b-2 border-[var(--accent)] px-5 py-5 lg:block">
+          <div className="corner-frame hidden m-3 border border-[var(--border)] px-5 py-5 lg:block">
             <div className="font-display text-[1.5rem] uppercase leading-none tracking-[-0.02em]">
-              MACRO<span style={{ color: "var(--accent)" }}>PAD</span>
+              MACRO<span className="glow-accent" style={{ color: "var(--accent)" }}>PAD</span>
             </div>
             <div className="mt-2.5 flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.09em] text-[var(--text-faint)]">
               <span className="relative flex h-1.5 w-1.5">
@@ -233,29 +233,29 @@ export default function DashboardShell({
         <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-9 lg:py-8">
           {isNews ? (
             <>
-              <header className="mb-7">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">News</h1>
+              <header className="corner-frame mb-7 border border-[var(--border)] px-4 py-3.5">
+                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold uppercase tracking-[-0.01em]">News</h1>
               </header>
               {newsSeries ? <NewsFeedCard series={newsSeries} /> : <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No news data yet.</p>}
             </>
           ) : isCustomDashboard ? (
             <>
-              <header className="mb-7">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">Custom Dashboard</h1>
+              <header className="corner-frame mb-7 border border-[var(--border)] px-4 py-3.5">
+                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold uppercase tracking-[-0.01em]">Custom Dashboard</h1>
               </header>
               <CustomDashboardPage panels={panels} markets={markets} />
             </>
           ) : isCustomBias ? (
             <>
-              <header className="mb-7">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">Custom Bias</h1>
+              <header className="corner-frame mb-7 border border-[var(--border)] px-4 py-3.5">
+                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold uppercase tracking-[-0.01em]">Custom Bias</h1>
               </header>
               <CustomBiasPage panels={panels} />
             </>
           ) : active ? (
             <>
-              <header className="mb-7">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">{active.title}</h1>
+              <header className="corner-frame mb-7 border border-[var(--border)] px-4 py-3.5">
+                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold uppercase tracking-[-0.01em]">{active.title}</h1>
               </header>
 
               <div className={DEEP_PANELS.has(active.id) ? "flex flex-col gap-2" : "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"}>

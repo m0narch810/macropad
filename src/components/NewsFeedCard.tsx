@@ -81,7 +81,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
                   Sentiment over time
                 </div>
                 <div className="h-[130px] w-full">
-                  <ResponsiveContainer width="100%" height="100%">
+                  <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={130}>
                     <AreaChart data={history} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>
                       <defs>
                         <linearGradient id="news-sentiment-fill" x1="0" y1="0" x2="0" y2="1">

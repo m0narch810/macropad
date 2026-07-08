@@ -20,7 +20,7 @@ export default function Sparkline({
 
   return (
     <div className={`${heightClass} w-full`}>
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={20}>
         <AreaChart data={points} margin={{ top: 3, right: 1, bottom: 1, left: 1 }}>
           <YAxis domain={[min - pad, max + pad]} hide />
           <Area

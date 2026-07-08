@@ -27,7 +27,7 @@ export default function SpecializedStatChart({ stat }: { stat: ExtraStat }) {
       </div>
       {history && history.length >= 10 && (
         <div className="mt-2 h-[86px] w-full">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={86}>
             <AreaChart data={history} margin={{ top: 4, right: 4, bottom: 0, left: -26 }}>
               <XAxis dataKey="date" hide />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 9 }} tickLine={false} axisLine={false} width={34} domain={["auto", "auto"]} />

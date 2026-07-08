@@ -32,6 +32,8 @@ import MarketLink from "@/components/MarketLink";
 import SpecializedStatChart from "@/components/SpecializedStatChart";
 import NewsFeedCard from "@/components/NewsFeedCard";
 import { getBias, getDirectionTone, getSignTone } from "@/lib/bias";
+import { getBacktestEvidence } from "@/lib/backtestImportance";
+import BacktestChip from "@/components/BacktestChip";
 import { IMPACTS, marketRowId } from "@/lib/markets";
 import { computeIndicatorSignal, getSignalConfig, type SignalMethod } from "@/lib/indicatorSignal";
 import type { MarketRow } from "@/lib/getMarkets";
@@ -584,6 +586,7 @@ export default function QuantCard({
   const method: SignalMethod = config?.method ?? "positioning";
 
   const bias = getBias(series.id, signal?.score ?? null);
+  const backtest = getBacktestEvidence(series.id);
   const biasToneColor = bias ? (bias.tone === "up" ? "var(--up)" : bias.tone === "down" ? "var(--down)" : "var(--text-faint)") : "var(--text-faint)";
   const chipTone = getDirectionTone(series.id, series.status);
 
@@ -597,6 +600,7 @@ export default function QuantCard({
             <span className="shrink-0 rounded-full border px-2 py-[2px] font-sans text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]" style={{ borderColor: "var(--border)" }} title={config?.rationale}>
               {methodLabel[method]}
             </span>
+            {backtest && <BacktestChip evidence={backtest} />}
             {!isRelevant && (
               <span className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] px-2 py-[3px] font-sans text-[0.62rem] font-semibold text-[var(--text-faint)]">
                 Not linked to {assetLabel ?? assetFilter}
@@ -673,6 +677,21 @@ export default function QuantCard({
             <ThresholdBody series={series} history={history} values={values} />
           ) : (
             <PositioningBody series={series} history={history} values={values} />
+          )}
+
+          {backtest && (
+            <div className="mt-6">
+              <SectionHead title="Backtest evidence" />
+              <div className="grid grid-cols-2 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-4">
+                <Stat label="ES weekly" value={backtest.esWeekly !== null ? `${(backtest.esWeekly * 100).toFixed(1)}%` : "—"} />
+                <Stat label="NQ weekly" value={backtest.nqWeekly !== null ? `${(backtest.nqWeekly * 100).toFixed(1)}%` : "—"} />
+                <Stat label="ES daily" value={backtest.esDaily !== null ? `${(backtest.esDaily * 100).toFixed(1)}%` : "—"} />
+                <Stat label="NQ daily" value={backtest.nqDaily !== null ? `${(backtest.nqDaily * 100).toFixed(1)}%` : "—"} />
+              </div>
+              <p className="m-0 mt-2 font-sans text-[0.72rem] text-[var(--text-faint)]">
+                Share of RandomForest feature importance in the walk-forward return backtests (rank {backtest.rank} of {backtest.rankedCount} weekly). Relevance evidence — not a directional signal.
+              </p>
+            </div>
           )}
 
           <div className="mt-5 flex items-center justify-between font-mono text-[0.7rem] text-[var(--text-faint)]">

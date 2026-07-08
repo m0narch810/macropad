@@ -57,12 +57,7 @@ function NavButton({
           : undefined
       }
     >
-      {isActive && (
-        <span
-          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full"
-          style={{ background: "var(--accent)" }}
-        />
-      )}
+      {isActive && <span className="absolute left-0 top-1/2 h-full w-[3px] -translate-y-1/2" style={{ background: "var(--accent)" }} />}
       <PanelIcon id={icon} className="shrink-0 transition-colors" style={{ color: isActive ? "var(--accent)" : "var(--text-faint)" }} />
       <div className="min-w-0 flex-1">
         <div
@@ -117,8 +112,8 @@ export default function DashboardShell({
             <path d="M2 12H14" />
           </svg>
         </button>
-        <div className="font-display text-[1.1rem] leading-none">
-          <span className="text-[var(--accent)]">Macro</span>pad
+        <div className="font-display text-[1.05rem] uppercase leading-none tracking-[-0.01em]">
+          MACRO<span style={{ color: "var(--accent)" }}>PAD</span>
         </div>
       </div>
 
@@ -132,22 +127,9 @@ export default function DashboardShell({
             navOpen ? "translate-x-0" : ""
           }`}
         >
-          <div className="hidden border-b border-[var(--border)] px-5 py-5 lg:block">
-            <div className="flex items-center gap-2.5">
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-[0.8rem] font-bold"
-                style={{
-                  background: "color-mix(in srgb, var(--accent) 16%, transparent)",
-                  border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)",
-                  color: "var(--accent)",
-                  boxShadow: "0 0 14px color-mix(in srgb, var(--accent) 25%, transparent)",
-                }}
-              >
-                M
-              </div>
-              <div className="font-display text-[1.3rem] leading-none">
-                <span className="text-[var(--accent)]">Macro</span>pad
-              </div>
+          <div className="hidden border-b-2 border-[var(--accent)] px-5 py-5 lg:block">
+            <div className="font-display text-[1.5rem] uppercase leading-none tracking-[-0.02em]">
+              MACRO<span style={{ color: "var(--accent)" }}>PAD</span>
             </div>
             <div className="mt-2.5 flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.09em] text-[var(--text-faint)]">
               <span className="relative flex h-1.5 w-1.5">

@@ -1,59 +1,57 @@
 @import "tailwindcss";
 
 /*
- * Black-hacker desk tokens. --accent is cyan, deliberately NOT green/red so
- * it never competes with --up/--down for meaning. Data colors (--up, --down,
- * --accent, --steel) are validated against the panel surface in both modes
- * (lightness band, chroma floor, CVD separation, 3:1 contrast) — change them
- * only in validated pairs.
+ * Jet-black / white / green. --accent and --up share the same green — this
+ * theme has exactly one hue. --down stays red because bearish has to read
+ * as red regardless of theme; it is not part of the three-color palette.
  */
 :root {
-  --bg: #030405;
-  --panel: #07090a;
-  --panel-2: #0b0e10;
-  --border: #161b1d;
-  --border-strong: #232b2e;
-  --text: #e6f7f5;
-  --text-dim: #8fa5a2;
-  --text-faint: #4d6260;
-  --accent: #00e5ff;
-  --up: #21e88f;
-  --down: #ff3860;
-  --steel: #4fb8e8;
-  --flat: #6b7c7a;
+  --bg: #000000;
+  --panel: #050505;
+  --panel-2: #0a0a0a;
+  --border: #1c1c1c;
+  --border-strong: #2c2c2c;
+  --text: #ffffff;
+  --text-dim: #a1a1a1;
+  --text-faint: #5a5a5a;
+  --accent: #22ff88;
+  --up: #22ff88;
+  --down: #ff3b3b;
+  --steel: #a1a1a1;
+  --flat: #6b6b6b;
 }
 
 :root[data-theme="light"] {
-  --bg: #eef1f1;
-  --panel: #f8fafa;
-  --panel-2: #f1f4f4;
-  --border: #d4dbdb;
-  --border-strong: #b7c1c1;
-  --text: #0a1514;
-  --text-dim: #45524f;
-  --text-faint: #74827f;
-  --accent: #007c8f;
-  --up: #158554;
-  --down: #c31c3f;
-  --steel: #1c6fa0;
-  --flat: #55625f;
+  --bg: #ffffff;
+  --panel: #f7f7f7;
+  --panel-2: #f0f0f0;
+  --border: #dcdcdc;
+  --border-strong: #bcbcbc;
+  --text: #050505;
+  --text-dim: #4a4a4a;
+  --text-faint: #8a8a8a;
+  --accent: #0a8f4a;
+  --up: #0a8f4a;
+  --down: #c31c1c;
+  --steel: #4a4a4a;
+  --flat: #6b6b6b;
 }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-theme="dark"]) {
-    --bg: #eef1f1;
-    --panel: #f8fafa;
-    --panel-2: #f1f4f4;
-    --border: #d4dbdb;
-    --border-strong: #b7c1c1;
-    --text: #0a1514;
-    --text-dim: #45524f;
-    --text-faint: #74827f;
-    --accent: #007c8f;
-    --up: #158554;
-    --down: #c31c3f;
-    --steel: #1c6fa0;
-    --flat: #55625f;
+    --bg: #ffffff;
+    --panel: #f7f7f7;
+    --panel-2: #f0f0f0;
+    --border: #dcdcdc;
+    --border-strong: #bcbcbc;
+    --text: #050505;
+    --text-dim: #4a4a4a;
+    --text-faint: #8a8a8a;
+    --accent: #0a8f4a;
+    --up: #0a8f4a;
+    --down: #c31c1c;
+    --steel: #4a4a4a;
+    --flat: #6b6b6b;
   }
 }
 
@@ -105,41 +103,8 @@ body {
   text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
-/*
- * Flat black backdrop, no tiled grid. Reference is an editorial poster —
- * huge bold type on negative space, not a boxed instrument panel.
- */
 body {
   background-color: var(--bg);
-}
-
-/*
- * Decorative wireframe-mesh mass, fixed behind all content — the "iceberg"
- * visual from the reference poster. Pure SVG line art, no external request.
- */
-.wireframe-bg {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  object-fit: cover;
-  object-position: center 30%;
-  opacity: 0.22;
-  pointer-events: none;
-  z-index: 0;
-  user-select: none;
-}
-
-:root[data-theme="light"] .wireframe-bg {
-  opacity: 0.1;
-  filter: invert(1);
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) .wireframe-bg {
-    opacity: 0.1;
-    filter: invert(1);
-  }
 }
 
 /*

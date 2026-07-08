@@ -127,9 +127,9 @@ export default function DashboardShell({
             <path d="M2 12H14" />
           </svg>
         </button>
-        <div className="font-display text-[1.05rem] uppercase leading-none tracking-[-0.01em]">
+        <a href="/" className="font-display text-[1.05rem] uppercase leading-none tracking-[-0.01em]">
           MACRO<span className="glow-accent" style={{ color: "var(--accent)" }}>PAD</span>
-        </div>
+        </a>
       </div>
 
       {navOpen && (
@@ -143,9 +143,9 @@ export default function DashboardShell({
           }`}
         >
           <div className="hidden px-6 pb-6 pt-8 lg:block">
-            <div className="font-display text-[1.9rem] uppercase leading-none tracking-[-0.03em]">
+            <a href="/" className="font-display block text-[1.9rem] uppercase leading-none tracking-[-0.03em]">
               MACRO<span className="glow-accent" style={{ color: "var(--accent)" }}>PAD</span>
-            </div>
+            </a>
             <div className="mt-3 flex items-center gap-1.5 eyebrow">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--up)] opacity-60" />

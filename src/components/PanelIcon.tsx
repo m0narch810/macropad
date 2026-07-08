@@ -1,4 +1,12 @@
 const ICONS: Record<string, React.ReactNode> = {
+  board: (
+    <>
+      <rect x="2.5" y="2.5" width="15" height="15" rx="1.5" />
+      <path d="M2.5 8H17.5" />
+      <path d="M7 8V17.5" />
+      <path d="M12.5 8V17.5" />
+    </>
+  ),
   "us-macro": (
     <>
       <rect x="3" y="4" width="14" height="3" rx="1" />

@@ -10,10 +10,12 @@ import MarketTicker from "@/components/MarketTicker";
 import PanelIcon from "@/components/PanelIcon";
 import CustomDashboardPage from "@/components/CustomDashboardPage";
 import CustomBiasPage from "@/components/CustomBiasPage";
+import BoardPage from "@/components/BoardPage";
 import { MARKET_SYMBOLS } from "@/lib/markets";
 import { getSignTone } from "@/lib/bias";
 
 const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics", "volatility"]);
+const BOARD_ID = "board";
 const NEWS_ID = "news";
 const CUSTOM_DASHBOARD_ID = "custom-dashboard";
 const CUSTOM_BIAS_ID = "custom-bias";
@@ -82,7 +84,7 @@ export default function DashboardShell({
   lastUpdated: string | null;
   markets: MarketRow[];
 }) {
-  const [activeId, setActiveId] = useState(panels[0]?.id ?? "");
+  const [activeId, setActiveId] = useState(BOARD_ID);
   const [assetFilter, setAssetFilter] = useState<string>("");
   const [navOpen, setNavOpen] = useState(false);
   const active = panels.find((p) => p.id === activeId);
@@ -90,6 +92,7 @@ export default function DashboardShell({
     setActiveId(id);
     setNavOpen(false);
   };
+  const isBoard = activeId === BOARD_ID;
   const isNews = activeId === NEWS_ID;
   const isCustomDashboard = activeId === CUSTOM_DASHBOARD_ID;
   const isCustomBias = activeId === CUSTOM_BIAS_ID;
@@ -181,6 +184,10 @@ export default function DashboardShell({
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 p-3">
+            <NavButton isActive={isBoard} onClick={() => pickPage(BOARD_ID)} icon="board" title="Board" subtitle="everything, one screen" />
+
+            <div className="my-2 border-t border-[var(--border)]" />
+
             <NavButton isActive={isNews} onClick={() => pickPage(NEWS_ID)} icon="news" title="News" subtitle="headline sentiment" />
             {panels.map((panel) => {
               const { bull, bear } = panelSignals(panel);
@@ -231,7 +238,15 @@ export default function DashboardShell({
         </aside>
 
         <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-14 lg:py-12">
-          {isNews ? (
+          {isBoard ? (
+            <>
+              <header className="mb-4 flex items-baseline gap-3">
+                <h1 className="font-display m-0 text-[1.4rem] uppercase leading-none tracking-[-0.02em]">Board</h1>
+                <span className="eyebrow">{panels.reduce((n, p) => n + p.series.filter((s) => s.id !== "geo:news-feed").length, 0)} indicators, one screen</span>
+              </header>
+              <BoardPage panels={panels} />
+            </>
+          ) : isNews ? (
             <>
               <header className="mb-10">
                 <div className="eyebrow mb-2">Headline sentiment</div>

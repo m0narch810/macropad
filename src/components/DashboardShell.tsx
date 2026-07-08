@@ -11,6 +11,7 @@ import PanelIcon from "@/components/PanelIcon";
 import CustomDashboardPage from "@/components/CustomDashboardPage";
 import CustomBiasPage from "@/components/CustomBiasPage";
 import BoardPage from "@/components/BoardPage";
+import DocumentationPage from "@/components/DocumentationPage";
 import { MARKET_SYMBOLS } from "@/lib/markets";
 import { getSignTone } from "@/lib/bias";
 
@@ -21,6 +22,7 @@ const BOARD_ID = "board";
 const NEWS_ID = "news";
 const CUSTOM_DASHBOARD_ID = "custom-dashboard";
 const CUSTOM_BIAS_ID = "custom-bias";
+const DOCS_ID = "docs";
 
 /** Count of strong reads (|score| >= 0.5 on the -1..1 method scale) per panel, split by good/bad tone. */
 function panelSignals(panel: MacroPanel): { bull: number; bear: number } {
@@ -87,7 +89,6 @@ export default function DashboardShell({
   markets: MarketRow[];
 }) {
   const [activeId, setActiveId] = useState(BOARD_ID);
-  const [assetFilter, setAssetFilter] = useState<string>("");
   const [navOpen, setNavOpen] = useState(false);
   const [newsAssetTab, setNewsAssetTab] = useState<string>(""); // "" = general macro feed
   const visiblePanels = panels.filter((p) => !HIDDEN_PANELS.has(p.id));
@@ -100,7 +101,7 @@ export default function DashboardShell({
   const isNews = activeId === NEWS_ID;
   const isCustomDashboard = activeId === CUSTOM_DASHBOARD_ID;
   const isCustomBias = activeId === CUSTOM_BIAS_ID;
-  const assetLabel = MARKET_SYMBOLS.find((m) => m.symbol === assetFilter)?.label ?? null;
+  const isDocs = activeId === DOCS_ID;
   const allSeries = panels.flatMap((p) => p.series);
   const newsSeries = allSeries.find((s) => s.id === "geo:news-feed") ?? null;
   const activeNewsSeries = newsAssetTab
@@ -155,46 +156,6 @@ export default function DashboardShell({
             </div>
           </div>
 
-          <div className="border-b border-[var(--border)] px-3.5 py-3.5">
-            <label className="mb-1.5 block font-sans text-[0.64rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]">
-              Asset lens
-            </label>
-            <div className="relative">
-              <select
-                value={assetFilter}
-                onChange={(e) => setAssetFilter(e.target.value)}
-                className="w-full appearance-none rounded-md border px-3 py-2 pr-8 font-sans text-[0.82rem] font-medium outline-none"
-                style={{
-                  borderColor: assetFilter ? "color-mix(in srgb, var(--accent) 45%, transparent)" : "var(--border)",
-                  background: assetFilter ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "var(--panel)",
-                  color: assetFilter ? "var(--accent)" : "var(--text-dim)",
-                }}
-              >
-                <option value="">All indicators</option>
-                {MARKET_SYMBOLS.map((m) => (
-                  <option key={m.symbol} value={m.symbol}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: assetFilter ? "var(--accent)" : "var(--text-faint)" }}
-              >
-                <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            {assetFilter && (
-              <p className="m-0 mt-1.5 font-sans text-[0.68rem] leading-snug text-[var(--text-faint)]">
-                Indicators with no mapped impact on {assetLabel} are dimmed below.
-              </p>
-            )}
-          </div>
-
           <nav className="flex flex-1 flex-col gap-1 p-3">
             <NavButton isActive={isBoard} onClick={() => pickPage(BOARD_ID)} icon="board" title="Board" subtitle="everything, one screen" />
 
@@ -243,6 +204,16 @@ export default function DashboardShell({
               subtitle="your own weights + thresholds"
             />
           </nav>
+
+          <div className="border-t border-[var(--border)] p-3">
+            <NavButton
+              isActive={isDocs}
+              onClick={() => pickPage(DOCS_ID)}
+              icon="docs"
+              title="Documentation"
+              subtitle="how the board works"
+            />
+          </div>
 
           <div className="border-t border-[var(--border)] px-5 py-3.5 font-mono text-[0.66rem] text-[var(--text-faint)]">
             {visiblePanels.reduce((n, p) => n + p.series.length, 0)} live series
@@ -315,6 +286,14 @@ export default function DashboardShell({
               </header>
               <CustomBiasPage panels={panels} />
             </>
+          ) : isDocs ? (
+            <>
+              <header className="mb-10">
+                <div className="eyebrow mb-2">Reference</div>
+                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">Documentation</h1>
+              </header>
+              <DocumentationPage panels={panels} />
+            </>
           ) : active ? (
             <>
               <header className="mb-10">
@@ -327,15 +306,9 @@ export default function DashboardShell({
                   .filter((series) => series.id !== "geo:news-feed")
                   .map((series) =>
                     DEEP_PANELS.has(active.id) ? (
-                      <QuantCard
-                        key={series.id}
-                        series={series}
-                        markets={markets}
-                        assetFilter={assetFilter || null}
-                        assetLabel={assetLabel}
-                      />
+                      <QuantCard key={series.id} series={series} markets={markets} assetFilter={null} assetLabel={null} />
                     ) : (
-                      <SeriesCard key={series.id} series={series} assetFilter={assetFilter || null} assetLabel={assetLabel} />
+                      <SeriesCard key={series.id} series={series} assetFilter={null} assetLabel={null} />
                     )
                   )}
               </div>

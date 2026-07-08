@@ -69,6 +69,14 @@ const ICONS: Record<string, React.ReactNode> = {
       <circle cx="10" cy="15" r="1.3" />
     </>
   ),
+  docs: (
+    <>
+      <path d="M5 3H12.5L16 6.5V17H5Z" />
+      <path d="M12.5 3V6.5H16" />
+      <circle cx="10.3" cy="12.3" r="2.3" />
+      <path d="M12 14L13.5 15.5" />
+    </>
+  ),
 };
 
 export default function PanelIcon({

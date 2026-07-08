@@ -106,6 +106,10 @@ export default function DashboardShell({
   const activeNewsSeries = newsAssetTab
     ? allSeries.find((s) => s.id === `asset-news:${newsAssetTab}`) ?? null
     : newsSeries;
+  const boardNewsSeries = [
+    newsSeries,
+    ...MARKET_SYMBOLS.map((m) => allSeries.find((s) => s.id === `asset-news:${m.symbol}`) ?? null),
+  ].filter((s): s is NonNullable<typeof s> => s !== null);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -252,7 +256,7 @@ export default function DashboardShell({
                 <h1 className="font-display m-0 text-[1.4rem] uppercase leading-none tracking-[-0.02em]">Board</h1>
                 <span className="eyebrow">{visiblePanels.reduce((n, p) => n + p.series.filter((s) => s.id !== "geo:news-feed").length, 0)} indicators, one screen</span>
               </header>
-              <BoardPage panels={visiblePanels} />
+              <BoardPage panels={visiblePanels} newsSeries={boardNewsSeries} />
             </>
           ) : isNews ? (
             <>

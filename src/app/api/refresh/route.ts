@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseServer";
 import { fetchFredHistory, statusFromDelta, fmt } from "@/lib/fred";
 import { fetchCotSeries, cotIndex, fmtNet, COT_CODES, type CotPoint } from "@/lib/cftc";
 import { fetchYahooHistory, ratioSeriesDated, toDatedSeries } from "@/lib/yahoo";
-import { fetchNewsFeed, fetchAssetNewsFeed, weightedSentimentAvg } from "@/lib/news";
+import { fetchNewsFeed, fetchAssetNewsFeed, weightedSentimentAvg, sentimentTrend } from "@/lib/news";
 import {
   computeStats,
   lastValidPair,
@@ -1230,10 +1230,7 @@ export async function GET(req: NextRequest) {
     // ---- News sentiment feed (pooled headlines, keyword-lexicon scored) ----
     const newsItems = await fetchNewsFeed(100);
     if (newsItems.length > 0) {
-      const sentimentHistory: HistPoint[] = newsItems
-        .slice()
-        .reverse()
-        .map((item) => ({ date: item.pubDate, value: item.sentimentScore }));
+      const sentimentHistory: HistPoint[] = sentimentTrend(newsItems);
       const bull = newsItems.filter((n) => n.sentimentLabel === "bullish").length;
       const bear = newsItems.filter((n) => n.sentimentLabel === "bearish").length;
       const avgScore = weightedSentimentAvg(newsItems);
@@ -1258,10 +1255,7 @@ export async function GET(req: NextRequest) {
       MARKET_SYMBOLS.map(async (m) => {
         const items = await fetchAssetNewsFeed(m.symbol, 40);
         if (items.length === 0) return;
-        const sentimentHistory: HistPoint[] = items
-          .slice()
-          .reverse()
-          .map((item) => ({ date: item.pubDate, value: item.sentimentScore }));
+        const sentimentHistory: HistPoint[] = sentimentTrend(items);
         const bull = items.filter((n) => n.sentimentLabel === "bullish").length;
         const bear = items.filter((n) => n.sentimentLabel === "bearish").length;
         const avgScore = weightedSentimentAvg(items);

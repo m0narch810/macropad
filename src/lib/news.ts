@@ -69,6 +69,39 @@ export function weightedSentimentAvg(items: NewsItem[], halfLifeHours = 6): numb
   return weightSum > 0 ? scoreSum / weightSum : 0;
 }
 
+/**
+ * Smoothed sentiment trend for charting — an exponentially-weighted running
+ * average through time, not the raw per-headline score. Plotting raw scores
+ * as a line is meaningless noise: headlines land at irregular intervals from
+ * different sources and each one swings between -1 and +1 on its own, so a
+ * line connecting them just zigzags. This produces one point per headline
+ * (in chronological order) but each point is the decayed rolling average up
+ * to that moment, same half-life logic as weightedSentimentAvg.
+ */
+export function sentimentTrend(items: NewsItem[], halfLifeHours = 6): { date: string; value: number }[] {
+  const chronological = [...items].reverse(); // oldest -> newest
+  const out: { date: string; value: number }[] = [];
+  let weightSum = 0;
+  let scoreSum = 0;
+  let lastTime: number | null = null;
+
+  for (const it of chronological) {
+    const t = new Date(it.pubDate).getTime();
+    if (lastTime !== null) {
+      const elapsedHours = Math.max(0, (t - lastTime) / 3_600_000);
+      const decay = Math.pow(0.5, elapsedHours / halfLifeHours);
+      weightSum *= decay;
+      scoreSum *= decay;
+    }
+    weightSum += 1;
+    scoreSum += it.sentimentScore;
+    lastTime = t;
+    out.push({ date: it.pubDate, value: weightSum > 0 ? scoreSum / weightSum : 0 });
+  }
+
+  return out;
+}
+
 /** Fetches headlines across macro news desks — the "general" feed. */
 export async function fetchNewsFeed(maxItems = 120): Promise<NewsItem[]> {
   const results = await Promise.all(

@@ -14,6 +14,12 @@ const METHOD_LABEL: Record<SignalMethod, string> = {
   positioning: "Positioning",
 };
 
+interface ExtraStatDoc {
+  label: string;
+  value: string;
+  caption: string | null;
+}
+
 interface SearchRow {
   id: string;
   name: string;
@@ -25,6 +31,7 @@ interface SearchRow {
   rationale: string | null;
   reference: number | null;
   band: number | null;
+  extraStats: ExtraStatDoc[];
 }
 
 function buildIndex(panels: MacroPanel[]): SearchRow[] {
@@ -44,6 +51,11 @@ function buildIndex(panels: MacroPanel[]): SearchRow[] {
         rationale: config?.rationale ?? null,
         reference: config?.reference ?? null,
         band: config?.band ?? null,
+        // Pulled live from the actual data, not a static doc file, since the
+        // exact set of extra stats a series carries can differ over time.
+        // Every one already has a caption written when it's computed in the
+        // refresh pipeline, it just was never surfaced in the UI until now.
+        extraStats: (s.extraStats ?? []).map((e) => ({ label: e.label, value: e.value, caption: e.caption ?? null })),
       });
     }
   }
@@ -74,7 +86,8 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
         r.source.toLowerCase().includes(q) ||
         r.doc.toLowerCase().includes(q) ||
         (r.method?.toLowerCase().includes(q) ?? false) ||
-        (r.rationale?.toLowerCase().includes(q) ?? false)
+        (r.rationale?.toLowerCase().includes(q) ?? false) ||
+        r.extraStats.some((e) => e.label.toLowerCase().includes(q) || (e.caption?.toLowerCase().includes(q) ?? false))
     );
   }, [index, query]);
 
@@ -212,9 +225,28 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
 
         <Section title="News and sentiment scoring">
           <p className="m-0">
-            The News page pools headlines from real macro and policy news desks (CNBC Economy, the Federal
-            Reserve, WSJ Markets, Yahoo Finance, and FXStreet) rather than per ticker stock headlines. Each
-            headline is scored by a finance specific keyword lexicon, a hand built dictionary of bullish and
+            The General tab pools headlines from real macro and policy news desks, CNBC Economy, the Federal
+            Reserve's monetary policy releases, Federal Reserve speeches, the European Central Bank, WSJ
+            Markets, and FXStreet, rather than per ticker stock headlines. WSJ and FXStreet also carry a lot of
+            routine single name price chatter alongside their real macro coverage, so headlines from those two
+            specifically are kept only when they match a macro relevance keyword list (Fed, inflation, jobs,
+            yields, tariffs, geopolitics, and similar), before being merged in with the other desks, which are
+            curated enough not to need that filter.
+          </p>
+          <p className="m-0">
+            Each asset tab is built from that exact same pool of desks, filtered again down to headlines that
+            match that specific asset's fundamental drivers, oil and OPEC for crude, safe haven and bullion for
+            gold, credit spreads and corporate bonds for the high yield ETF, the yield curve and Treasury
+            auctions for the long bond ETF, and so on for every tracked asset. This replaced an earlier version
+            that pulled a generic per ticker headline feed, which for futures and ETFs mostly returned
+            technical price forecast and retail portfolio content rather than the asset's actual macro drivers.
+            When a specific asset genuinely has no matching headlines in a given refresh cycle, its tab says so
+            rather than padding the feed with unrelated filler.
+          </p>
+          <p className="m-0">
+            Each headline is scored on its title plus its description or dek when the source provides one,
+            since a one or two sentence summary gives the scorer more to work with than the headline alone. The
+            score itself comes from a finance specific keyword lexicon, a hand built dictionary of bullish and
             bearish financial terms with assigned weights, plus a negation check so that phrases like not
             rising flip the expected direction. Two word phrases such as rate cut or soft landing are matched
             before single words so they are not misread by one of their component words alone.
@@ -224,14 +256,16 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
             pushed further toward the extremes, so a headline with a genuinely clear lean reads clearly on the
             board instead of blending into the middle. The displayed sentiment number and the Sentiment over
             time chart both use a recency weighted average with an exponential half life, so a headline from
-            the last hour moves the number more than a headline from yesterday, and the number naturally decays
+            the last few hours moves the number more than one from yesterday, and the number naturally decays
             back toward neutral as headlines age out of relevance.
           </p>
           <p className="m-0">
-            Switch between the General tab, pooled macro headlines, and per asset tabs for ticker specific
-            headline sentiment on any of the tracked assets. The 3D scatter under each feed plots headlines by
-            time on one axis and sentiment score on another, with color marking bullish, bearish, or neutral,
-            so you can see clustering and shifts in tone at a glance without reading every headline.
+            This is a keyword lexicon, not a language model, so treat it as a noisy directional read across many
+            headlines rather than a verdict on any single one, and expect it to occasionally misfire on sarcasm
+            or a headline where the bullish or bearish word describes a different asset than the one being
+            asked about. The 3D scatter under each feed plots headlines by time on one axis and sentiment score
+            on another, with color marking bullish, bearish, or neutral, so you can see clustering and shifts in
+            tone at a glance without reading every headline.
           </p>
         </Section>
 
@@ -302,6 +336,22 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
                       </span>
                     )}
                   </p>
+                </div>
+              )}
+
+              {r.extraStats.length > 0 && (
+                <div className="mt-3 flex flex-col gap-2 border-t border-[var(--border)] pt-3">
+                  {r.extraStats.map((e) => (
+                    <div key={e.label}>
+                      <div className="flex items-baseline gap-2">
+                        <span className="font-sans text-[0.78rem] font-semibold text-[var(--text)]">{e.label}</span>
+                        <span className="font-mono text-[0.74rem] text-[var(--text-dim)]">{e.value}</span>
+                      </div>
+                      {e.caption && (
+                        <p className="m-0 mt-0.5 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)]">{e.caption}</p>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
 

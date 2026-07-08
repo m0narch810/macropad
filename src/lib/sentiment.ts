@@ -21,6 +21,8 @@ const BULLISH: Record<string, number> = {
   accelerate: 1, accelerates: 1, accelerating: 1, upbeat: 1.5, robust: 1.2, exceeds: 1.2, exceeded: 1.2,
   tailwind: 1, tailwinds: 1, "rate pause": 0.8, ceasefire: 1.8, truce: 1.5,
   surplus: 1, outpace: 1, outpaces: 1, upgraded: 1.5, "beat expectations": 1.8,
+  waiver: 1.2, waivers: 1.2, unlock: 0.8, unlocks: 0.8, "de-escalate": 1.5, "de-escalation": 1.5,
+  deescalate: 1.5, stabilize: 0.8, stabilizes: 0.8, stability: 0.8, confidence: 0.8,
 };
 
 const BEARISH: Record<string, number> = {
@@ -36,6 +38,8 @@ const BEARISH: Record<string, number> = {
   shortage: 1.2, shutdown: 1.8, low: 0.4, lows: 0.4, weak: 1.2, weakness: 1.2, weakens: 1.2, plummet: 2.8, plummets: 2.8,
   strikes: 1.8, strike: 1.5, sanctions: 1.8, sanction: 1.5, standoff: 1.5, invasion: 2.2, attack: 1.8, attacks: 1.8,
   collapse: 2.5, collapses: 2.5, "missed expectations": 1.8, stagflation: 2.2, unemployment: 1, "job cuts": 1.8,
+  resign: 1.2, resigns: 1.2, resignation: 1.5, blockade: 1.8, escalating: 1.8, backlash: 1.2,
+  uncertainty: 1, volatile: 0.6, volatility: 0.6,
 };
 
 const NEGATORS = new Set(["not", "no", "never", "isn't", "wasn't", "doesn't", "didn't", "won't", "n't"]);

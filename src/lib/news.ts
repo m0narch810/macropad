@@ -20,6 +20,7 @@ const NEWS_SOURCES = [
   // so the pooled feed stays event-driven instead of daily price chatter.
   { label: "WSJ Markets", url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", filterMacro: true },
   { label: "FXStreet", url: "https://www.fxstreet.com/rss/news", filterMacro: true },
+  { label: "MarketWatch", url: "https://feeds.content.dowjones.io/public/rss/mw_topstories", filterMacro: true },
 ];
 
 /**
@@ -28,15 +29,17 @@ const NEWS_SOURCES = [
  * intentionally ticker-specific.
  */
 const MACRO_KEYWORDS = [
-  "fed", "fomc", "federal reserve", "ecb", "central bank", "boe", "boj", "pboc",
-  "rate cut", "rate hike", "rate decision", "interest rate", "monetary policy",
-  "inflation", "cpi", "pce", "disinflation", "deflation",
-  "gdp", "recession", "economy", "economic", "growth",
+  "fed", "fomc", "federal reserve", "powell", "warsh", "ecb", "lagarde", "central bank",
+  "boe", "boj", "pboc", "rate cut", "rate hike", "rate decision", "rate pause",
+  "interest rate", "monetary policy", "hawkish", "dovish",
+  "inflation", "cpi", "pce", "disinflation", "deflation", "stagflation",
+  "gdp", "recession", "economy", "economic", "growth", "soft landing", "hard landing",
   "jobs report", "payrolls", "unemployment", "jobless", "labor market", "labor force",
-  "yield", "treasury", "bond market", "dollar", "currency", "fx",
-  "tariff", "trade war", "trade deal", "sanctions", "opec", "oil price",
-  "geopolitic", "war", "ceasefire", "conflict", "election", "government shutdown",
+  "yield", "yields", "treasury", "bond market", "bond yields", "dollar", "currency", "fx",
+  "tariff", "trade war", "trade deal", "sanctions", "opec", "oil price", "supply chain",
+  "geopolitic", "war", "ceasefire", "truce", "conflict", "election", "government shutdown",
   "debt ceiling", "budget", "deficit", "stimulus", "quantitative easing", "quantitative tightening",
+  "stock market", "wall street", "risk assets", "equity market", "market selloff", "rally",
 ];
 
 function isMacroRelevant(item: RssItem): boolean {
@@ -55,15 +58,15 @@ function isMacroRelevant(item: RssItem): boolean {
  * chatter from a random forecasting site.
  */
 const ASSET_KEYWORDS: Record<string, string[]> = {
-  "^GSPC": ["s&p 500", "s&p500", "wall street", "stock market", "stocks", "equities", "equity market", "dow jones", "risk assets"],
-  "^IXIC": ["nasdaq", "tech stocks", "big tech", "ai stocks", "chipmakers", "semiconductor", "growth stocks", "technology sector"],
-  "CL=F": ["oil", "crude", "wti", "brent", "opec", "barrel", "energy prices", "petroleum"],
-  "GC=F": ["gold", "bullion", "safe haven", "safe-haven", "precious metal"],
-  "HG=F": ["copper", "industrial metal"],
-  "DX-Y.NYB": ["dollar", "dxy", "greenback", "usd", "dollar index", "currency market"],
-  "HYG": ["high yield", "high-yield", "junk bond", "credit spread", "corporate bond", "corporate debt", "credit market", "leveraged loan", "credit conditions"],
-  "TLT": ["treasury", "treasuries", "bond market", "10-year", "10 year yield", "30-year", "long bond", "yield curve", "bond yields", "government debt"],
-  "SI=F": ["silver", "precious metal"],
+  "^GSPC": ["s&p 500", "s&p500", "wall street", "stock market", "stocks", "equities", "equity market", "dow jones", "risk assets", "market selloff", "rally", "wall st"],
+  "^IXIC": ["nasdaq", "tech stocks", "big tech", "ai stocks", "chipmakers", "semiconductor", "growth stocks", "technology sector", "megacap", "wall street", "stock market"],
+  "CL=F": ["oil", "crude", "wti", "brent", "opec", "barrel", "energy prices", "petroleum", "xti"],
+  "GC=F": ["gold", "bullion", "safe haven", "safe-haven", "precious metal", "xau"],
+  "HG=F": ["copper", "industrial metal", "dr. copper"],
+  "DX-Y.NYB": ["dollar", "dxy", "greenback", "usd", "dollar index", "currency market", "forex", "eur/usd", "gbp/usd"],
+  "HYG": ["high yield", "high-yield", "junk bond", "credit spread", "corporate bond", "corporate debt", "credit market", "leveraged loan", "credit conditions", "default risk"],
+  "TLT": ["treasury", "treasuries", "bond market", "10-year", "10 year yield", "30-year", "long bond", "yield curve", "bond yields", "government debt", "duration", "yield", "yields"],
+  "SI=F": ["silver", "precious metal", "xag"],
   "NG=F": ["natural gas", "henry hub", "natgas", "lng", "gas prices"],
 };
 

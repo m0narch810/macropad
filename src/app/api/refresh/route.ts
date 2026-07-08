@@ -1231,7 +1231,7 @@ export async function GET(req: NextRequest) {
     // the general feed and every per-asset feed below ----
     const newsPool = await fetchMacroNewsPool();
 
-    const newsItems = scoreGeneralFeed(newsPool, 100);
+    const newsItems = scoreGeneralFeed(newsPool, 150);
     if (newsItems.length > 0) {
       const sentimentHistory: HistPoint[] = sentimentTrend(newsItems);
       const bull = newsItems.filter((n) => n.sentimentLabel === "bullish").length;
@@ -1244,7 +1244,7 @@ export async function GET(req: NextRequest) {
         note: "Pooled macro headlines, keyword-lexicon scored",
         value: `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
         status: avgScore > 0.05 ? "up" : avgScore < -0.05 ? "down" : "flat",
-        source: "CNBC · Fed · ECB · WSJ · FXStreet",
+        source: "CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch",
         zscore: avgScore,
         sparkline: null,
         window_label: `${bull}▲ ${bear}▼ · ${newsItems.length} headlines`,
@@ -1257,7 +1257,7 @@ export async function GET(req: NextRequest) {
     // about each asset's actual fundamental drivers (not a per-ticker feed
     // full of generic price-forecast churn) ----
     for (const m of MARKET_SYMBOLS) {
-      const items = scoreAssetFeed(newsPool, m.symbol, 40);
+      const items = scoreAssetFeed(newsPool, m.symbol, 60);
       const sentimentHistory: HistPoint[] = sentimentTrend(items);
       const bull = items.filter((n) => n.sentimentLabel === "bullish").length;
       const bear = items.filter((n) => n.sentimentLabel === "bearish").length;
@@ -1272,7 +1272,7 @@ export async function GET(req: NextRequest) {
         note: "Macro headlines filtered to this asset's drivers, keyword-lexicon scored",
         value: items.length === 0 ? "—" : `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
         status: items.length === 0 ? "flat" : avgScore > 0.05 ? "up" : avgScore < -0.05 ? "down" : "flat",
-        source: "CNBC · Fed · ECB · WSJ · FXStreet",
+        source: "CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch",
         zscore: items.length === 0 ? null : avgScore,
         sparkline: null,
         window_label: items.length === 0 ? "No matching headlines this cycle" : `${bull}▲ ${bear}▼ · ${items.length} headlines`,

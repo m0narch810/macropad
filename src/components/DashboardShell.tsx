@@ -7,6 +7,7 @@ import SeriesCard from "@/components/SeriesCard";
 import QuantCard from "@/components/QuantCard";
 import NewsFeedCard from "@/components/NewsFeedCard";
 import MarketTicker from "@/components/MarketTicker";
+import IndicatorTicker from "@/components/IndicatorTicker";
 import PanelIcon from "@/components/PanelIcon";
 import CustomDashboardPage from "@/components/CustomDashboardPage";
 import CustomBiasPage from "@/components/CustomBiasPage";
@@ -111,10 +112,12 @@ export default function DashboardShell({
     newsSeries,
     ...MARKET_SYMBOLS.map((m) => allSeries.find((s) => s.id === `asset-news:${m.symbol}`) ?? null),
   ].filter((s): s is NonNullable<typeof s> => s !== null);
+  const tickerSeries = visiblePanels.flatMap((p) => p.series).filter((s) => s.id !== "geo:news-feed");
 
   return (
     <div className="flex min-h-screen flex-col">
       <MarketTicker markets={markets} />
+      <IndicatorTicker series={tickerSeries} />
 
       <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-4 py-3 lg:hidden">
         <button

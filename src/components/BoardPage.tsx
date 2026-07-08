@@ -43,8 +43,14 @@ export default function BoardPage({ panels, newsSeries }: { panels: MacroPanel[]
                     title={bias?.label ?? s.note}
                   >
                     <span className="min-w-0 truncate text-[0.74rem] text-[var(--text-dim)]">{s.name}</span>
-                    <span className="shrink-0 whitespace-nowrap font-mono text-[0.78rem] font-semibold" style={{ color }}>
-                      {s.value}
+                    <span className="shrink-0 whitespace-nowrap font-mono text-[0.78rem]">
+                      <span className="font-semibold" style={{ color }}>{s.value}</span>
+                      {s.zscore !== null && (
+                        <span className="ml-1.5 text-[0.66rem]" style={{ color }}>
+                          {s.zscore > 0 ? "+" : ""}
+                          {Math.round(s.zscore * 100)}%
+                        </span>
+                      )}
                     </span>
                   </div>
                 );

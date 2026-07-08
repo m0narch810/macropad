@@ -172,7 +172,7 @@ export const macroPanels: MacroPanel[] = [
     title: "Asset News",
     description: "Per-asset headline sentiment.",
     series: MARKET_SYMBOLS.map((m) =>
-      blank(`asset-news:${m.symbol}`, `${m.label} News`, "Macro headlines filtered to this asset's drivers, keyword-lexicon scored", "CNBC · Fed · ECB · WSJ · FXStreet")
+      blank(`asset-news:${m.symbol}`, `${m.label} News`, "Macro headlines filtered to this asset's drivers, keyword-lexicon scored", "CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch")
     ),
   },
   {

@@ -52,7 +52,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
 
       <div className="pb-8">
         {headlines.length === 0 ? (
-            <p className="m-0 font-sans text-[0.85rem] text-[var(--text-faint)]">No headlines available right now.</p>
+            <p className="m-0 font-sans text-[0.85rem] text-[var(--text-faint)]">No data for this asset yet.</p>
           ) : (
             <>
               <NewsScatter3D headlines={headlines} />
@@ -86,7 +86,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
 
               <div className="mt-6">
                 <div className="mb-2 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">
-                  All {headlines.length} headlines, newest first
+                  All {headlines.length} items, newest first
                 </div>
                 <div className="flex max-h-[360px] flex-col gap-1.5 overflow-y-auto pr-1">
                   {headlines.map((h, i) => (
@@ -102,12 +102,22 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
                         {h.sentimentScore.toFixed(2)}
                       </span>
                       <div className="min-w-0 flex-1">
-                        {h.link ? (
-                          <a href={h.link} target="_blank" rel="noopener noreferrer" className="font-sans text-[0.8rem] leading-snug text-[var(--text)] hover:text-[var(--accent)] hover:underline">
-                            {h.title}
-                          </a>
-                        ) : (
-                          <span className="font-sans text-[0.8rem] leading-snug text-[var(--text)]">{h.title}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {h.kind && h.kind !== "headline" && (
+                            <span className="shrink-0 font-mono text-[0.58rem] font-bold uppercase tracking-wide text-[var(--text-faint)]">
+                              [DATA]
+                            </span>
+                          )}
+                          {h.link ? (
+                            <a href={h.link} target="_blank" rel="noopener noreferrer" className="font-sans text-[0.8rem] leading-snug text-[var(--text)] hover:text-[var(--accent)] hover:underline">
+                              {h.title}
+                            </a>
+                          ) : (
+                            <span className="font-sans text-[0.8rem] leading-snug text-[var(--text)]">{h.title}</span>
+                          )}
+                        </div>
+                        {h.description && (
+                          <p className="m-0 mt-0.5 font-sans text-[0.74rem] leading-snug text-[var(--text-dim)]">{h.description}</p>
                         )}
                         <div className="mt-0.5 font-mono text-[0.64rem] text-[var(--text-faint)]">
                           {h.source} · {fmtDateTime(h.pubDate)}

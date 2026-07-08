@@ -25,6 +25,10 @@ export interface NewsHeadlinePayload {
   source: string;
   sentimentScore: number;
   sentimentLabel: "bullish" | "bearish" | "neutral";
+  /** "headline" = real scraped article. "indicator"/"metric" = generated from actual FRED/CFTC data, not text. */
+  kind?: "headline" | "indicator" | "metric";
+  /** Explanation shown for indicator/metric events instead of a clickable link (there is no article to link to). */
+  description?: string;
 }
 
 /** Row-specific extra data too structured for extra_stats: scored headlines, daily price bars. */
@@ -172,7 +176,7 @@ export const macroPanels: MacroPanel[] = [
     title: "Asset News",
     description: "Per-asset headline sentiment.",
     series: MARKET_SYMBOLS.map((m) =>
-      blank(`asset-news:${m.symbol}`, `${m.label} News`, "Macro headlines filtered to this asset's drivers, keyword-lexicon scored", "CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch")
+      blank(`asset-news:${m.symbol}`, `${m.label} News`, "Real indicator events (FRED/CFTC) plus matching headlines, not headline-only sentiment", "FRED · CFTC · CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch")
     ),
   },
   {

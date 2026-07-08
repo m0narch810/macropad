@@ -21,6 +21,7 @@ import {
 import { computeIndicatorSignal } from "@/lib/indicatorSignal";
 import type { ExtraStat, SeriesPayload } from "@/lib/macroData";
 import { MARKET_SYMBOLS, marketRowId } from "@/lib/markets";
+import { buildAssetIndicatorEvents } from "@/lib/assetEvents";
 
 export const dynamic = "force-dynamic";
 
@@ -1253,34 +1254,6 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ---- Asset-specific news: same pooled desks, filtered to headlines
-    // about each asset's actual fundamental drivers (not a per-ticker feed
-    // full of generic price-forecast churn) ----
-    for (const m of MARKET_SYMBOLS) {
-      const items = scoreAssetFeed(newsPool, m.symbol, 60);
-      const sentimentHistory: HistPoint[] = sentimentTrend(items);
-      const bull = items.filter((n) => n.sentimentLabel === "bullish").length;
-      const bear = items.filter((n) => n.sentimentLabel === "bearish").length;
-      const avgScore = weightedSentimentAvg(items);
-      // Always upsert, even with zero matches this cycle — otherwise a quiet
-      // day for this asset's keywords leaves the row frozen on whatever
-      // (possibly stale, pre-migration) content it last had.
-      rows.push({
-        id: `asset-news:${m.symbol}`,
-        panel_id: "asset-news",
-        name: `${m.label} News`,
-        note: "Macro headlines filtered to this asset's drivers, keyword-lexicon scored",
-        value: items.length === 0 ? "—" : `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
-        status: items.length === 0 ? "flat" : avgScore > 0.05 ? "up" : avgScore < -0.05 ? "down" : "flat",
-        source: "CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch",
-        zscore: items.length === 0 ? null : avgScore,
-        sparkline: null,
-        window_label: items.length === 0 ? "No matching headlines this cycle" : `${bull}▲ ${bear}▼ · ${items.length} headlines`,
-        history: sentimentHistory,
-        payload: { headlines: items },
-      });
-    }
-
     // ================= TRANSMISSION =================
 
     // ---- NFCI (weekly, 0 = average conditions by construction) ----
@@ -1405,6 +1378,57 @@ export async function GET(req: NextRequest) {
       ratioRow("transmission:smh-spy", "SMH / SPY Ratio", "Semis vs market — cycle leadership", "Yahoo Finance SMH / SPY", ratioSeriesDated(smhW, spyW)),
     ];
     for (const r of ratioRows) if (r) rows.push(r);
+
+    // ---- Asset-specific news: real dated events built from this asset's
+    // actual linked indicators (FRED/CFTC data + the same impact model used
+    // everywhere else in the app), not guessed from headline text. Every
+    // asset that has any linked indicators gets guaranteed baseline
+    // coverage this way; real scraped headlines matching the asset's
+    // keywords are merged in on top for color and recency, not as the sole
+    // source. Runs after every indicator panel above so `rows` has the full
+    // set of computed indicators (including transmission) to draw from. ----
+    for (const m of MARKET_SYMBOLS) {
+      const indicatorEvents = buildAssetIndicatorEvents(m.symbol, rows);
+      const headlineEvents = scoreAssetFeed(newsPool, m.symbol, 30).map((h) => ({
+        title: h.title,
+        link: h.link,
+        pubDate: h.pubDate,
+        source: h.source,
+        sentimentScore: h.sentimentScore,
+        sentimentLabel: h.sentimentLabel,
+        kind: "headline" as const,
+      }));
+
+      const seen = new Set<string>();
+      const merged = [...indicatorEvents, ...headlineEvents]
+        .filter((e) => {
+          const key = e.title.toLowerCase().trim();
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        })
+        .sort((a, b) => new Date(b.pubDate).getTime() - new Date(a.pubDate).getTime())
+        .slice(0, 60);
+
+      const sentimentHistory: HistPoint[] = sentimentTrend(merged);
+      const bull = merged.filter((n) => n.sentimentLabel === "bullish").length;
+      const bear = merged.filter((n) => n.sentimentLabel === "bearish").length;
+      const avgScore = weightedSentimentAvg(merged);
+      rows.push({
+        id: `asset-news:${m.symbol}`,
+        panel_id: "asset-news",
+        name: `${m.label} News`,
+        note: "Real indicator events (FRED/CFTC) plus matching headlines, not headline-only sentiment",
+        value: merged.length === 0 ? "—" : `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
+        status: merged.length === 0 ? "flat" : avgScore > 0.05 ? "up" : avgScore < -0.05 ? "down" : "flat",
+        source: "FRED · CFTC · CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch",
+        zscore: merged.length === 0 ? null : avgScore,
+        sparkline: null,
+        window_label: merged.length === 0 ? "No data for this asset yet" : `${bull}▲ ${bear}▼ · ${merged.length} events`,
+        history: sentimentHistory,
+        payload: { headlines: merged },
+      });
+    }
 
     // ================= MARKET TICKERS =================
     // Weekly bars for display/correlation; daily bars (payload) let the

@@ -12,7 +12,7 @@ export default function MarketingNav() {
           <Link href="/#product" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors hover:text-[var(--text)]">
             Product
           </Link>
-          <Link href="/#coverage" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors hover:text-[var(--text)]">
+          <Link href="/coverage" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors hover:text-[var(--text)]">
             Coverage
           </Link>
           <Link href="/pricing" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors hover:text-[var(--text)]">

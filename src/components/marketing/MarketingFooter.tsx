@@ -18,7 +18,7 @@ export default function MarketingFooter() {
             <div className="eyebrow mb-3">Product</div>
             <div className="flex flex-col gap-2.5">
               <Link href="/#product" className="font-sans text-[0.82rem] text-[var(--text-dim)] hover:text-[var(--text)]">Overview</Link>
-              <Link href="/#coverage" className="font-sans text-[0.82rem] text-[var(--text-dim)] hover:text-[var(--text)]">Coverage</Link>
+              <Link href="/coverage" className="font-sans text-[0.82rem] text-[var(--text-dim)] hover:text-[var(--text)]">Coverage</Link>
               <Link href="/pricing" className="font-sans text-[0.82rem] text-[var(--text-dim)] hover:text-[var(--text)]">Pricing</Link>
             </div>
           </div>

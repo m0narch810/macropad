@@ -3,14 +3,7 @@ import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 import DecryptText from "@/components/marketing/DecryptText";
 
-const COVERAGE = [
-  { icon: "us-macro", title: "US Macroeconomics", desc: "CPI, payrolls, PCE, ISM — the releases that move every desk." },
-  { icon: "yield-rates", title: "Yield Rates", desc: "Curve shape, real yields, breakevens, term premium." },
-  { icon: "cot-positioning", title: "COT Positioning", desc: "CFTC net positioning across futures, tracked weekly." },
-  { icon: "transmission", title: "Transmission Check", desc: "Credit spreads, liquidity, financial conditions." },
-  { icon: "geopolitics", title: "Geopolitics", desc: "Live-scored macro headlines from real policy desks." },
-  { icon: "volatility", title: "Volatility", desc: "Vol surface, skew, term structure across assets." },
-];
+const COVERAGE_TEASER = ["US Macroeconomics", "Yield Rates", "COT Positioning", "Transmission Check", "Geopolitics", "Volatility"];
 
 const FEATURES = [
   {
@@ -133,20 +126,29 @@ export default function LandingPage() {
           </div>
         </section>
 
-        {/* Coverage */}
-        <section id="coverage" className="border-b border-[var(--border)] bg-[var(--panel)]">
-          <div className="mx-auto max-w-[1180px] px-5 py-20 sm:px-8">
-            <div className="eyebrow mb-3">Coverage</div>
-            <h2 className="font-display m-0 max-w-lg text-[1.9rem] uppercase leading-[1.05] tracking-[-0.02em] sm:text-[2.4rem]">
-              Six panels. Every regime input that matters.
-            </h2>
+        {/* Coverage teaser */}
+        <section className="border-b border-[var(--border)] bg-[var(--panel)]">
+          <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8">
+            <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="eyebrow mb-3">Coverage</div>
+                <h2 className="font-display m-0 max-w-lg text-[1.6rem] uppercase leading-[1.05] tracking-[-0.02em] sm:text-[2rem]">
+                  Six panels. Every regime input that matters.
+                </h2>
+              </div>
+              <Link
+                href="/coverage"
+                className="shrink-0 border border-[var(--border-strong)] px-5 py-2.5 font-sans text-[0.78rem] font-semibold uppercase tracking-wide text-[var(--text)] transition-colors hover:border-[var(--text-dim)]"
+              >
+                See full coverage
+              </Link>
+            </div>
 
-            <div className="mt-14 grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] sm:grid-cols-2 lg:grid-cols-3" style={{ background: "var(--border)" }}>
-              {COVERAGE.map((c) => (
-                <div key={c.icon} className="bg-[var(--bg)] p-6">
-                  <h3 className="m-0 text-[1.02rem] font-semibold">{c.title}</h3>
-                  <p className="m-0 mt-2 font-sans text-[0.85rem] leading-relaxed text-[var(--text-faint)]">{c.desc}</p>
-                </div>
+            <div className="mt-10 flex flex-wrap gap-3">
+              {COVERAGE_TEASER.map((c) => (
+                <span key={c} className="border border-[var(--border)] px-3.5 py-2 font-sans text-[0.78rem] text-[var(--text-dim)]">
+                  {c}
+                </span>
               ))}
             </div>
           </div>

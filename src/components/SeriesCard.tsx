@@ -36,13 +36,13 @@ export default function SeriesCard({
 
   return (
     <div
-      className="corner-frame border border-[var(--border)] bg-[var(--panel)] p-4"
+      className="border-b border-[var(--border)] py-5"
       style={!isRelevant ? { opacity: 0.4 } : undefined}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="m-0 truncate text-[0.9rem] font-semibold text-[var(--text)]">{series.name}</h3>
-          <p className="m-0 mt-0.5 truncate text-[0.74rem] text-[var(--text-faint)]">{series.note}</p>
+          <div className="eyebrow truncate">{series.name}</div>
+          <p className="m-0 mt-1 truncate text-[0.78rem] text-[var(--text-dim)]">{series.note}</p>
         </div>
         <span className="shrink-0 font-mono text-[0.78rem]" style={{ color: chipColor }} title={toneLabel[signalTone]}>
           {dirGlyph[signalTone]}
@@ -55,14 +55,14 @@ export default function SeriesCard({
         </div>
       )}
 
-      <div className="mt-2.5 font-mono text-[1.45rem] font-semibold leading-none text-[var(--text)]">
+      <div className="font-display mt-3 text-[2rem] leading-none tracking-[-0.02em] text-[var(--text)]">
         {series.value}
       </div>
 
       {bias && bias.strength !== null && (
         <div
-          className="mt-1.5 text-[0.76rem] font-medium"
-          style={{ color: bias.tone === "up" ? "var(--up)" : bias.tone === "down" ? "var(--down)" : "var(--text-dim)" }}
+          className="tag-flag mt-2.5"
+          style={{ background: bias.tone === "up" ? "var(--up)" : bias.tone === "down" ? "var(--down)" : "var(--flat)" }}
         >
           {bias.label}
         </div>

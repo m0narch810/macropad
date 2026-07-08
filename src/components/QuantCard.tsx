@@ -565,35 +565,23 @@ export default function QuantCard({
   const biasToneColor = bias ? (bias.tone === "up" ? "var(--up)" : bias.tone === "down" ? "var(--down)" : "var(--text-faint)") : "var(--text-faint)";
 
   return (
-    <div className="corner-frame border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 p-4 text-left sm:gap-4 sm:p-7">
+    <div className="border-b border-[var(--border)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 py-6 text-left sm:gap-6">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h3 className="font-display m-0 truncate text-[1.5rem] uppercase leading-none tracking-[-0.02em]">{series.name}</h3>
             {bias && bias.tone !== "flat" && (
-              <span
-                className="shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide"
-                style={{
-                  color: biasToneColor,
-                  borderColor: `color-mix(in srgb, ${biasToneColor} 35%, transparent)`,
-                  background: `color-mix(in srgb, ${biasToneColor} 14%, transparent)`,
-                }}
-              >
+              <span className="tag-flag shrink-0" style={{ background: biasToneColor }}>
                 {bias.tone === "up" ? "bullish" : "bearish"}
               </span>
             )}
             {!isRelevant && (
-              <span className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] px-2 py-[3px] font-sans text-[0.62rem] font-semibold text-[var(--text-faint)]">
+              <span className="shrink-0 whitespace-nowrap font-sans text-[0.62rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]">
                 Not linked to {assetLabel ?? assetFilter}
               </span>
             )}
           </div>
-          <p className="m-0 mt-1 truncate font-sans text-[0.86rem] text-[var(--text-faint)]">{series.note}</p>
-          {bias && (
-            <div className="mt-1 truncate font-sans text-[0.8rem]" style={{ color: biasToneColor }}>
-              {bias.label}
-            </div>
-          )}
+          <p className="m-0 mt-1.5 truncate font-sans text-[0.86rem] text-[var(--text-dim)]">{series.note}</p>
         </div>
 
         {series.sparkline && series.sparkline.length >= 5 && (
@@ -603,9 +591,9 @@ export default function QuantCard({
         )}
 
         <div className="shrink-0 text-right">
-          <div className="font-mono text-[1.4rem] font-semibold leading-none sm:text-[2.1rem]">{series.value}</div>
+          <div className="font-display text-[1.8rem] leading-none tracking-[-0.02em] sm:text-[2.6rem]">{series.value}</div>
           {signal && (
-            <div className="mt-1 font-mono text-[0.8rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
+            <div className="mt-1.5 font-mono text-[0.8rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
               {signal.score > 0 ? "+" : ""}
               {Math.round(signal.score * 100)}%
             </div>
@@ -616,12 +604,10 @@ export default function QuantCard({
       </button>
 
       {open && (
-        <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-7 sm:pt-6">
+        <div className="pb-8">
           {bias && (
-            <div className="mt-4 rounded-md border p-3.5" style={{ borderColor: `color-mix(in srgb, ${biasToneColor} 35%, var(--border))`, background: `color-mix(in srgb, ${biasToneColor} 7%, transparent)` }}>
-              <div className="font-sans text-[0.92rem] font-semibold" style={{ color: biasToneColor }}>
-                {bias.label}
-              </div>
+            <div className="tag-flag" style={{ background: biasToneColor }}>
+              {bias.label}
             </div>
           )}
 

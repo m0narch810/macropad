@@ -127,11 +127,11 @@ export default function DashboardShell({
             navOpen ? "translate-x-0" : ""
           }`}
         >
-          <div className="corner-frame hidden m-3 border border-[var(--border)] px-5 py-5 lg:block">
-            <div className="font-display text-[1.5rem] uppercase leading-none tracking-[-0.02em]">
+          <div className="hidden px-6 pb-6 pt-8 lg:block">
+            <div className="font-display text-[1.9rem] uppercase leading-none tracking-[-0.03em]">
               MACRO<span className="glow-accent" style={{ color: "var(--accent)" }}>PAD</span>
             </div>
-            <div className="mt-2.5 flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.09em] text-[var(--text-faint)]">
+            <div className="mt-3 flex items-center gap-1.5 eyebrow">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--up)] opacity-60" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--up)]" />
@@ -230,32 +230,36 @@ export default function DashboardShell({
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-9 lg:py-8">
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-14 lg:py-12">
           {isNews ? (
             <>
-              <header className="corner-frame mb-7 border border-[var(--border)] px-4 py-3.5">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold uppercase tracking-[-0.01em]">News</h1>
+              <header className="mb-10">
+                <div className="eyebrow mb-2">Headline sentiment</div>
+                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">News</h1>
               </header>
               {newsSeries ? <NewsFeedCard series={newsSeries} /> : <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No news data yet.</p>}
             </>
           ) : isCustomDashboard ? (
             <>
-              <header className="corner-frame mb-7 border border-[var(--border)] px-4 py-3.5">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold uppercase tracking-[-0.01em]">Custom Dashboard</h1>
+              <header className="mb-10">
+                <div className="eyebrow mb-2">Watchlist</div>
+                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">Custom Dashboard</h1>
               </header>
               <CustomDashboardPage panels={panels} markets={markets} />
             </>
           ) : isCustomBias ? (
             <>
-              <header className="corner-frame mb-7 border border-[var(--border)] px-4 py-3.5">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold uppercase tracking-[-0.01em]">Custom Bias</h1>
+              <header className="mb-10">
+                <div className="eyebrow mb-2">Weights + thresholds</div>
+                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">Custom Bias</h1>
               </header>
               <CustomBiasPage panels={panels} />
             </>
           ) : active ? (
             <>
-              <header className="corner-frame mb-7 border border-[var(--border)] px-4 py-3.5">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold uppercase tracking-[-0.01em]">{active.title}</h1>
+              <header className="mb-10">
+                <div className="eyebrow mb-2">{active.series.length} live series</div>
+                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">{active.title}</h1>
               </header>
 
               <div className={DEEP_PANELS.has(active.id) ? "flex flex-col gap-2" : "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"}>

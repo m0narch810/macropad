@@ -14,11 +14,11 @@ const toneColor: Record<"bullish" | "bearish" | "neutral", string> = {
   neutral: "var(--flat)",
 };
 
-const chipTone: Record<MacroSeries["status"], string> = {
-  up: "text-[var(--up)] bg-[color-mix(in_srgb,var(--up)_14%,transparent)] border-[color-mix(in_srgb,var(--up)_35%,transparent)]",
-  down: "text-[var(--down)] bg-[color-mix(in_srgb,var(--down)_14%,transparent)] border-[color-mix(in_srgb,var(--down)_35%,transparent)]",
-  flat: "text-[var(--flat)] bg-[color-mix(in_srgb,var(--flat)_14%,transparent)] border-[color-mix(in_srgb,var(--flat)_35%,transparent)]",
-  pending: "text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border-[color-mix(in_srgb,var(--accent)_30%,transparent)]",
+const chipBg: Record<MacroSeries["status"], string> = {
+  up: "var(--up)",
+  down: "var(--down)",
+  flat: "var(--flat)",
+  pending: "var(--accent)",
 };
 
 const chipLabel: Record<MacroSeries["status"], string> = {
@@ -33,24 +33,24 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
   const history = series.history ?? [];
 
   return (
-    <div className="corner-frame border border-[var(--border)] bg-[var(--panel)]">
-      <div className="flex w-full items-center gap-3 p-4 text-left sm:gap-4 sm:p-7">
+    <div className="border-b border-[var(--border)]">
+      <div className="flex w-full items-center gap-3 py-6 text-left sm:gap-6">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
-            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipTone[series.status]}`}>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h3 className="font-display m-0 truncate text-[1.5rem] uppercase leading-none tracking-[-0.02em]">{series.name}</h3>
+            <span className="tag-flag shrink-0" style={{ background: chipBg[series.status] }}>
               {chipLabel[series.status]}
             </span>
           </div>
-          <p className="m-0 mt-1 truncate font-sans text-[0.86rem] text-[var(--text-faint)]">{series.note}</p>
+          <p className="m-0 mt-1.5 truncate font-sans text-[0.86rem] text-[var(--text-dim)]">{series.note}</p>
         </div>
         <div className="shrink-0 text-right">
-          <div className="font-mono text-[1.5rem] font-semibold leading-none">{series.value}</div>
-          <div className="mt-1 font-mono text-[0.72rem] text-[var(--text-faint)]">{series.windowLabel}</div>
+          <div className="font-display text-[1.8rem] leading-none tracking-[-0.02em] sm:text-[2.2rem]">{series.value}</div>
+          <div className="mt-1.5 font-mono text-[0.72rem] text-[var(--text-faint)]">{series.windowLabel}</div>
         </div>
       </div>
 
-      <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-7 sm:pt-6">
+      <div className="pb-8">
         {headlines.length === 0 ? (
             <p className="m-0 font-sans text-[0.85rem] text-[var(--text-faint)]">No headlines available right now.</p>
           ) : (

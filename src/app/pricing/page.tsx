@@ -54,7 +54,7 @@ export default function PricingPage() {
         </section>
 
         <section className="border-b border-[var(--border)]">
-          <div className="mx-auto max-w-[560px] px-5 py-16 sm:px-8">
+          <div className="mx-auto grid max-w-[1180px] grid-cols-1 gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_1.1fr] lg:items-start">
             <div
               className="relative flex flex-col border p-8"
               style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 5%, var(--panel))" }}
@@ -94,6 +94,35 @@ export default function PricingPage() {
               >
                 Launch free trial
               </Link>
+            </div>
+
+            <div className="flex flex-col gap-8 lg:pt-8">
+              <div>
+                <div className="eyebrow mb-3">Why free right now</div>
+                <h2 className="font-display m-0 text-[1.5rem] uppercase leading-[1.1] tracking-[-0.01em] sm:text-[1.8rem]">
+                  This is launch pricing.
+                </h2>
+                <p className="m-0 mt-4 font-sans text-[0.92rem] leading-relaxed text-[var(--text-dim)]">
+                  Macropad just launched. Free access right now is how we get the board in front of real desks and
+                  find out what's actually useful before we charge for it — not a permanent price.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-5 border-t border-[var(--border)] pt-6">
+                {[
+                  ["01", "Trial users lock in early access", "Everyone who signs up during launch keeps full access through the trial period, no surprise downgrades."],
+                  ["02", "Paid Pro tier is coming", "Once the product's proven out, a paid Pro plan launches. Pricing then will cost more than $0 — this window won't last."],
+                  ["03", "You'll get notice first", "No silent price change. Trial users hear about the switch before it happens."],
+                ].map(([n, title, desc]) => (
+                  <div key={n} className="flex gap-4">
+                    <div className="eyebrow shrink-0 pt-0.5" style={{ color: "var(--accent)" }}>{n}</div>
+                    <div>
+                      <div className="font-sans text-[0.92rem] font-semibold text-[var(--text)]">{title}</div>
+                      <p className="m-0 mt-1.5 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">{desc}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
         </section>

@@ -62,13 +62,8 @@ function daysBetween(a: string, b: string): number {
   return Math.round((new Date(b).getTime() - new Date(a).getTime()) / 86_400_000);
 }
 
-function SectionHead({ title, caption }: { title: string; caption: string }) {
-  return (
-    <div className="mb-1.5">
-      <div className="font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">{title}</div>
-      <div className="font-sans text-[0.76rem] leading-snug text-[var(--text-faint)]">{caption}</div>
-    </div>
-  );
+function SectionHead({ title }: { title: string }) {
+  return <div className="mb-1.5 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">{title}</div>;
 }
 
 function MomentumBadge({
@@ -160,10 +155,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
   return (
     <>
       <div className="mt-6">
-        <SectionHead
-          title="History"
-          caption={`Raw series with ${maShortWindow}- and ${maLongWindow}-period moving averages overlaid — crossovers flag trend shifts.`}
-        />
+        <SectionHead title="History" />
         <div className="h-[240px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
@@ -191,7 +183,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
 
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div>
-          <SectionHead title={`Rolling z-score (window ${zWindow})`} caption="σ from the trailing mean at every point — dashed lines mark the ±2σ tail." />
+          <SectionHead title={`Rolling z-score (${zWindow}p)`} />
           <div className="h-[130px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
@@ -208,7 +200,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
         </div>
 
         <div>
-          <SectionHead title={`Rolling volatility (${volWindow}p std dev)`} caption="Realized dispersion — rising means choppier, not a direction." />
+          <SectionHead title={`Rolling volatility (${volWindow}p)`} />
           <div className="h-[130px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
@@ -223,16 +215,13 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
       </div>
 
       <div className="mt-6">
-        <SectionHead
-          title="Signal robustness"
-          caption="Rolling z-score across 8 lookback windows at once, as a heat grid. A column hot all the way down is robust to window choice; one hot cell in a single row is a lookback artifact."
-        />
+        <SectionHead title="Signal robustness" />
         <ZHeatmap history={history} />
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-5 lg:grid-cols-2">
         <div>
-          <SectionHead title={`Distribution (${series.windowLabel})`} caption="Historical values by bucket — accent bar is where today sits." />
+          <SectionHead title="Distribution" />
           <div className="h-[90px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={hist} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
@@ -251,7 +240,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
 
         {dist52 && (
           <div>
-            <SectionHead title={cadence === "daily" || cadence === "weekly" ? "52w range" : cadence === "monthly" ? "12m range" : "4q range"} caption="Dot marks where today's value sits in the recent range." />
+            <SectionHead title={cadence === "daily" || cadence === "weekly" ? "52w range" : cadence === "monthly" ? "12m range" : "4q range"} />
             <div className="mt-3">
               <div className="mb-1.5 flex justify-between font-mono text-[0.72rem] text-[var(--text-faint)]">
                 <span>{dist52.min.toFixed(3)}</span>
@@ -333,7 +322,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
   return (
     <>
       <div className="mt-6">
-        <SectionHead title="History" caption={`The raw level is arbitrary for this series — the ${trendWindow}-period trend line is what carries the signal.`} />
+        <SectionHead title="History" />
         <div className="h-[240px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
@@ -358,7 +347,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
       </div>
 
       <div className="mt-6">
-        <SectionHead title="Pace — this is exactly what drives the bias score" caption={`Average of the most recent ${window} periods vs. the ${window} before that. This comparison, normalized by the series' own volatility, is the momentum signal.`} />
+        <SectionHead title="Pace" />
         <div className="h-[110px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={paceData} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 4 }}>
@@ -432,7 +421,7 @@ function AnchorBody({
   return (
     <>
       <div className="mt-6">
-        <SectionHead title="History vs. target" caption={`Shaded band is the ${reference} ± ${band} range this indicator is judged against — not its own historical range.`} />
+        <SectionHead title="History vs. target" />
         <div className="h-[240px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
@@ -448,7 +437,7 @@ function AnchorBody({
       </div>
 
       <div className="mt-6">
-        <SectionHead title="Distance from target — this is exactly what drives the bias score" caption="Position within the reference band, not percentile of its own history." />
+        <SectionHead title="Distance from target" />
         <div className="mt-3">
           <div className="mb-1.5 flex justify-between font-mono text-[0.72rem] text-[var(--text-faint)]">
             <span>{(reference - band).toFixed(2)}</span>
@@ -513,7 +502,7 @@ function ThresholdBody({ series, history, values }: { series: MacroSeries; histo
   return (
     <>
       <div className="mt-6">
-        <SectionHead title="Sign history" caption="The spread crossing zero is the event this indicator watches for — bars below the line mark inversion." />
+        <SectionHead title="Sign history" />
         <div className="h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
@@ -532,15 +521,11 @@ function ThresholdBody({ series, history, values }: { series: MacroSeries; histo
       </div>
 
       <div className="mt-6 rounded-md border p-4" style={{ borderColor: `color-mix(in srgb, ${stateColor} 35%, var(--border))`, background: `color-mix(in srgb, ${stateColor} 7%, transparent)` }}>
-        <div className="font-sans text-[0.68rem] font-bold uppercase tracking-wide" style={{ color: stateColor }}>
-          Current state — this is exactly what drives the bias score
-        </div>
-        <div className="mt-1 font-sans text-[1.05rem] font-semibold" style={{ color: stateColor }}>
+        <div className="font-sans text-[1.05rem] font-semibold" style={{ color: stateColor }}>
           {invertedNow ? "Inverted" : "Normal"} for {daysInState}d
         </div>
-        <p className="m-0 mt-1.5 font-sans text-[0.78rem] leading-snug text-[var(--text-faint)]">
-          {flips} sign flip{flips === 1 ? "" : "s"} across the visible history. The magnitude on either side of zero
-          matters far less than which side it's on.
+        <p className="m-0 mt-1 font-sans text-[0.76rem] text-[var(--text-faint)]">
+          {flips} sign flip{flips === 1 ? "" : "s"} in view
         </p>
       </div>
 
@@ -629,7 +614,7 @@ export default function QuantCard({
           {signal && (
             <div className="mt-1 font-mono text-[0.8rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
               {signal.score > 0 ? "+" : ""}
-              {signal.score.toFixed(2)}
+              {Math.round(signal.score * 100)}%
             </div>
           )}
         </div>
@@ -650,16 +635,12 @@ export default function QuantCard({
                 {bias.label}
               </div>
               <p className="m-0 mt-1.5 font-sans text-[0.78rem] leading-snug text-[var(--text-faint)]">{bias.context}</p>
-              {config && <p className="m-0 mt-2 font-sans text-[0.72rem] leading-snug text-[var(--text-faint)] opacity-80">Method: {config.rationale}</p>}
             </div>
           )}
 
           {linkedMarkets.length > 0 && (
             <div className="mt-3 flex flex-col gap-2">
-              <SectionHead
-                title={`Impacts ${linkedMarkets.length} asset${linkedMarkets.length === 1 ? "" : "s"}`}
-                caption="Arrow = effect of this indicator printing HIGH vs its regime norm. These signed links are exactly what Net Bias aggregates."
-              />
+              <SectionHead title={`Linked assets (${linkedMarkets.length})`} />
               {linkedMarkets.map(({ impact, market }) => (
                 <MarketLink key={impact.symbol} market={market} impact={impact} indicatorHistory={history} />
               ))}
@@ -668,7 +649,7 @@ export default function QuantCard({
 
           {series.extraStats && series.extraStats.length > 0 && (
             <div className="mt-6">
-              <SectionHead title="Specialized for this indicator" caption="Metrics quants actually use for this specific series, not generic stats — each with its own history and z-score." />
+              <SectionHead title="Specialized metrics" />
               <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                 {series.extraStats.map((stat) => (
                   <SpecializedStatChart key={stat.label} stat={stat} />

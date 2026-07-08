@@ -95,12 +95,10 @@ function AssetSummaryCard({
 
 function HorizonCard({
   label,
-  caption,
   data,
   isPrimary,
 }: {
   label: string;
-  caption: string;
   data: HorizonBias;
   isPrimary: boolean;
 }) {
@@ -114,14 +112,7 @@ function HorizonCard({
       }
     >
       <div className="flex items-baseline justify-between gap-2">
-        <div className="flex items-center gap-1.5 font-sans text-[0.78rem] font-semibold">
-          {label}
-          {isPrimary && (
-            <span className="rounded-full px-1.5 py-[1px] text-[0.58rem] font-bold uppercase tracking-wide" style={{ color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 16%, transparent)" }}>
-              sidebar
-            </span>
-          )}
-        </div>
+        <div className="font-sans text-[0.78rem] font-semibold">{label}</div>
         <span
           className="rounded-full border px-2 py-[3px] text-[0.62rem] font-bold uppercase tracking-wide"
           style={{
@@ -137,10 +128,9 @@ function HorizonCard({
         <NetBiasGauge score={data.score} tone={data.tone} />
       </div>
       <div className="mt-2 flex items-center justify-between font-mono text-[0.68rem] text-[var(--text-faint)]">
-        <span>score {data.score > 0 ? "+" : ""}{data.score.toFixed(2)}</span>
+        <span>{data.score > 0 ? "+" : ""}{Math.round(data.score * 100)}%</span>
         <span>{data.daysUsed}d sampled</span>
       </div>
-      <p className="m-0 mt-2 font-sans text-[0.7rem] leading-snug text-[var(--text-faint)]">{caption}</p>
     </div>
   );
 }
@@ -191,7 +181,7 @@ function ContributorRow({ c }: { c: BiasContributor }) {
         <div className="shrink-0 text-right font-mono">
           <div className="text-[0.8rem]" style={{ color: toneColor(c.tone) }}>
             {c.contribution > 0 ? "+" : ""}
-            {c.contribution.toFixed(2)}
+            {Math.round(c.contribution * 100)}%
           </div>
           <div className="mt-0.5 text-[0.66rem] text-[var(--text-faint)]">
             {c.correlation !== null ? `r=${c.correlation > 0 ? "+" : ""}${c.correlation.toFixed(2)}` : "r=n/a"}
@@ -200,7 +190,7 @@ function ContributorRow({ c }: { c: BiasContributor }) {
       </div>
       <div className="mt-2.5">
         <div className="mb-0.5 flex justify-between font-sans text-[0.6rem] uppercase tracking-wide text-[var(--text-faint)]">
-          <span>Weight (impact salience × cadence fit × measured correlation)</span>
+          <span>Weight</span>
           <span>{weightPct}%</span>
         </div>
         <div className="h-1 rounded-full bg-[var(--border)]">
@@ -236,16 +226,11 @@ function BacktestSection({ panels, markets, symbol, horizon, label }: { panels: 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] p-6">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <div className="font-sans text-[0.9rem] font-semibold">Backtest — does this score actually predict {label}?</div>
+        <div className="font-sans text-[0.9rem] font-semibold">Backtest</div>
         <span className="font-mono text-[0.68rem] text-[var(--text-faint)]">
           {backtest.n} weekly samples · {backtest.horizonDays}d forward window
         </span>
       </div>
-      <p className="m-0 mt-2 max-w-[80ch] font-sans text-[0.78rem] leading-snug text-[var(--text-faint)]">
-        For every past week, recomputes what Net Bias would have said using only data available up to that week (same
-        no-lookahead logic as the replay above), then checks what {label} actually did over the next {backtest.horizonDays}{" "}
-        days. If the score were meaningless, correlation would sit near zero and hit rate near 50%.
-      </p>
 
       <div className="mt-5 grid grid-cols-2 gap-4 sm:grid-cols-4">
         <div>
@@ -275,9 +260,6 @@ function BacktestSection({ panels, markets, symbol, horizon, label }: { panels: 
       </div>
 
       <div className="mt-5">
-        <div className="mb-1 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">
-          Each point: a past week's score vs. what happened {backtest.horizonDays}d later
-        </div>
         <div className="h-[220px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ScatterChart margin={{ top: 8, right: 12, bottom: 8, left: 4 }}>
@@ -349,11 +331,6 @@ export default function NetBiasPage({
   if (!assetFilter || !result || !horizonBias) {
     return (
       <div>
-        <p className="m-0 mb-5 font-sans text-[0.85rem] text-[var(--text-dim)]">
-          Pick an asset to see its detailed breakdown, replay history, and backtest — or scan every asset's live net
-          read below, weighted for the <strong className="text-[var(--text)]">{horizon}</strong> horizon selected in
-          the sidebar.
-        </p>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {MARKET_SYMBOLS.map((m) => (
             <AssetSummaryCard
@@ -451,41 +428,17 @@ export default function NetBiasPage({
         <div className="mt-5">
           <div className="mb-1.5 flex justify-between font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">
             <span>Bearish</span>
-            <span className="font-mono normal-case">score {result.score > 0 ? "+" : ""}{result.score.toFixed(2)}</span>
+            <span className="font-mono normal-case">{result.score > 0 ? "+" : ""}{Math.round(result.score * 100)}%</span>
             <span>Bullish</span>
           </div>
           <NetBiasGauge score={result.score} tone={result.tone} />
         </div>
-
-        <p className="m-0 mt-4 max-w-[75ch] font-sans text-[0.8rem] leading-snug text-[var(--text-faint)]">
-          Each indicator is scored with whichever method fits how it actually behaves — not one generic z-score for
-          everything. Crowding-prone series (COT positioning, sentiment surveys) use robust median/MAD
-          z-score + percentile rank; series where the level is arbitrary but the trend matters (balance sheet,
-          payrolls, M2) use momentum vs. their own prior window; series with a real economic reference point
-          (inflation vs. 2% target, unemployment vs. NAIRU) use distance from that anchor; curve spreads use the
-          sign flip itself. Hover a method tag on each row below for the specific reasoning. Scores are then
-          weighted by how well each indicator's release cadence matches the{" "}
-          <strong className="text-[var(--text)]">{horizon}</strong> horizon selected in the sidebar, and by its{" "}
-          <strong className="text-[var(--text)]">measured historical correlation</strong> to {label} itself — a link
-          that sounds intuitive but doesn't actually move with the asset counts for less. Computed from data as of{" "}
-          {asOfDate}.
-        </p>
       </div>
 
       <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <HorizonCard label="Daily bias" caption={`Point-in-time read on ${asOfDate} only.`} data={horizonBias.daily} isPrimary={horizon === "daily"} />
-        <HorizonCard
-          label="Weekly bias"
-          caption="Averages the daily read over the trailing 7 calendar days — smooths single-day noise."
-          data={horizonBias.weekly}
-          isPrimary={horizon === "weekly"}
-        />
-        <HorizonCard
-          label="Monthly bias"
-          caption="Averages the daily read over the trailing 30 calendar days — shows the persistent backdrop."
-          data={horizonBias.monthly}
-          isPrimary={horizon === "monthly"}
-        />
+        <HorizonCard label="Daily bias" data={horizonBias.daily} isPrimary={horizon === "daily"} />
+        <HorizonCard label="Weekly bias" data={horizonBias.weekly} isPrimary={horizon === "weekly"} />
+        <HorizonCard label="Monthly bias" data={horizonBias.monthly} isPrimary={horizon === "monthly"} />
       </div>
 
       <div className="mt-6">
@@ -494,7 +447,7 @@ export default function NetBiasPage({
 
       <div className="mt-6">
         <div className="mb-2 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">
-          Contributing indicators as of {asOfDate}, ranked by weighted strength
+          Contributing indicators
         </div>
         {result.contributors.length === 0 ? (
           <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No linked indicators have enough history as of this date.</p>

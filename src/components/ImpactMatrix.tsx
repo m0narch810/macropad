@@ -67,7 +67,7 @@ export default function ImpactMatrix({ panels }: { panels: MacroPanel[] }) {
                         {s.name}
                       </td>
                       <td className="px-2 py-2 text-right font-mono text-[0.72rem]" style={{ color: signalColor }}>
-                        {s.zscore === null ? "—" : `${s.zscore > 0 ? "+" : ""}${s.zscore.toFixed(2)}`}
+                        {s.zscore === null ? "—" : `${s.zscore > 0 ? "+" : ""}${Math.round(s.zscore * 100)}%`}
                       </td>
                       {MARKET_SYMBOLS.map((m) => {
                         const impact = IMPACTS[s.id]?.find((i) => i.symbol === m.symbol);

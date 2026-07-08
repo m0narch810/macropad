@@ -1,0 +1,536 @@
+[
+  {
+    "label": "ES RF full+chg",
+    "n_predictions": 1690,
+    "correlation_pred_vs_actual": 0.04683817383264163,
+    "hit_rate_all": 0.5615384615384615,
+    "hit_rate_top60pct_magnitude": 0.5857988165680473,
+    "top_features": [
+      {
+        "feature": "us-macro:h41-balance-sheet__chg",
+        "importance": 0.15854519556921265
+      },
+      {
+        "feature": "us-macro:retail-sales",
+        "importance": 0.07825619562375777
+      },
+      {
+        "feature": "us-macro:jobless-claims__chg",
+        "importance": 0.07216513742568627
+      },
+      {
+        "feature": "us-macro:jobless-claims",
+        "importance": 0.06813150937327773
+      },
+      {
+        "feature": "us-macro:housing-starts__chg",
+        "importance": 0.05048494099366754
+      },
+      {
+        "feature": "us-macro:payrolls__chg",
+        "importance": 0.04631041015380536
+      },
+      {
+        "feature": "us-macro:unemployment__chg",
+        "importance": 0.039977802083861556
+      },
+      {
+        "feature": "us-macro:gdp__chg",
+        "importance": 0.03643657537846082
+      },
+      {
+        "feature": "us-macro:consumer-sentiment__chg",
+        "importance": 0.031351758705455285
+      },
+      {
+        "feature": "cot:crude__chg",
+        "importance": 0.030716767054668342
+      },
+      {
+        "feature": "us-macro:retail-sales__chg",
+        "importance": 0.023174944428349782
+      },
+      {
+        "feature": "us-macro:m2__chg",
+        "importance": 0.02282103659656383
+      },
+      {
+        "feature": "transmission:nfci__chg",
+        "importance": 0.021595253872918718
+      },
+      {
+        "feature": "cot:crude",
+        "importance": 0.021312434036192283
+      },
+      {
+        "feature": "us-macro:payrolls",
+        "importance": 0.021193421991009445
+      },
+      {
+        "feature": "us-macro:consumer-sentiment",
+        "importance": 0.01782609039635287
+      },
+      {
+        "feature": "us-macro:h41-balance-sheet",
+        "importance": 0.01758464521051394
+      },
+      {
+        "feature": "us-macro:core-pce",
+        "importance": 0.015127224602926112
+      },
+      {
+        "feature": "us-macro:m2",
+        "importance": 0.013376479291268601
+      },
+      {
+        "feature": "us-macro:unemployment",
+        "importance": 0.01327004959908113
+      }
+    ]
+  },
+  {
+    "label": "ES RF top20",
+    "n_predictions": 1690,
+    "correlation_pred_vs_actual": 0.04846628941927563,
+    "hit_rate_all": 0.5792899408284023,
+    "hit_rate_top60pct_magnitude": 0.5932872655478776,
+    "top_features": [
+      {
+        "feature": "us-macro:h41-balance-sheet__chg",
+        "importance": 0.1574274873157442
+      },
+      {
+        "feature": "us-macro:jobless-claims__chg",
+        "importance": 0.08789641309100972
+      },
+      {
+        "feature": "us-macro:retail-sales",
+        "importance": 0.08537879692397579
+      },
+      {
+        "feature": "us-macro:jobless-claims",
+        "importance": 0.08478767977038741
+      },
+      {
+        "feature": "us-macro:payrolls__chg",
+        "importance": 0.06774139911874238
+      },
+      {
+        "feature": "us-macro:unemployment__chg",
+        "importance": 0.06383099127207023
+      },
+      {
+        "feature": "us-macro:housing-starts__chg",
+        "importance": 0.05504393093211852
+      },
+      {
+        "feature": "us-macro:m2__chg",
+        "importance": 0.04899589299359333
+      },
+      {
+        "feature": "cot:crude__chg",
+        "importance": 0.04504307295667798
+      },
+      {
+        "feature": "us-macro:gdp__chg",
+        "importance": 0.0425204757173389
+      },
+      {
+        "feature": "us-macro:retail-sales__chg",
+        "importance": 0.0391331995352484
+      },
+      {
+        "feature": "us-macro:h41-balance-sheet",
+        "importance": 0.033413736103591
+      },
+      {
+        "feature": "us-macro:payrolls",
+        "importance": 0.03133018650452759
+      },
+      {
+        "feature": "us-macro:core-pce",
+        "importance": 0.026935108085965182
+      },
+      {
+        "feature": "us-macro:consumer-sentiment__chg",
+        "importance": 0.026020717834056187
+      },
+      {
+        "feature": "cot:crude",
+        "importance": 0.024915718676178405
+      },
+      {
+        "feature": "us-macro:consumer-sentiment",
+        "importance": 0.02326842447194206
+      },
+      {
+        "feature": "transmission:nfci__chg",
+        "importance": 0.022968068836472018
+      },
+      {
+        "feature": "us-macro:unemployment",
+        "importance": 0.018414041079479956
+      },
+      {
+        "feature": "us-macro:m2",
+        "importance": 0.014934658780880745
+      }
+    ]
+  },
+  {
+    "label": "ES HGB full+chg",
+    "n_predictions": 1690,
+    "correlation_pred_vs_actual": 0.08052813286743828,
+    "hit_rate_all": 0.5408284023668639,
+    "hit_rate_top60pct_magnitude": 0.5543478260869565,
+    "top_features": [
+      {
+        "feature": "us-macro:h41-balance-sheet",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:h41-balance-sheet__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:h41-balance-sheet__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:sofr-effr-iorb",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:sofr-effr-iorb__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:sofr-effr-iorb__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:housing-starts",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:housing-starts__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:housing-starts__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y-yield",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y-yield__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y-yield__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:hy-credit-spread",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:hy-credit-spread__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:hy-credit-spread__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:unemployment",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:unemployment__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:unemployment__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y2y-spread",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y2y-spread__chg",
+        "importance": 0.0
+      }
+    ]
+  },
+  {
+    "label": "NQ RF full+chg",
+    "n_predictions": 1690,
+    "correlation_pred_vs_actual": 0.05548522990603341,
+    "hit_rate_all": 0.5698224852071005,
+    "hit_rate_top60pct_magnitude": 0.5804540967423495,
+    "top_features": [
+      {
+        "feature": "us-macro:h41-balance-sheet__chg",
+        "importance": 0.06577859969953882
+      },
+      {
+        "feature": "us-macro:jobless-claims__chg",
+        "importance": 0.05676618475445716
+      },
+      {
+        "feature": "us-macro:jobless-claims",
+        "importance": 0.051875670515788244
+      },
+      {
+        "feature": "us-macro:core-pce",
+        "importance": 0.0440642796475967
+      },
+      {
+        "feature": "us-macro:gdp__chg",
+        "importance": 0.042979007556929356
+      },
+      {
+        "feature": "us-macro:payrolls__chg",
+        "importance": 0.03645787658113117
+      },
+      {
+        "feature": "cot:crude__chg",
+        "importance": 0.033186642636675014
+      },
+      {
+        "feature": "us-macro:h41-balance-sheet",
+        "importance": 0.03267478693541886
+      },
+      {
+        "feature": "us-macro:core-cpi",
+        "importance": 0.028281952501295053
+      },
+      {
+        "feature": "transmission:nfci__chg",
+        "importance": 0.028059281173608928
+      },
+      {
+        "feature": "us-macro:payrolls",
+        "importance": 0.025974125697547677
+      },
+      {
+        "feature": "us-macro:consumer-sentiment",
+        "importance": 0.021994640664838416
+      },
+      {
+        "feature": "us-macro:retail-sales__chg",
+        "importance": 0.020394977043795275
+      },
+      {
+        "feature": "us-macro:unemployment__chg",
+        "importance": 0.020260891176880763
+      },
+      {
+        "feature": "us-macro:retail-sales",
+        "importance": 0.020246610223728978
+      },
+      {
+        "feature": "us-macro:housing-starts__chg",
+        "importance": 0.020221222140585575
+      },
+      {
+        "feature": "us-macro:industrial-production",
+        "importance": 0.019558825106031647
+      },
+      {
+        "feature": "cot:crude",
+        "importance": 0.019473112479680935
+      },
+      {
+        "feature": "us-macro:consumer-sentiment__chg",
+        "importance": 0.018267251468100702
+      },
+      {
+        "feature": "us-macro:gdp__stale_days",
+        "importance": 0.017922695254003095
+      }
+    ]
+  },
+  {
+    "label": "NQ RF top20",
+    "n_predictions": 1690,
+    "correlation_pred_vs_actual": 0.0617082724528572,
+    "hit_rate_all": 0.5621301775147929,
+    "hit_rate_top60pct_magnitude": 0.588,
+    "top_features": [
+      {
+        "feature": "us-macro:h41-balance-sheet__chg",
+        "importance": 0.117001580485502
+      },
+      {
+        "feature": "us-macro:jobless-claims__chg",
+        "importance": 0.08396662116319606
+      },
+      {
+        "feature": "us-macro:payrolls__chg",
+        "importance": 0.08381991580993602
+      },
+      {
+        "feature": "us-macro:h41-balance-sheet",
+        "importance": 0.07923901758228752
+      },
+      {
+        "feature": "us-macro:jobless-claims",
+        "importance": 0.07634824653376755
+      },
+      {
+        "feature": "us-macro:gdp__chg",
+        "importance": 0.06160937219774771
+      },
+      {
+        "feature": "us-macro:core-cpi",
+        "importance": 0.05314019674850009
+      },
+      {
+        "feature": "us-macro:core-pce",
+        "importance": 0.05167166386831029
+      },
+      {
+        "feature": "us-macro:industrial-production",
+        "importance": 0.04985464709795216
+      },
+      {
+        "feature": "us-macro:retail-sales",
+        "importance": 0.0484886311488079
+      },
+      {
+        "feature": "cot:crude__chg",
+        "importance": 0.0442820676995171
+      },
+      {
+        "feature": "transmission:nfci__chg",
+        "importance": 0.04414571138653293
+      },
+      {
+        "feature": "us-macro:consumer-sentiment__chg",
+        "importance": 0.03941219227072468
+      },
+      {
+        "feature": "us-macro:gdp__stale_days",
+        "importance": 0.03065050312075574
+      },
+      {
+        "feature": "cot:crude",
+        "importance": 0.02931436803489506
+      },
+      {
+        "feature": "us-macro:consumer-sentiment",
+        "importance": 0.027110541042529537
+      },
+      {
+        "feature": "us-macro:housing-starts__chg",
+        "importance": 0.0217620566591776
+      },
+      {
+        "feature": "us-macro:retail-sales__chg",
+        "importance": 0.02121830242788446
+      },
+      {
+        "feature": "us-macro:unemployment__chg",
+        "importance": 0.019399661645103358
+      },
+      {
+        "feature": "us-macro:payrolls",
+        "importance": 0.017564703076872364
+      }
+    ]
+  },
+  {
+    "label": "NQ HGB full+chg",
+    "n_predictions": 1690,
+    "correlation_pred_vs_actual": 0.08218987247234776,
+    "hit_rate_all": 0.5396449704142012,
+    "hit_rate_top60pct_magnitude": 0.5601577909270217,
+    "top_features": [
+      {
+        "feature": "us-macro:h41-balance-sheet",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:h41-balance-sheet__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:h41-balance-sheet__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:sofr-effr-iorb",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:sofr-effr-iorb__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:sofr-effr-iorb__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:housing-starts",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:housing-starts__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:housing-starts__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y-yield",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y-yield__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y-yield__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:hy-credit-spread",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:hy-credit-spread__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:hy-credit-spread__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:unemployment",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:unemployment__chg",
+        "importance": 0.0
+      },
+      {
+        "feature": "us-macro:unemployment__stale_days",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y2y-spread",
+        "importance": 0.0
+      },
+      {
+        "feature": "yield-rates:10y2y-spread__chg",
+        "importance": 0.0
+      }
+    ]
+  }
+]

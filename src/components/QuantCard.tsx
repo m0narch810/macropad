@@ -38,11 +38,11 @@ import { IMPACTS, marketRowId } from "@/lib/markets";
 import { computeIndicatorSignal, getSignalConfig, type SignalMethod } from "@/lib/indicatorSignal";
 import type { MarketRow } from "@/lib/getMarkets";
 
-const chipClasses: Record<MacroSeries["status"], string> = {
-  up: "text-[var(--up)] bg-[color-mix(in_srgb,var(--up)_14%,transparent)] border-[color-mix(in_srgb,var(--up)_35%,transparent)]",
-  down: "text-[var(--down)] bg-[color-mix(in_srgb,var(--down)_14%,transparent)] border-[color-mix(in_srgb,var(--down)_35%,transparent)]",
-  flat: "text-[var(--flat)] bg-[color-mix(in_srgb,var(--flat)_14%,transparent)] border-[color-mix(in_srgb,var(--flat)_35%,transparent)]",
-  pending: "text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border-[color-mix(in_srgb,var(--accent)_30%,transparent)]",
+const chipColor: Record<MacroSeries["status"], string> = {
+  up: "var(--up)",
+  down: "var(--down)",
+  flat: "var(--flat)",
+  pending: "var(--text-faint)",
 };
 
 /** Chip text reads good/bad (bullish/bearish), not literal direction — a chip that says "up" in red is confusing. */
@@ -606,14 +606,16 @@ export default function QuantCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
             <h3 className="m-0 text-[1rem] font-semibold leading-tight sm:text-[1.1rem]">{series.name}</h3>
-            <span className={`shrink-0 rounded-full border px-2 py-[3px] text-[0.64rem] font-bold uppercase tracking-wide ${chipClasses[chipTone]}`}>{chipLabel[chipTone]}</span>
-            <span className="hidden shrink-0 rounded-full border px-2 py-[2px] font-sans text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--text-faint)] sm:inline" style={{ borderColor: "var(--border)" }} title={config?.rationale}>
-              {methodLabel[method]}
+            <span className="shrink-0 font-mono text-[0.68rem] font-bold uppercase tracking-wide" style={{ color: chipColor[chipTone] }}>
+              [{chipLabel[chipTone]}]
+            </span>
+            <span className="hidden shrink-0 font-mono text-[0.62rem] uppercase tracking-wide text-[var(--text-faint)] sm:inline" title={config?.rationale}>
+              [{methodLabel[method]}]
             </span>
             {backtest && <BacktestChip evidence={backtest} />}
             {!isRelevant && (
-              <span className="shrink-0 whitespace-nowrap rounded-full border border-[var(--border)] px-2 py-[3px] font-sans text-[0.62rem] font-semibold text-[var(--text-faint)]">
-                Not linked to {assetLabel ?? assetFilter}
+              <span className="shrink-0 whitespace-nowrap font-mono text-[0.62rem] text-[var(--text-faint)]">
+                [no {assetLabel ?? assetFilter} link]
               </span>
             )}
           </div>

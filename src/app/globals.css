@@ -1,65 +1,35 @@
 @import "tailwindcss";
 
 /*
- * Desk tokens. Data colors (--up, --down, --accent, --steel) are validated
- * against the panel surface in both modes (lightness band, chroma floor,
- * CVD separation, 3:1 contrast) — change them only in validated pairs.
+ * Phosphor terminal tokens — dark only, by design.
+ * Direction colors keep a lightness gap + paired ▲▼ glyphs for CVD safety:
+ * up/accent #3dd68c (bright) vs down #ff5f56 (darker, orange-leaning red).
+ * --amber is reserved for evidence/warning (non-directional) so green never
+ * has to mean two things at once.
  */
 :root {
-  --bg: #0b0e12;
-  --panel: #11151b;
-  --panel-2: #151a21;
-  --border: #232933;
-  --border-strong: #323a47;
-  --text: #e8eaed;
-  --text-dim: #9aa1ac;
-  --text-faint: #636b76;
-  --accent: #bd8226;
-  --up: #34a56f;
-  --down: #e8555c;
-  --steel: #5e96d8;
-  --flat: #9aa1ac;
-}
-
-:root[data-theme="light"] {
-  --bg: #e7e9ed;
-  --panel: #f4f5f7;
-  --panel-2: #eff1f4;
-  --border: #d3d7de;
-  --border-strong: #b9bfc9;
-  --text: #16181d;
-  --text-dim: #4c525c;
-  --text-faint: #7d8492;
-  --accent: #8a6210;
-  --up: #1e7a4d;
-  --down: #c03540;
-  --steel: #3568a8;
-  --flat: #4c525c;
-}
-
-@media (prefers-color-scheme: light) {
-  :root:not([data-theme="dark"]) {
-    --bg: #e7e9ed;
-    --panel: #f4f5f7;
-    --panel-2: #eff1f4;
-    --border: #d3d7de;
-    --border-strong: #b9bfc9;
-    --text: #16181d;
-    --text-dim: #4c525c;
-    --text-faint: #7d8492;
-    --accent: #8a6210;
-    --up: #1e7a4d;
-    --down: #c03540;
-    --steel: #3568a8;
-    --flat: #4c525c;
-  }
+  color-scheme: dark;
+  --bg: #050807;
+  --panel: #0a0f0c;
+  --panel-2: #0d1310;
+  --border: #1b2a21;
+  --border-strong: #2b4433;
+  --text: #d8e9de;
+  --text-dim: #93ab9d;
+  --text-faint: #5c7365;
+  --accent: #3dd68c;
+  --up: #3dd68c;
+  --down: #ff5f56;
+  --steel: #58c2cf;
+  --amber: #f0b04d;
+  --flat: #93ab9d;
 }
 
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text);
   --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-mono: var(--font-jet);
 }
 
 html,
@@ -72,17 +42,62 @@ body {
   font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 }
 
+/* Ambient phosphor bloom at the top of the page. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(1200px 380px at 50% -60px, color-mix(in srgb, var(--accent) 7%, transparent), transparent 70%);
+}
+
+/* CRT scanlines over everything — the one loud texture, kept faint. */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.16) 0px, rgba(0, 0, 0, 0.16) 1px, transparent 1px, transparent 3px);
+  opacity: 0.45;
+}
+
+/* Display role = bold terminal caps, not a serif. */
 .font-display {
-  font-family: var(--font-display), Georgia, "Times New Roman", serif;
-  font-weight: 400;
-  letter-spacing: 0.005em;
+  font-family: var(--font-jet), ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
 }
 
 .font-mono {
   font-variant-numeric: tabular-nums;
 }
 
-/* Terminal-style blinking block cursor (logo tape, statusline). */
+.glow {
+  text-shadow: 0 0 9px color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* Terminal chrome is square. Flatten every rounded utility; opt back in
+   with .keep-round (this rule is unlayered so it beats @layer utilities). */
+[class*="rounded"] {
+  border-radius: 2px;
+}
+.keep-round {
+  border-radius: 9999px;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Terminal-style blinking block cursor (statusline, hero). */
 @keyframes blink-cursor {
   50% {
     opacity: 0;
@@ -93,10 +108,17 @@ body {
   animation: blink-cursor 1.1s steps(1) infinite;
 }
 
-/* Faint graph-paper dot grid for the main work surface. */
+/* Faint dot grid for the main work surface. */
 .dotgrid {
-  background-image: radial-gradient(color-mix(in srgb, var(--text) 6%, transparent) 1px, transparent 1px);
+  background-image: radial-gradient(color-mix(in srgb, var(--accent) 7%, transparent) 1px, transparent 1px);
   background-size: 24px 24px;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

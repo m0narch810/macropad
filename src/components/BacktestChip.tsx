@@ -1,21 +1,17 @@
 import { backtestTooltip, type BacktestEvidence } from "@/lib/backtestImportance";
 
 /**
- * Tiny "this input mattered in the backtest" marker. Neutral accent color on
- * purpose — relevance says nothing about direction.
+ * Tiny "this input mattered in the backtest" marker. Amber on purpose —
+ * evidence is non-directional, so it must never read as green/red.
  */
 export default function BacktestChip({ evidence }: { evidence: BacktestEvidence }) {
   return (
     <span
-      className="shrink-0 whitespace-nowrap rounded-full border px-2 py-[2px] font-mono text-[0.6rem] font-semibold uppercase tracking-wide"
-      style={{
-        color: "var(--accent)",
-        borderColor: "color-mix(in srgb, var(--accent) 35%, var(--border))",
-        background: "color-mix(in srgb, var(--accent) 8%, transparent)",
-      }}
+      className="shrink-0 whitespace-nowrap font-mono text-[0.62rem] font-semibold uppercase tracking-wide"
+      style={{ color: "var(--amber)" }}
       title={backtestTooltip(evidence)}
     >
-      bt #{evidence.rank} · {Math.round(evidence.weeklyShare * 100)}%
+      [bt#{evidence.rank}·{Math.round(evidence.weeklyShare * 100)}%]
     </span>
   );
 }

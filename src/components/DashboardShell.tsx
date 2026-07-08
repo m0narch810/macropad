@@ -7,8 +7,7 @@ import SeriesCard from "@/components/SeriesCard";
 import QuantCard from "@/components/QuantCard";
 import NewsFeedCard from "@/components/NewsFeedCard";
 import MarketTicker from "@/components/MarketTicker";
-import PanelIcon from "@/components/PanelIcon";
-import AsciiLogo from "@/components/AsciiLogo";
+import TerminalHero from "@/components/TerminalHero";
 import OverviewBoard from "@/components/OverviewBoard";
 import CustomDashboardPage from "@/components/CustomDashboardPage";
 import CustomBiasPage from "@/components/CustomBiasPage";
@@ -20,6 +19,15 @@ const BOARD_ID = "board";
 const NEWS_ID = "news";
 const CUSTOM_DASHBOARD_ID = "custom-dashboard";
 const CUSTOM_BIAS_ID = "custom-bias";
+
+/** tmux-style short window names for the tab bar. */
+const SHORT_LABEL: Record<string, string> = {
+  "us-macro": "macro",
+  "yield-rates": "rates",
+  "cot-positioning": "cot",
+  transmission: "transmission",
+  geopolitics: "geo-vol",
+};
 
 /** Count of strong reads (|score| >= 0.5 on the -1..1 method scale) per panel, split by good/bad tone. */
 function panelSignals(panel: MacroPanel): { bull: number; bear: number } {
@@ -34,64 +42,61 @@ function panelSignals(panel: MacroPanel): { bull: number; bear: number } {
   return { bull, bear };
 }
 
-function NavButton({
+function Tab({
+  index,
+  label,
   isActive,
   onClick,
-  icon,
-  title,
-  subtitle,
+  bull,
+  bear,
 }: {
+  index: number;
+  label: string;
   isActive: boolean;
   onClick: () => void;
-  icon: string;
-  title: string;
-  subtitle: React.ReactNode;
+  bull?: number;
+  bear?: number;
 }) {
   return (
     <button
       onClick={onClick}
-      className="group relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left font-sans transition-all duration-150"
-      style={
+      className={`flex shrink-0 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 font-mono text-[0.72rem] transition-colors ${
         isActive
-          ? {
-              background: "color-mix(in srgb, var(--accent) 11%, transparent)",
-              boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent)",
-            }
-          : undefined
-      }
+          ? "border-[var(--accent)] text-[var(--accent)] glow"
+          : "border-transparent text-[var(--text-dim)] hover:text-[var(--text)]"
+      }`}
     >
-      {isActive && (
-        <span
-          className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full"
-          style={{ background: "var(--accent)" }}
-        />
+      <span className={isActive ? "text-[var(--accent)]" : "text-[var(--text-faint)]"}>{index}:</span>
+      {label}
+      {(bull ?? 0) + (bear ?? 0) > 0 && (
+        <span className="hidden text-[0.62rem] lg:inline">
+          {bull ? <span className="text-[var(--up)]">{bull}▲</span> : null}
+          {bear ? <span className="text-[var(--down)]">{bear}▼</span> : null}
+        </span>
       )}
-      <PanelIcon id={icon} className="shrink-0 transition-colors" style={{ color: isActive ? "var(--accent)" : "var(--text-faint)" }} />
-      <div className="min-w-0 flex-1">
-        <div
-          className={`truncate text-[0.85rem] font-semibold transition-colors ${
-            isActive ? "text-[var(--text)]" : "text-[var(--text-dim)] group-hover:text-[var(--text)]"
-          }`}
-        >
-          {title}
-        </div>
-        <div className="mt-0.5 text-[0.66rem] text-[var(--text-faint)]">{subtitle}</div>
-      </div>
     </button>
   );
 }
 
-/** Sticky page header so the context survives scrolling through dense lists. */
 function PageHead({ title, meta }: { title: string; meta?: React.ReactNode }) {
   return (
-    <header
-      className="sticky top-0 z-20 -mx-4 mb-6 flex items-baseline gap-3 border-b border-[var(--border)] px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-9 lg:px-9"
-      style={{ background: "color-mix(in srgb, var(--bg) 84%, transparent)" }}
-    >
-      <h1 className="font-display m-0 text-balance text-[1.35rem] font-semibold leading-none">{title}</h1>
+    <div className="mb-5 flex flex-wrap items-baseline gap-3">
+      <h1 className="font-display m-0 text-[1.1rem] leading-none text-[var(--accent)] glow">{title}</h1>
       {meta && <span className="font-mono text-[0.66rem] text-[var(--text-faint)]">{meta}</span>}
-    </header>
+    </div>
   );
+}
+
+/** Live UTC-naive local clock for the statusline; blank until mounted so SSR matches. */
+function Clock() {
+  const [t, setT] = useState("");
+  useEffect(() => {
+    const tick = () => setT(new Date().toLocaleTimeString("en-US", { hour12: false }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="font-mono tabular-nums">{t}</span>;
 }
 
 export default function DashboardShell({
@@ -106,17 +111,15 @@ export default function DashboardShell({
   const [activeId, setActiveId] = useState<string>(BOARD_ID);
   const [focusSeriesId, setFocusSeriesId] = useState<string | null>(null);
   const [assetFilter, setAssetFilter] = useState<string>("");
-  const [navOpen, setNavOpen] = useState(false);
   const active = panels.find((p) => p.id === activeId);
+
   const pickPage = (id: string) => {
     setActiveId(id);
     setFocusSeriesId(null);
-    setNavOpen(false);
   };
   const openFromBoard = (panelId: string, seriesId: string) => {
     setActiveId(panelId);
     setFocusSeriesId(seriesId);
-    setNavOpen(false);
   };
 
   useEffect(() => {
@@ -143,208 +146,143 @@ export default function DashboardShell({
     { bull: 0, bear: 0 }
   );
 
+  const tabs: { id: string; label: string; bull?: number; bear?: number }[] = [
+    { id: BOARD_ID, label: "board" },
+    { id: NEWS_ID, label: "news" },
+    ...panels.map((p) => ({ id: p.id, label: SHORT_LABEL[p.id] ?? p.id, ...panelSignals(p) })),
+    { id: CUSTOM_DASHBOARD_ID, label: "custom-dash" },
+    { id: CUSTOM_BIAS_ID, label: "custom-bias" },
+  ];
+
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="relative z-[1] flex min-h-screen flex-col pb-8">
+      <TerminalHero seriesCount={totalSeries} bull={totals.bull} bear={totals.bear} lastUpdated={lastUpdated} />
+
       <MarketTicker markets={markets} />
 
-      <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-4 py-3 lg:hidden">
-        <button
-          onClick={() => setNavOpen((v) => !v)}
-          aria-label="Toggle navigation"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--text-dim)]"
-        >
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
-            <path d="M2 4H14" />
-            <path d="M2 8H14" />
-            <path d="M2 12H14" />
-          </svg>
-        </button>
-        <AsciiLogo tapeLength={10} className="flex items-baseline gap-2.5 [&>div:last-child]:mt-0" />
+      <div className="sticky top-0 z-30 flex items-stretch gap-1 border-b border-[var(--border)] bg-[var(--panel-2)] pr-2">
+        <nav className="no-scrollbar flex flex-1 items-stretch overflow-x-auto px-1">
+          {tabs.map((t, i) => (
+            <Tab
+              key={t.id}
+              index={i}
+              label={t.label}
+              isActive={activeId === t.id}
+              onClick={() => pickPage(t.id)}
+              bull={t.bull}
+              bear={t.bear}
+            />
+          ))}
+        </nav>
+        <div className="flex shrink-0 items-center py-1.5">
+          <select
+            value={assetFilter}
+            onChange={(e) => setAssetFilter(e.target.value)}
+            aria-label="Asset lens"
+            className="appearance-none border px-2 py-1 font-mono text-[0.68rem] outline-none"
+            style={{
+              borderColor: assetFilter ? "color-mix(in srgb, var(--accent) 55%, transparent)" : "var(--border)",
+              background: assetFilter ? "color-mix(in srgb, var(--accent) 12%, transparent)" : "var(--panel)",
+              color: assetFilter ? "var(--accent)" : "var(--text-dim)",
+            }}
+          >
+            <option value="">lens: all</option>
+            {MARKET_SYMBOLS.map((m) => (
+              <option key={m.symbol} value={m.symbol}>
+                lens: {m.label}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
-      {navOpen && (
-        <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden="true" />
-      )}
-
-      <div className="flex flex-1">
-        <aside
-          className={`fixed inset-y-0 left-0 z-40 flex w-[248px] shrink-0 -translate-x-full flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--panel-2)] transition-transform duration-200 lg:static lg:translate-x-0 ${
-            navOpen ? "translate-x-0" : ""
-          }`}
-        >
-          <div className="hidden border-b border-[var(--border)] px-5 py-5 lg:block">
-            <AsciiLogo tapeLength={18} />
-          </div>
-
-          <div className="border-b border-[var(--border)] px-3.5 py-3.5">
-            <label className="mb-1.5 block font-sans text-[0.64rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]">
-              Asset lens
-            </label>
-            <div className="relative">
-              <select
-                value={assetFilter}
-                onChange={(e) => setAssetFilter(e.target.value)}
-                className="w-full appearance-none rounded-md border px-3 py-2 pr-8 font-sans text-[0.82rem] font-medium outline-none"
-                style={{
-                  borderColor: assetFilter ? "color-mix(in srgb, var(--accent) 45%, transparent)" : "var(--border)",
-                  background: assetFilter ? "color-mix(in srgb, var(--accent) 10%, transparent)" : "var(--panel)",
-                  color: assetFilter ? "var(--accent)" : "var(--text-dim)",
-                }}
-              >
-                <option value="">All indicators</option>
-                {MARKET_SYMBOLS.map((m) => (
-                  <option key={m.symbol} value={m.symbol}>
-                    {m.label}
-                  </option>
-                ))}
-              </select>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2"
-                style={{ color: assetFilter ? "var(--accent)" : "var(--text-faint)" }}
-              >
-                <path d="M4 6L8 10L12 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </div>
-            {assetFilter && (
-              <p className="m-0 mt-1.5 font-sans text-[0.68rem] leading-snug text-[var(--text-faint)]">
-                Indicators with no mapped impact on {assetLabel} are dimmed below.
-              </p>
-            )}
-          </div>
-
-          <nav className="flex flex-1 flex-col gap-1 p-3">
-            <NavButton
-              isActive={isBoard}
-              onClick={() => pickPage(BOARD_ID)}
-              icon="board"
+      <main className="dotgrid min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8">
+        {isBoard ? (
+          <>
+            <PageHead
               title="The Board"
-              subtitle="every series · one screen"
+              meta={
+                <>
+                  {totalSeries} series · <span className="text-[var(--up)]">{totals.bull}▲</span>{" "}
+                  <span className="text-[var(--down)]">{totals.bear}▼</span> strong
+                  {assetFilter && <> · lens {assetLabel}</>}
+                </>
+              }
             />
-            <NavButton isActive={isNews} onClick={() => pickPage(NEWS_ID)} icon="news" title="News" subtitle="headline sentiment" />
-            {panels.map((panel) => {
-              const { bull, bear } = panelSignals(panel);
-              return (
-                <NavButton
-                  key={panel.id}
-                  isActive={panel.id === activeId}
-                  onClick={() => pickPage(panel.id)}
-                  icon={panel.id}
-                  title={panel.title}
-                  subtitle={
-                    bull + bear === 0 ? (
-                      "no strong reads"
-                    ) : (
-                      <span className="font-mono">
-                        {bull > 0 && <span className="text-[var(--up)]">{bull} bull</span>}
-                        {bull > 0 && bear > 0 && " · "}
-                        {bear > 0 && <span className="text-[var(--down)]">{bear} bear</span>}
-                        <span> strong</span>
-                      </span>
-                    )
-                  }
-                />
-              );
-            })}
-
-            <div className="my-2 border-t border-[var(--border)]" />
-
-            <NavButton
-              isActive={isCustomDashboard}
-              onClick={() => pickPage(CUSTOM_DASHBOARD_ID)}
-              icon="custom-dashboard"
-              title="Custom Dashboard"
-              subtitle="pick your own indicators"
-            />
-            <NavButton
-              isActive={isCustomBias}
-              onClick={() => pickPage(CUSTOM_BIAS_ID)}
-              icon="custom-bias"
-              title="Custom Bias"
-              subtitle="your own weights + thresholds"
-            />
-          </nav>
-
-          <div className="whitespace-nowrap border-t border-[var(--border)] px-4 py-3 font-mono text-[0.64rem] text-[var(--text-faint)]">
-            {totalSeries} series │ {lastUpdated ? `synced ${new Date(lastUpdated).toLocaleTimeString()}` : "not synced"} │{" "}
-            <span className="blink-cursor text-[var(--accent)]">▊</span>
-          </div>
-        </aside>
-
-        <main className="dotgrid min-w-0 flex-1 px-4 pb-6 sm:px-6 lg:px-9 lg:pb-8">
-          {isBoard ? (
-            <>
-              <PageHead
-                title="The Board"
-                meta={
+            <OverviewBoard panels={panels} assetFilter={assetFilter || null} onOpen={openFromBoard} />
+          </>
+        ) : isNews ? (
+          <>
+            <PageHead title="News" />
+            {newsSeries ? (
+              <NewsFeedCard series={newsSeries} />
+            ) : (
+              <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No news data yet.</p>
+            )}
+          </>
+        ) : isCustomDashboard ? (
+          <>
+            <PageHead title="Custom Dashboard" />
+            <CustomDashboardPage panels={panels} markets={markets} />
+          </>
+        ) : isCustomBias ? (
+          <>
+            <PageHead title="Custom Bias" />
+            <CustomBiasPage panels={panels} />
+          </>
+        ) : active ? (
+          <>
+            <PageHead
+              title={active.title}
+              meta={(() => {
+                const { bull, bear } = panelSignals(active);
+                return bull + bear === 0 ? (
+                  "no strong reads"
+                ) : (
                   <>
-                    {totalSeries} series ·{" "}
-                    <span className="text-[var(--up)]">{totals.bull}▲</span>{" "}
-                    <span className="text-[var(--down)]">{totals.bear}▼</span> strong
+                    <span className="text-[var(--up)]">{bull}▲</span> <span className="text-[var(--down)]">{bear}▼</span> strong
                   </>
-                }
-              />
-              <OverviewBoard panels={panels} assetFilter={assetFilter || null} onOpen={openFromBoard} />
-            </>
-          ) : isNews ? (
-            <>
-              <PageHead title="News" />
-              {newsSeries ? <NewsFeedCard series={newsSeries} /> : <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No news data yet.</p>}
-            </>
-          ) : isCustomDashboard ? (
-            <>
-              <PageHead title="Custom Dashboard" />
-              <CustomDashboardPage panels={panels} markets={markets} />
-            </>
-          ) : isCustomBias ? (
-            <>
-              <PageHead title="Custom Bias" />
-              <CustomBiasPage panels={panels} />
-            </>
-          ) : active ? (
-            <>
-              <PageHead
-                title={active.title}
-                meta={(() => {
-                  const { bull, bear } = panelSignals(active);
-                  return bull + bear === 0 ? (
-                    "no strong reads"
-                  ) : (
-                    <>
-                      <span className="text-[var(--up)]">{bull}▲</span> <span className="text-[var(--down)]">{bear}▼</span> strong
-                    </>
-                  );
-                })()}
-              />
+                );
+              })()}
+            />
 
-              <div className={DEEP_PANELS.has(active.id) ? "flex flex-col gap-2" : "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"}>
-                {active.series
-                  .filter((series) => series.id !== "geo:news-feed")
-                  .map((series) =>
-                    DEEP_PANELS.has(active.id) ? (
-                      <div key={series.id} id={`card-${series.id}`} className="scroll-mt-16">
-                        <QuantCard
-                          series={series}
-                          markets={markets}
-                          assetFilter={assetFilter || null}
-                          assetLabel={assetLabel}
-                          defaultOpen={focusSeriesId === series.id}
-                        />
-                      </div>
+            <div className={DEEP_PANELS.has(active.id) ? "flex flex-col gap-2" : "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"}>
+              {active.series
+                .filter((series) => series.id !== "geo:news-feed")
+                .map((series) => (
+                  <div key={series.id} id={`card-${series.id}`} className="scroll-mt-16">
+                    {DEEP_PANELS.has(active.id) ? (
+                      <QuantCard
+                        series={series}
+                        markets={markets}
+                        assetFilter={assetFilter || null}
+                        assetLabel={assetLabel}
+                        defaultOpen={focusSeriesId === series.id}
+                      />
                     ) : (
-                      <div key={series.id} id={`card-${series.id}`} className="scroll-mt-16">
-                        <SeriesCard series={series} assetFilter={assetFilter || null} assetLabel={assetLabel} />
-                      </div>
-                    )
-                  )}
-              </div>
-            </>
-          ) : null}
-        </main>
-      </div>
+                      <SeriesCard series={series} assetFilter={assetFilter || null} assetLabel={assetLabel} />
+                    )}
+                  </div>
+                ))}
+            </div>
+          </>
+        ) : null}
+      </main>
+
+      <footer className="fixed inset-x-0 bottom-0 z-40 flex h-8 items-center gap-x-4 overflow-hidden border-t border-[var(--border)] bg-[var(--panel-2)] px-3 font-mono text-[0.66rem] text-[var(--text-dim)]">
+        <span className="font-bold tracking-[0.08em] text-[var(--accent)]">MACROPAD</span>
+        <span className="hidden sm:inline">{totalSeries} series</span>
+        <span>
+          <span className="text-[var(--up)]">{totals.bull}▲</span> <span className="text-[var(--down)]">{totals.bear}▼</span>
+        </span>
+        <span className="hidden md:inline">
+          synced {lastUpdated ? new Date(lastUpdated).toLocaleTimeString("en-US", { hour12: false }) : "never"}
+        </span>
+        <span className="ml-auto flex items-center gap-1.5">
+          <Clock />
+          <span className="blink-cursor text-[var(--accent)]">▊</span>
+        </span>
+      </footer>
     </div>
   );
 }

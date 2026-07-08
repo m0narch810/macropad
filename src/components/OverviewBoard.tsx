@@ -50,7 +50,7 @@ function Tile({
       <div className="flex w-full items-center justify-between gap-2">
         <span className="truncate font-sans text-[0.7rem] font-medium text-[var(--text-dim)]">{series.name}</span>
         {ev && (
-          <span className="shrink-0 font-mono text-[0.58rem] text-[var(--accent)]" title={`Backtest evidence rank ${ev.rank} of ${ev.rankedCount}`}>
+          <span className="shrink-0 font-mono text-[0.58rem] text-[var(--amber)]" title={`Backtest evidence rank ${ev.rank} of ${ev.rankedCount}`}>
             bt#{ev.rank}
           </span>
         )}

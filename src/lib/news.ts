@@ -44,6 +44,36 @@ function isMacroRelevant(item: RssItem): boolean {
   return MACRO_KEYWORDS.some((k) => t.includes(k));
 }
 
+/**
+ * Per-asset feeds used to hit Yahoo's ticker headline RSS, which for these
+ * symbols (mostly futures/ETFs, not single stocks) mostly returns generic
+ * "Gold Price Forecast" technical-analysis churn rather than the actual
+ * macro drivers of that asset. Instead, asset feeds are now built by
+ * filtering the SAME pooled macro desks used for the general feed down to
+ * headlines that are actually about that asset's fundamental drivers —
+ * real Fed/ECB/OPEC/growth coverage, keyword-matched per symbol, not price
+ * chatter from a random forecasting site.
+ */
+const ASSET_KEYWORDS: Record<string, string[]> = {
+  "^GSPC": ["s&p 500", "s&p500", "wall street", "stock market", "stocks", "equities", "equity market", "dow jones", "risk assets"],
+  "^IXIC": ["nasdaq", "tech stocks", "big tech", "ai stocks", "chipmakers", "semiconductor", "growth stocks", "technology sector"],
+  "CL=F": ["oil", "crude", "wti", "brent", "opec", "barrel", "energy prices", "petroleum"],
+  "GC=F": ["gold", "bullion", "safe haven", "safe-haven", "precious metal"],
+  "HG=F": ["copper", "industrial metal"],
+  "DX-Y.NYB": ["dollar", "dxy", "greenback", "usd", "dollar index", "currency market"],
+  "HYG": ["high yield", "high-yield", "junk bond", "credit spread", "corporate bond", "corporate debt", "credit market", "leveraged loan", "credit conditions"],
+  "TLT": ["treasury", "treasuries", "bond market", "10-year", "10 year yield", "30-year", "long bond", "yield curve", "bond yields", "government debt"],
+  "SI=F": ["silver", "precious metal"],
+  "NG=F": ["natural gas", "henry hub", "natgas", "lng", "gas prices"],
+};
+
+function isAssetRelevant(item: RssItem, symbol: string): boolean {
+  const keywords = ASSET_KEYWORDS[symbol];
+  if (!keywords) return false;
+  const t = `${item.title} ${item.description ?? ""}`.toLowerCase();
+  return keywords.some((k) => t.includes(k));
+}
+
 export interface NewsItem {
   title: string;
   link: string | null;
@@ -157,24 +187,38 @@ export function sentimentTrend(items: NewsItem[], halfLifeHours = 3): { date: st
   return out;
 }
 
-/** Fetches headlines across macro news desks — the "general" feed. */
-export async function fetchNewsFeed(maxItems = 120): Promise<NewsItem[]> {
-  const results = await Promise.all(
+export interface NewsPool {
+  source: string;
+  items: RssItem[];
+}
+
+/**
+ * Fetches every macro desk once so both the general feed and all ten
+ * per-asset feeds can be built from the same data instead of each asset
+ * hitting its own separate source (which is how the old Yahoo-per-ticker
+ * approach worked, and why it needed 10 extra network calls per refresh).
+ */
+export async function fetchMacroNewsPool(): Promise<NewsPool[]> {
+  return Promise.all(
     NEWS_SOURCES.map(async (src) => {
       const items = await fetchRssHeadlines(src.url);
       return { source: src.label, items: src.filterMacro ? items.filter(isMacroRelevant) : items };
     })
   );
-  return mergeAndScore(results, maxItems);
+}
+
+/** Scores the pooled macro desks as-is — the "general" feed. */
+export function scoreGeneralFeed(pool: NewsPool[], maxItems = 120): NewsItem[] {
+  return mergeAndScore(pool, maxItems);
 }
 
 /**
- * Asset-specific feed for a single ticker — this is exactly what the Yahoo
- * per-ticker headline RSS is actually good at (it was wrong for the pooled
- * "general" feed, which needs real macro desks instead).
+ * Asset-specific feed for a single tracked symbol, built by filtering the
+ * same pooled macro desks down to headlines about that asset's actual
+ * fundamental drivers (Fed/ECB/OPEC/growth coverage mentioning it), not a
+ * per-ticker RSS feed full of generic price-forecast churn.
  */
-export async function fetchAssetNewsFeed(symbol: string, maxItems = 40): Promise<NewsItem[]> {
-  const url = `https://feeds.finance.yahoo.com/rss/2.0/headline?s=${encodeURIComponent(symbol)}&region=US&lang=en-US`;
-  const items = await fetchRssHeadlines(url);
-  return mergeAndScore([{ source: `Yahoo Finance ${symbol}`, items }], maxItems);
+export function scoreAssetFeed(pool: NewsPool[], symbol: string, maxItems = 40): NewsItem[] {
+  const filtered = pool.map(({ source, items }) => ({ source, items: items.filter((h) => isAssetRelevant(h, symbol)) }));
+  return mergeAndScore(filtered, maxItems);
 }

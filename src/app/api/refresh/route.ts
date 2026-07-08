@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabaseServer";
 import { fetchFredHistory, statusFromDelta, fmt } from "@/lib/fred";
 import { fetchCotSeries, cotIndex, fmtNet, COT_CODES, type CotPoint } from "@/lib/cftc";
 import { fetchYahooHistory, ratioSeriesDated, toDatedSeries } from "@/lib/yahoo";
-import { fetchNewsFeed, fetchAssetNewsFeed, weightedSentimentAvg, sentimentTrend } from "@/lib/news";
+import { fetchMacroNewsPool, scoreGeneralFeed, scoreAssetFeed, weightedSentimentAvg, sentimentTrend } from "@/lib/news";
 import {
   computeStats,
   lastValidPair,
@@ -1227,8 +1227,11 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ---- News sentiment feed (pooled headlines, keyword-lexicon scored) ----
-    const newsItems = await fetchNewsFeed(100);
+    // ---- News sentiment: one pooled fetch of the macro desks, reused for
+    // the general feed and every per-asset feed below ----
+    const newsPool = await fetchMacroNewsPool();
+
+    const newsItems = scoreGeneralFeed(newsPool, 100);
     if (newsItems.length > 0) {
       const sentimentHistory: HistPoint[] = sentimentTrend(newsItems);
       const bull = newsItems.filter((n) => n.sentimentLabel === "bullish").length;
@@ -1241,7 +1244,7 @@ export async function GET(req: NextRequest) {
         note: "Pooled macro headlines, keyword-lexicon scored",
         value: `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
         status: avgScore > 0.05 ? "up" : avgScore < -0.05 ? "down" : "flat",
-        source: "CNBC · Fed · WSJ · Yahoo · FXStreet",
+        source: "CNBC · Fed · ECB · WSJ · FXStreet",
         zscore: avgScore,
         sparkline: null,
         window_label: `${bull}▲ ${bear}▼ · ${newsItems.length} headlines`,
@@ -1250,31 +1253,33 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // ---- Asset-specific news feeds (one per tradable symbol) ----
-    await Promise.all(
-      MARKET_SYMBOLS.map(async (m) => {
-        const items = await fetchAssetNewsFeed(m.symbol, 40);
-        if (items.length === 0) return;
-        const sentimentHistory: HistPoint[] = sentimentTrend(items);
-        const bull = items.filter((n) => n.sentimentLabel === "bullish").length;
-        const bear = items.filter((n) => n.sentimentLabel === "bearish").length;
-        const avgScore = weightedSentimentAvg(items);
-        rows.push({
-          id: `asset-news:${m.symbol}`,
-          panel_id: "asset-news",
-          name: `${m.label} News`,
-          note: "Ticker-specific headlines, keyword-lexicon scored",
-          value: `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
-          status: avgScore > 0.05 ? "up" : avgScore < -0.05 ? "down" : "flat",
-          source: `Yahoo Finance RSS (${m.symbol})`,
-          zscore: avgScore,
-          sparkline: null,
-          window_label: `${bull}▲ ${bear}▼ · ${items.length} headlines`,
-          history: sentimentHistory,
-          payload: { headlines: items },
-        });
-      })
-    );
+    // ---- Asset-specific news: same pooled desks, filtered to headlines
+    // about each asset's actual fundamental drivers (not a per-ticker feed
+    // full of generic price-forecast churn) ----
+    for (const m of MARKET_SYMBOLS) {
+      const items = scoreAssetFeed(newsPool, m.symbol, 40);
+      const sentimentHistory: HistPoint[] = sentimentTrend(items);
+      const bull = items.filter((n) => n.sentimentLabel === "bullish").length;
+      const bear = items.filter((n) => n.sentimentLabel === "bearish").length;
+      const avgScore = weightedSentimentAvg(items);
+      // Always upsert, even with zero matches this cycle — otherwise a quiet
+      // day for this asset's keywords leaves the row frozen on whatever
+      // (possibly stale, pre-migration) content it last had.
+      rows.push({
+        id: `asset-news:${m.symbol}`,
+        panel_id: "asset-news",
+        name: `${m.label} News`,
+        note: "Macro headlines filtered to this asset's drivers, keyword-lexicon scored",
+        value: items.length === 0 ? "—" : `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
+        status: items.length === 0 ? "flat" : avgScore > 0.05 ? "up" : avgScore < -0.05 ? "down" : "flat",
+        source: "CNBC · Fed · ECB · WSJ · FXStreet",
+        zscore: items.length === 0 ? null : avgScore,
+        sparkline: null,
+        window_label: items.length === 0 ? "No matching headlines this cycle" : `${bull}▲ ${bear}▼ · ${items.length} headlines`,
+        history: sentimentHistory,
+        payload: { headlines: items },
+      });
+    }
 
     // ================= TRANSMISSION =================
 

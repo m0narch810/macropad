@@ -8,10 +8,15 @@ import QuantCard from "@/components/QuantCard";
 import NewsFeedCard from "@/components/NewsFeedCard";
 import MarketTicker from "@/components/MarketTicker";
 import PanelIcon from "@/components/PanelIcon";
+import CustomDashboardPage from "@/components/CustomDashboardPage";
+import CustomBiasPage from "@/components/CustomBiasPage";
 import { MARKET_SYMBOLS } from "@/lib/markets";
 import { getSignTone } from "@/lib/bias";
 
 const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics"]);
+const NEWS_ID = "news";
+const CUSTOM_DASHBOARD_ID = "custom-dashboard";
+const CUSTOM_BIAS_ID = "custom-bias";
 
 /** Count of strong reads (|score| >= 0.5 on the -1..1 method scale) per panel, split by good/bad tone. */
 function panelSignals(panel: MacroPanel): { bull: number; bear: number } {
@@ -84,16 +89,50 @@ export default function DashboardShell({
 }) {
   const [activeId, setActiveId] = useState(panels[0]?.id ?? "");
   const [assetFilter, setAssetFilter] = useState<string>("");
+  const [navOpen, setNavOpen] = useState(false);
   const active = panels.find((p) => p.id === activeId);
+  const pickPage = (id: string) => {
+    setActiveId(id);
+    setNavOpen(false);
+  };
+  const isNews = activeId === NEWS_ID;
+  const isCustomDashboard = activeId === CUSTOM_DASHBOARD_ID;
+  const isCustomBias = activeId === CUSTOM_BIAS_ID;
   const assetLabel = MARKET_SYMBOLS.find((m) => m.symbol === assetFilter)?.label ?? null;
+  const newsSeries = panels.flatMap((p) => p.series).find((s) => s.id === "geo:news-feed") ?? null;
 
   return (
     <div className="flex min-h-screen flex-col">
       <MarketTicker markets={markets} />
 
+      <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-4 py-3 lg:hidden">
+        <button
+          onClick={() => setNavOpen((v) => !v)}
+          aria-label="Toggle navigation"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--text-dim)]"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+            <path d="M2 4H14" />
+            <path d="M2 8H14" />
+            <path d="M2 12H14" />
+          </svg>
+        </button>
+        <div className="font-display text-[1.1rem] leading-none">
+          <span className="text-[var(--accent)]">Macro</span>pad
+        </div>
+      </div>
+
+      {navOpen && (
+        <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden="true" />
+      )}
+
       <div className="flex flex-1">
-        <aside className="flex w-[248px] shrink-0 flex-col border-r border-[var(--border)] bg-[var(--panel-2)]">
-          <div className="border-b border-[var(--border)] px-5 py-5">
+        <aside
+          className={`fixed inset-y-0 left-0 z-40 flex w-[248px] shrink-0 -translate-x-full flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--panel-2)] transition-transform duration-200 lg:static lg:translate-x-0 ${
+            navOpen ? "translate-x-0" : ""
+          }`}
+        >
+          <div className="hidden border-b border-[var(--border)] px-5 py-5 lg:block">
             <div className="flex items-center gap-2.5">
               <div
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-[0.8rem] font-bold"
@@ -160,13 +199,17 @@ export default function DashboardShell({
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 p-3">
+            <NavButton isActive={isNews} onClick={() => pickPage(NEWS_ID)} icon="news" title="News" subtitle="headline sentiment" />
+
+            <div className="my-2 border-t border-[var(--border)]" />
+
             {panels.map((panel) => {
               const { bull, bear } = panelSignals(panel);
               return (
                 <NavButton
                   key={panel.id}
                   isActive={panel.id === activeId}
-                  onClick={() => setActiveId(panel.id)}
+                  onClick={() => pickPage(panel.id)}
                   icon={panel.id}
                   title={panel.title}
                   subtitle={
@@ -184,6 +227,23 @@ export default function DashboardShell({
                 />
               );
             })}
+
+            <div className="my-2 border-t border-[var(--border)]" />
+
+            <NavButton
+              isActive={isCustomDashboard}
+              onClick={() => pickPage(CUSTOM_DASHBOARD_ID)}
+              icon="custom-dashboard"
+              title="Custom Dashboard"
+              subtitle="pick your own indicators"
+            />
+            <NavButton
+              isActive={isCustomBias}
+              onClick={() => pickPage(CUSTOM_BIAS_ID)}
+              icon="custom-bias"
+              title="Custom Bias"
+              subtitle="your own weights + thresholds"
+            />
           </nav>
 
           <div className="border-t border-[var(--border)] px-5 py-3.5 font-mono text-[0.66rem] text-[var(--text-faint)]">
@@ -191,29 +251,50 @@ export default function DashboardShell({
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 px-9 py-8">
-          {active ? (
+        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-9 lg:py-8">
+          {isNews ? (
+            <>
+              <header className="mb-7">
+                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">News</h1>
+              </header>
+              {newsSeries ? <NewsFeedCard series={newsSeries} /> : <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No news data yet.</p>}
+            </>
+          ) : isCustomDashboard ? (
+            <>
+              <header className="mb-7">
+                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">Custom Dashboard</h1>
+              </header>
+              <CustomDashboardPage panels={panels} markets={markets} />
+            </>
+          ) : isCustomBias ? (
+            <>
+              <header className="mb-7">
+                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">Custom Bias</h1>
+              </header>
+              <CustomBiasPage panels={panels} />
+            </>
+          ) : active ? (
             <>
               <header className="mb-7">
                 <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">{active.title}</h1>
               </header>
 
               <div className={DEEP_PANELS.has(active.id) ? "flex flex-col gap-2" : "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"}>
-                {active.series.map((series) =>
-                  series.id === "geo:news-feed" ? (
-                    <NewsFeedCard key={series.id} series={series} />
-                  ) : DEEP_PANELS.has(active.id) ? (
-                    <QuantCard
-                      key={series.id}
-                      series={series}
-                      markets={markets}
-                      assetFilter={assetFilter || null}
-                      assetLabel={assetLabel}
-                    />
-                  ) : (
-                    <SeriesCard key={series.id} series={series} assetFilter={assetFilter || null} assetLabel={assetLabel} />
-                  )
-                )}
+                {active.series
+                  .filter((series) => series.id !== "geo:news-feed")
+                  .map((series) =>
+                    DEEP_PANELS.has(active.id) ? (
+                      <QuantCard
+                        key={series.id}
+                        series={series}
+                        markets={markets}
+                        assetFilter={assetFilter || null}
+                        assetLabel={assetLabel}
+                      />
+                    ) : (
+                      <SeriesCard key={series.id} series={series} assetFilter={assetFilter || null} assetLabel={assetLabel} />
+                    )
+                  )}
               </div>
             </>
           ) : null}

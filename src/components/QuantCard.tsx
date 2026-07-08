@@ -589,7 +589,7 @@ export default function QuantCard({
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-4 p-7 text-left">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 p-4 text-left sm:gap-4 sm:p-7">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
@@ -618,7 +618,7 @@ export default function QuantCard({
         )}
 
         <div className="shrink-0 text-right">
-          <div className="font-mono text-[2.1rem] font-semibold leading-none">{series.value}</div>
+          <div className="font-mono text-[1.4rem] font-semibold leading-none sm:text-[2.1rem]">{series.value}</div>
           {signal && (
             <div className="mt-1 font-mono text-[0.8rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
               {signal.score > 0 ? "+" : ""}
@@ -631,7 +631,7 @@ export default function QuantCard({
       </button>
 
       {open && (
-        <div className="border-t border-[var(--border)] p-7 pt-6">
+        <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-7 sm:pt-6">
           {bias && (
             <div className="mt-4 rounded-md border p-3.5" style={{ borderColor: `color-mix(in srgb, ${biasToneColor} 35%, var(--border))`, background: `color-mix(in srgb, ${biasToneColor} 7%, transparent)` }}>
               <div className="flex items-center gap-2">

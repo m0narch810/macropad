@@ -51,7 +51,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)]">
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-4 p-7 text-left">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 p-4 text-left sm:gap-4 sm:p-7">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
@@ -69,7 +69,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
       </button>
 
       {open && (
-        <div className="border-t border-[var(--border)] p-7 pt-6">
+        <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-7 sm:pt-6">
           {headlines.length === 0 ? (
             <p className="m-0 font-sans text-[0.85rem] text-[var(--text-faint)]">No headlines available right now.</p>
           ) : (

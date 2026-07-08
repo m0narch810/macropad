@@ -33,30 +33,27 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M10 3C12.5 5.5 12.5 14.5 10 17C7.5 14.5 7.5 5.5 10 3Z" />
     </>
   ),
-  topology: (
+  news: (
     <>
-      <circle cx="4.5" cy="5" r="2" />
-      <circle cx="15.5" cy="5" r="2" />
-      <circle cx="10" cy="15" r="2" />
-      <circle cx="10" cy="8.5" r="1.6" />
-      <path d="M6.2 5.8L8.7 7.8" />
-      <path d="M13.8 5.8L11.3 7.8" />
-      <path d="M9 10L9.7 13" />
+      <rect x="3" y="4" width="14" height="12" rx="1.5" />
+      <path d="M6 8H14" />
+      <path d="M6 11H14" />
+      <path d="M6 13.5H10.5" />
     </>
   ),
-  "net-bias": (
+  "custom-dashboard": (
+    <>
+      <rect x="3" y="3" width="6.5" height="6.5" rx="1" />
+      <rect x="10.5" y="3" width="6.5" height="6.5" rx="1" />
+      <rect x="3" y="10.5" width="6.5" height="6.5" rx="1" />
+      <rect x="10.5" y="10.5" width="6.5" height="6.5" rx="1" />
+    </>
+  ),
+  "custom-bias": (
     <>
       <path d="M3 15A7 7 0 0 1 17 15" />
       <path d="M10 15L13.5 9" />
       <circle cx="10" cy="15" r="1.3" />
-    </>
-  ),
-  "impact-matrix": (
-    <>
-      <rect x="3" y="3" width="14" height="14" rx="1.5" />
-      <path d="M3 8H17" />
-      <path d="M3 13H17" />
-      <path d="M9 3V17" />
     </>
   ),
 };

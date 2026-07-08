@@ -565,7 +565,7 @@ export default function QuantCard({
   const biasToneColor = bias ? (bias.tone === "up" ? "var(--up)" : bias.tone === "down" ? "var(--down)" : "var(--text-faint)") : "var(--text-faint)";
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
+    <div className="corner-frame border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 p-4 text-left sm:gap-4 sm:p-7">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

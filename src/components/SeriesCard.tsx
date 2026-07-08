@@ -36,7 +36,7 @@ export default function SeriesCard({
 
   return (
     <div
-      className="rounded border border-[var(--border)] bg-[var(--panel)] p-4"
+      className="corner-frame border border-[var(--border)] bg-[var(--panel)] p-4"
       style={!isRelevant ? { opacity: 0.4 } : undefined}
     >
       <div className="flex items-start justify-between gap-3">

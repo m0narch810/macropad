@@ -33,7 +33,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
   const history = series.history ?? [];
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)]">
+    <div className="corner-frame border border-[var(--border)] bg-[var(--panel)]">
       <div className="flex w-full items-center gap-3 p-4 text-left sm:gap-4 sm:p-7">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">

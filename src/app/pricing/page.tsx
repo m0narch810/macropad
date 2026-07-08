@@ -88,7 +88,7 @@ export default function PricingPage() {
               </ul>
 
               <Link
-                href="/app"
+                href="/signup"
                 className="mt-8 block border py-3 text-center font-sans text-[0.8rem] font-semibold uppercase tracking-wide transition-opacity hover:opacity-85"
                 style={{ background: "var(--accent)", borderColor: "var(--accent)", color: "#000" }}
               >

@@ -21,7 +21,7 @@ export default function MarketingNav() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <Link href="/app" className="hidden font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors hover:text-[var(--text)] sm:block">
+          <Link href="/signin" className="hidden font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors hover:text-[var(--text)] sm:block">
             Sign in
           </Link>
           <Link

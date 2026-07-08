@@ -73,7 +73,7 @@ export default function CoveragePage() {
           </h2>
           <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
             <Link
-              href="/app"
+              href="/signup"
               className="border border-[var(--accent)] bg-[var(--accent)] px-6 py-3 font-sans text-[0.85rem] font-semibold uppercase tracking-wide text-black transition-opacity hover:opacity-85"
             >
               Launch the desk

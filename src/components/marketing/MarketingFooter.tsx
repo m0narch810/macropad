@@ -32,7 +32,7 @@ export default function MarketingFooter() {
           <div>
             <div className="eyebrow mb-3">App</div>
             <div className="flex flex-col gap-2.5">
-              <Link href="/app" className="font-sans text-[0.82rem] text-[var(--text-dim)] hover:text-[var(--text)]">Launch app</Link>
+              <Link href="/signup" className="font-sans text-[0.82rem] text-[var(--text-dim)] hover:text-[var(--text)]">Launch app</Link>
             </div>
           </div>
         </div>

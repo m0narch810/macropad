@@ -85,6 +85,32 @@ body {
   background-size: 88px 88px;
 }
 
+/* Sci-fi HUD corner brackets — two opposing corners, hairline. */
+.hud {
+  position: relative;
+}
+.hud::before,
+.hud::after {
+  content: "";
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border: 0 solid var(--border-strong);
+  pointer-events: none;
+}
+.hud::before {
+  top: -1px;
+  left: -1px;
+  border-top-width: 1px;
+  border-left-width: 1px;
+}
+.hud::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom-width: 1px;
+  border-right-width: 1px;
+}
+
 .no-scrollbar {
   scrollbar-width: none;
 }

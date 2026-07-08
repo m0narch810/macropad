@@ -100,20 +100,25 @@ export default function OverviewBoard({
 
   return (
     <div>
-      <input
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="find a series"
-        className="mb-7 w-full max-w-xs border-0 border-b border-[var(--border)] bg-transparent px-0 py-1.5 font-mono text-[0.76rem] text-[var(--text)] outline-none transition-colors placeholder:text-[var(--text-faint)] focus-visible:border-[var(--text-dim)] focus-visible:outline-none"
-      />
+      <div className="mb-7 flex max-w-xs items-center gap-2 border-b border-[var(--border)] transition-colors focus-within:border-[var(--text-dim)]">
+        <span className="font-mono text-[0.76rem] text-[var(--text-faint)]">/</span>
+        <input
+          id="board-search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="find a series"
+          className="w-full border-0 bg-transparent px-0 py-1.5 font-mono text-[0.76rem] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] focus-visible:outline-none"
+        />
+      </div>
 
-      {sections.map(({ panel, series }) => {
+      {sections.map(({ panel, series }, idx) => {
         const strong = series.filter((s) => s.zscore !== null && Math.abs(s.zscore) >= 0.5);
         const bull = strong.filter((s) => getSignTone(s.id, s.zscore) === "up").length;
         const bear = strong.filter((s) => getSignTone(s.id, s.zscore) === "down").length;
         return (
           <section key={panel.id} className="mb-9">
             <div className="mb-3 flex items-baseline gap-3">
+              <span className="font-mono text-[0.6rem] text-[var(--text-faint)]">{String(idx + 1).padStart(2, "0")}</span>
               <h2 className="m-0 font-mono text-[0.66rem] font-semibold uppercase tracking-[0.16em] text-[var(--text-dim)]">
                 {panel.title}
               </h2>

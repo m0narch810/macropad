@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Macropad",
   description:
-    "Live macro desk: US macro, yield rates, COT positioning, transmission, volatility — regime signals and per-asset net bias.",
+    "Live macro desk: US macro, yield rates, COT positioning, transmission, volatility - regime signals and per-asset net bias.",
 };
 
 export default function RootLayout({

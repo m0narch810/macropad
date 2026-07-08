@@ -20,7 +20,7 @@ export async function getPanels(): Promise<{ panels: MacroPanel[]; lastUpdated: 
     return { panels: macroPanels, lastUpdated: null };
   }
 
-  // payload is a later migration — retry without it so a pre-migration DB
+  // payload is a later migration - retry without it so a pre-migration DB
   // degrades to "no news feed" instead of a blank dashboard.
   let data: DbRow[] | null = null;
   let error: { message: string } | null = null;

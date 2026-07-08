@@ -5,7 +5,7 @@ function statusColor(status: MacroSeries["status"]): string {
   return status === "up" ? "var(--up)" : status === "down" ? "var(--down)" : "var(--text-faint)";
 }
 
-/** One-line-per-indicator overview, everything on screen at once — no charts, no depth. */
+/** One-line-per-indicator overview, everything on screen at once - no charts, no depth. */
 export default function BoardPage({ panels, newsSeries }: { panels: MacroPanel[]; newsSeries: MacroSeries[] }) {
   return (
     <div className="flex flex-col gap-5">

@@ -23,7 +23,7 @@ const FAQ = [
   },
   {
     q: "How often does it refresh?",
-    a: "Hourly. Every board shows the exact last-synced timestamp — no guessing.",
+    a: "Hourly. Every board shows the exact last-synced timestamp - no guessing.",
   },
   {
     q: "Do I need to connect my own accounts?",
@@ -31,7 +31,7 @@ const FAQ = [
   },
   {
     q: "What happens after the trial?",
-    a: "Pro pricing is coming later. We'll give you notice before anything changes — nothing switches off automatically.",
+    a: "Pro pricing is coming later. We'll give you notice before anything changes - nothing switches off automatically.",
   },
 ];
 
@@ -72,7 +72,7 @@ export default function PricingPage() {
                 <span className="font-sans text-[0.85rem] text-[var(--text-faint)]">during trial</span>
               </div>
               <p className="m-0 mt-2.5 font-sans text-[0.88rem] leading-relaxed text-[var(--text-dim)]">
-                Every panel, every asset, every feature. Pro tier with paid pricing arrives later — trial users get
+                Every panel, every asset, every feature. Pro tier with paid pricing arrives later - trial users get
                 advance notice first.
               </p>
 
@@ -104,14 +104,14 @@ export default function PricingPage() {
                 </h2>
                 <p className="m-0 mt-4 font-sans text-[0.92rem] leading-relaxed text-[var(--text-dim)]">
                   Macropad just launched. Free access right now is how we get the board in front of real desks and
-                  find out what's actually useful before we charge for it — not a permanent price.
+                  find out what's actually useful before we charge for it - not a permanent price.
                 </p>
               </div>
 
               <div className="flex flex-col gap-5 border-t border-[var(--border)] pt-6">
                 {[
                   ["01", "Trial users lock in early access", "Everyone who signs up during launch keeps full access through the trial period, no surprise downgrades."],
-                  ["02", "Paid Pro tier is coming", "Once the product's proven out, a paid Pro plan launches. Pricing then will cost more than $0 — this window won't last."],
+                  ["02", "Paid Pro tier is coming", "Once the product's proven out, a paid Pro plan launches. Pricing then will cost more than $0 - this window won't last."],
                   ["03", "You'll get notice first", "No silent price change. Trial users hear about the switch before it happens."],
                 ].map(([n, title, desc]) => (
                   <div key={n} className="flex gap-4">

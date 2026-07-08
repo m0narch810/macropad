@@ -48,7 +48,7 @@ function Dot({
   );
 }
 
-/** Faint reference floor grid — a "surface" to ground the point cloud, no data encoded in it. */
+/** Faint reference floor grid - a "surface" to ground the point cloud, no data encoded in it. */
 function Floor() {
   const geo = useMemo(() => new THREE.PlaneGeometry(WIDTH + 1, DEPTH + 1, 14, 6), []);
   return (

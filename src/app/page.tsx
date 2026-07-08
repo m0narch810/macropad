@@ -14,12 +14,12 @@ const FEATURES = [
   {
     n: "02",
     title: "Per-asset net bias",
-    desc: "Every macro read rolled into a directional bias per ticker — bullish, bearish, or flat, with the reasoning behind it.",
+    desc: "Every macro read rolled into a directional bias per ticker - bullish, bearish, or flat, with the reasoning behind it.",
   },
   {
     n: "03",
     title: "Recency-weighted sentiment",
-    desc: "Headlines scored on a finance lexicon and decayed on a half-life — recent news moves the number more than yesterday's.",
+    desc: "Headlines scored on a finance lexicon and decayed on a half-life - recent news moves the number more than yesterday's.",
   },
   {
     n: "04",
@@ -72,7 +72,7 @@ export default function LandingPage() {
 
             <p className="mt-6 max-w-xl font-sans text-[1.02rem] leading-relaxed text-[var(--text-dim)] sm:text-[1.1rem]">
               Macropad compresses US macro, rates, positioning, transmission, geopolitics, and vol into one dense
-              board — with a live per-asset bias derived from all of it.
+              board - with a live per-asset bias derived from all of it.
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-4">

@@ -31,7 +31,7 @@ export default function SignUpPage() {
     }
 
     // If the Supabase project requires email confirmation, signUp succeeds
-    // but returns no session yet — tell the user to check their inbox
+    // but returns no session yet - tell the user to check their inbox
     // instead of silently doing nothing.
     if (!data.session) {
       setCheckEmail(true);

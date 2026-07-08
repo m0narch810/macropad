@@ -18,7 +18,7 @@ async function fetchRaw(seriesId: string, apiKey: string, limit: number): Promis
   }));
 }
 
-/** Latest two points, newest first — for a quick up/down read. */
+/** Latest two points, newest first - for a quick up/down read. */
 export async function fetchFredSeries(seriesId: string, apiKey: string): Promise<FredPoint[]> {
   return fetchRaw(seriesId, apiKey, 2);
 }
@@ -37,7 +37,7 @@ export function statusFromDelta(latest: number | null, prev: number | null): "up
 }
 
 export function fmt(n: number | null, opts: { decimals?: number; suffix?: string; scale?: number } = {}): string {
-  if (n === null) return "—";
+  if (n === null) return "-";
   const { decimals = 2, suffix = "", scale = 1 } = opts;
   return `${(n * scale).toFixed(decimals)}${suffix}`;
 }

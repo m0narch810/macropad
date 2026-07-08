@@ -20,7 +20,7 @@ function extractTag(block: string, tag: string): string | null {
   return decodeXmlEntities(m[1].replace(/^<!\[CDATA\[(.*)\]\]>$/, "$1")).trim();
 }
 
-/** Generic RSS 2.0 headline parser — works against any well-formed feed, not just Yahoo. */
+/** Generic RSS 2.0 headline parser - works against any well-formed feed, not just Yahoo. */
 export async function fetchRssHeadlines(url: string): Promise<RssItem[]> {
   const res = await fetch(url, {
     cache: "no-store",

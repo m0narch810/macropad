@@ -29,7 +29,7 @@ function TickerItem({ s }: { s: MacroSeries }) {
   );
 }
 
-/** Second scrolling strip below the market price ticker — every tracked indicator, not just prices. */
+/** Second scrolling strip below the market price ticker - every tracked indicator, not just prices. */
 export default function IndicatorTicker({ series }: { series: MacroSeries[] }) {
   if (series.length === 0) return null;
 

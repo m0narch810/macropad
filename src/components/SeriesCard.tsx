@@ -29,7 +29,7 @@ export default function SeriesCard({
   const hasSignal = series.zscore !== null;
   const isRelevant = !assetFilter || seriesAffectsSymbol(series.id, assetFilter);
   const bias = getBias(series.id, series.zscore);
-  // Glyph, label, and bar all key off the same score-derived tone — no
+  // Glyph, label, and bar all key off the same score-derived tone - no
   // separate literal-direction tone to ever disagree with the bias label.
   const signalTone = getSignTone(series.id, series.zscore);
   const chipColor = signalTone === "up" ? "var(--up)" : signalTone === "down" ? "var(--down)" : "var(--text-faint)";

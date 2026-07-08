@@ -16,7 +16,7 @@ const NEWS_SOURCES = [
   { label: "Federal Reserve Speeches", url: "https://www.federalreserve.gov/feeds/speeches.xml", filterMacro: false },
   { label: "ECB", url: "https://www.ecb.europa.eu/rss/press.html", filterMacro: false },
   // WSJ/FXStreet mix real macro coverage with routine single-name market
-  // color ("Comex Gold, Silver Settle Lower") — keyword-gate just these two
+  // color ("Comex Gold, Silver Settle Lower") - keyword-gate just these two
   // so the pooled feed stays event-driven instead of daily price chatter.
   { label: "WSJ Markets", url: "https://feeds.a.dj.com/rss/RSSMarketsMain.xml", filterMacro: true },
   { label: "FXStreet", url: "https://www.fxstreet.com/rss/news", filterMacro: true },
@@ -53,7 +53,7 @@ function isMacroRelevant(item: RssItem): boolean {
  * "Gold Price Forecast" technical-analysis churn rather than the actual
  * macro drivers of that asset. Instead, asset feeds are now built by
  * filtering the SAME pooled macro desks used for the general feed down to
- * headlines that are actually about that asset's fundamental drivers —
+ * headlines that are actually about that asset's fundamental drivers -
  * real Fed/ECB/OPEC/growth coverage, keyword-matched per symbol, not price
  * chatter from a random forecasting site.
  */
@@ -126,7 +126,7 @@ function mergeAndScore(results: { source: string; items: RssItem[] }[], maxItems
 
 /**
  * Stretches an already -1..1 aggregate outward, same shape as the
- * per-headline polarization curve in sentiment.ts — a smoothed average of
+ * per-headline polarization curve in sentiment.ts - a smoothed average of
  * polarized inputs still regresses toward the middle, so re-polarize after
  * aggregating or the final number reads flatter than the headlines it came from.
  */
@@ -135,7 +135,7 @@ function polarize(x: number): number {
 }
 
 /**
- * Recency-weighted average sentiment — a headline from 10 minutes ago should
+ * Recency-weighted average sentiment - a headline from 10 minutes ago should
  * move the live score more than one from yesterday. Exponential decay,
  * half-life in hours: a headline's weight halves every `halfLifeHours`.
  * Half-life of 3 (was 6) so recent headlines dominate harder.
@@ -155,7 +155,7 @@ export function weightedSentimentAvg(items: NewsItem[], halfLifeHours = 3): numb
 }
 
 /**
- * Smoothed sentiment trend for charting — an exponentially-weighted running
+ * Smoothed sentiment trend for charting - an exponentially-weighted running
  * average through time, not the raw per-headline score. Plotting raw scores
  * as a line is meaningless noise: headlines land at irregular intervals from
  * different sources and each one swings between -1 and +1 on its own, so a
@@ -210,7 +210,7 @@ export async function fetchMacroNewsPool(): Promise<NewsPool[]> {
   );
 }
 
-/** Scores the pooled macro desks as-is — the "general" feed. */
+/** Scores the pooled macro desks as-is - the "general" feed. */
 export function scoreGeneralFeed(pool: NewsPool[], maxItems = 120): NewsItem[] {
   return mergeAndScore(pool, maxItems);
 }

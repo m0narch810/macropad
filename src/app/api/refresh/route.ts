@@ -64,7 +64,7 @@ function toHistory(dates: string[], values: (number | null)[]): HistPoint[] {
 /**
  * The `zscore` column stores the METHOD-BASED indicator score, -1..1 (see
  * indicatorSignal.ts: positioning / momentum / anchor / threshold, whichever
- * fits the series economically). Not a z-score — the column name is legacy.
+ * fits the series economically). Not a z-score - the column name is legacy.
  */
 function signalStats(seriesId: string, history: HistPoint[]): { signal: number | null; sparkline: number[] | null } {
   const spark = history.slice(-30).map((p) => p.value);
@@ -125,12 +125,12 @@ export async function GET(req: NextRequest) {
       window_label: "10y weekly · momentum 13w",
       history: walclHistory,
       extra_stats: [
-        { label: "4w pace (annualized)", value: walcl4wAnn === null ? "—" : `${walcl4wAnn > 0 ? "+" : ""}${walcl4wAnn.toFixed(1)}%` },
+        { label: "4w pace (annualized)", value: walcl4wAnn === null ? "-" : `${walcl4wAnn > 0 ? "+" : ""}${walcl4wAnn.toFixed(1)}%` },
         {
           label: "13w pace (annualized)",
-          value: walcl13wAnn === null ? "—" : `${walcl13wAnn > 0 ? "+" : ""}${walcl13wAnn.toFixed(1)}%`,
+          value: walcl13wAnn === null ? "-" : `${walcl13wAnn > 0 ? "+" : ""}${walcl13wAnn.toFixed(1)}%`,
           flag: walcl13wAnn !== null && walcl13wAnn <= -5,
-          caption: "Annualized 13-week pace of balance sheet change — the cleanest read on whether QT or QE is actively running.",
+          caption: "Annualized 13-week pace of balance sheet change - the cleanest read on whether QT or QE is actively running.",
           history: walcl13wHist,
           zscore: walcl13wStats.zscore,
           threshold: -5,
@@ -165,7 +165,7 @@ export async function GET(req: NextRequest) {
       id: "us-macro:sofr-effr-iorb",
       panel_id: "us-macro",
       name: "SOFR / EFFR / IORB",
-      note: "Funding stress — signal reads the SOFR−IORB spread",
+      note: "Funding stress - signal reads the SOFR−IORB spread",
       value: `${fmt(sofrV, { suffix: "%" })} / ${fmt(effrV, { suffix: "%" })} / ${fmt(iorbV, { suffix: "%" })}`,
       status: statusFromDelta(sofrIorbBps, sofrIorbSpreadHist.length > 1 ? sofrIorbSpreadHist[sofrIorbSpreadHist.length - 2].value : null),
       source: "FRED SOFR/EFFR/IORB",
@@ -176,9 +176,9 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "SOFR − IORB (bps)",
-          value: sofrIorbBps === null ? "—" : `${sofrIorbBps > 0 ? "+" : ""}${sofrIorbBps.toFixed(0)}bp`,
+          value: sofrIorbBps === null ? "-" : `${sofrIorbBps > 0 ? "+" : ""}${sofrIorbBps.toFixed(0)}bp`,
           flag: sofrIorbBps !== null && sofrIorbBps >= 10,
-          caption: "Repo/funding stress gauge — SOFR printing meaningfully above IORB signals collateral or cash scarcity.",
+          caption: "Repo/funding stress gauge - SOFR printing meaningfully above IORB signals collateral or cash scarcity.",
           history: sofrIorbSpreadHist,
           zscore: sofrIorbStats.zscore,
           threshold: 10,
@@ -186,8 +186,8 @@ export async function GET(req: NextRequest) {
         },
         {
           label: "EFFR − IORB (bps)",
-          value: effrIorbBps === null ? "—" : `${effrIorbBps > 0 ? "+" : ""}${effrIorbBps.toFixed(0)}bp`,
-          caption: "Effective fed funds vs IORB — a second read on funding conditions alongside SOFR.",
+          value: effrIorbBps === null ? "-" : `${effrIorbBps > 0 ? "+" : ""}${effrIorbBps.toFixed(0)}bp`,
+          caption: "Effective fed funds vs IORB - a second read on funding conditions alongside SOFR.",
           history: effrIorbSpreadHist,
           zscore: effrIorbStats.zscore,
           windowLabel: "3y daily",
@@ -220,8 +220,8 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "Implied 5y default rate",
-          value: impliedDefault5y === null ? "—" : `≈${impliedDefault5y.toFixed(1)}%`,
-          caption: "Back-solved from the spread assuming 40% recovery — the standard HY convention. Rises well before actual defaults do.",
+          value: impliedDefault5y === null ? "-" : `≈${impliedDefault5y.toFixed(1)}%`,
+          caption: "Back-solved from the spread assuming 40% recovery - the standard HY convention. Rises well before actual defaults do.",
           history: impliedDefaultHist,
           zscore: impliedDefaultStats.zscore,
           windowLabel: "3y daily",
@@ -263,16 +263,16 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "3m annualized",
-          value: cpi3mAnn === null ? "—" : `${cpi3mAnn > 0 ? "+" : ""}${cpi3mAnn.toFixed(1)}%`,
+          value: cpi3mAnn === null ? "-" : `${cpi3mAnn > 0 ? "+" : ""}${cpi3mAnn.toFixed(1)}%`,
           flag: cpi3mAnn !== null && cpiLatest !== null && cpi3mAnn > cpiLatest + 1,
-          caption: "3-month annualized rate — the most forward-looking read on where inflation momentum is heading, vs YoY which is backward-looking.",
+          caption: "3-month annualized rate - the most forward-looking read on where inflation momentum is heading, vs YoY which is backward-looking.",
           history: cpi3mHist,
           zscore: cpi3mStats.zscore,
           windowLabel: "15y monthly",
         },
         {
           label: "6m annualized",
-          value: cpi6mAnn === null ? "—" : `${cpi6mAnn > 0 ? "+" : ""}${cpi6mAnn.toFixed(1)}%`,
+          value: cpi6mAnn === null ? "-" : `${cpi6mAnn > 0 ? "+" : ""}${cpi6mAnn.toFixed(1)}%`,
           history: cpi6mHist,
           zscore: cpi6mStats.zscore,
           windowLabel: "15y monthly",
@@ -310,13 +310,13 @@ export async function GET(req: NextRequest) {
             label: "Distance from 2% target",
             value: `${latest - 2 > 0 ? "+" : ""}${(latest - 2).toFixed(2)}pp`,
             flag: latest - 2 >= 0.5,
-            caption: "The number the Fed's reaction function actually keys off — not where inflation sits vs its own history.",
+            caption: "The number the Fed's reaction function actually keys off - not where inflation sits vs its own history.",
             threshold: 0,
           },
         ],
       };
     };
-    const coreCpiRow = inflationRow("us-macro:core-cpi", "Core CPI (YoY)", "Ex food & energy — the sticky part", "FRED CPILFESL (derived YoY)", coreCpiHist);
+    const coreCpiRow = inflationRow("us-macro:core-cpi", "Core CPI (YoY)", "Ex food & energy - the sticky part", "FRED CPILFESL (derived YoY)", coreCpiHist);
     if (coreCpiRow) rows.push(coreCpiRow);
     const corePceRow = inflationRow("us-macro:core-pce", "Core PCE (YoY)", "The Fed's actual target metric", "FRED PCEPILFE (derived YoY)", corePceHist);
     if (corePceRow) rows.push(corePceRow);
@@ -345,7 +345,7 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "Sahm Rule indicator",
-          value: sahm.value === null ? "—" : `${sahm.value.toFixed(2)}pp`,
+          value: sahm.value === null ? "-" : `${sahm.value.toFixed(2)}pp`,
           flag: sahm.triggered,
           caption: "3-month avg unemployment minus its own 12-month low. ≥0.50pp has historically meant a recession is already underway.",
           history: sahmHist,
@@ -384,9 +384,9 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "3m avg monthly gain",
-          value: payems3mAvg === null ? "—" : `${payems3mAvg > 0 ? "+" : ""}${payems3mAvg.toFixed(0)}k`,
+          value: payems3mAvg === null ? "-" : `${payems3mAvg > 0 ? "+" : ""}${payems3mAvg.toFixed(0)}k`,
           flag: payems3mAvg !== null && payems3mAvg < 50,
-          caption: "Smooths the noisy single-month print — the standard way traders actually read the labor market's trend.",
+          caption: "Smooths the noisy single-month print - the standard way traders actually read the labor market's trend.",
           history: payems3mHist,
           zscore: payems3mStats.zscore,
           threshold: 50,
@@ -394,7 +394,7 @@ export async function GET(req: NextRequest) {
         },
         {
           label: "6m avg monthly gain",
-          value: payems6mAvg === null ? "—" : `${payems6mAvg > 0 ? "+" : ""}${payems6mAvg.toFixed(0)}k`,
+          value: payems6mAvg === null ? "-" : `${payems6mAvg > 0 ? "+" : ""}${payems6mAvg.toFixed(0)}k`,
           history: payems6mHist,
           zscore: payems6mStats.zscore,
           windowLabel: "20y monthly",
@@ -417,8 +417,8 @@ export async function GET(req: NextRequest) {
       id: "us-macro:jobless-claims",
       panel_id: "us-macro",
       name: "Initial Jobless Claims",
-      note: "Weekly — earliest hard labor data",
-      value: icsaLatest === null ? "—" : `${icsaLatest.toFixed(0)}k`,
+      note: "Weekly - earliest hard labor data",
+      value: icsaLatest === null ? "-" : `${icsaLatest.toFixed(0)}k`,
       status: statusFromDelta(icsaLatest, icsaPrev),
       source: "FRED ICSA",
       zscore: icsaSig.signal,
@@ -428,7 +428,7 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "4-week average",
-          value: icsa4wLatest === null ? "—" : `${icsa4wLatest.toFixed(0)}k`,
+          value: icsa4wLatest === null ? "-" : `${icsa4wLatest.toFixed(0)}k`,
           caption: "The standard smoothing for a series that jumps on every holiday week and strike.",
           history: icsa4wHist,
           zscore: icsa4wStats.zscore,
@@ -484,7 +484,7 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "YoY growth",
-          value: m2YoyAnn === null ? "—" : `${m2YoyAnn > 0 ? "+" : ""}${m2YoyAnn.toFixed(1)}%`,
+          value: m2YoyAnn === null ? "-" : `${m2YoyAnn > 0 ? "+" : ""}${m2YoyAnn.toFixed(1)}%`,
           flag: m2YoyAnn !== null && m2YoyAnn < 0,
           caption: "Negative YoY M2 growth (2022-23) has historically coincided with tightening credit conditions.",
           history: m2YoyHist,
@@ -507,7 +507,7 @@ export async function GET(req: NextRequest) {
       panel_id: "us-macro",
       name: "Reverse Repo (RRP)",
       note: "Liquidity parked at the Fed, $B",
-      value: rrpLatest === null ? "—" : `$${rrpLatest.toFixed(0)}B`,
+      value: rrpLatest === null ? "-" : `$${rrpLatest.toFixed(0)}B`,
       status: statusFromDelta(rrpLatest, rrpPrev),
       source: "FRED RRPONTSYD",
       zscore: rrpSig.signal,
@@ -561,7 +561,7 @@ export async function GET(req: NextRequest) {
         window_label: "15y monthly · anchor 0%",
         history: houstYoy,
         extra_stats: [
-          { label: "Level (SAAR)", value: houstLevel === null ? "—" : `${(houstLevel / 1000).toFixed(2)}M units` },
+          { label: "Level (SAAR)", value: houstLevel === null ? "-" : `${(houstLevel / 1000).toFixed(2)}M units` },
         ],
       });
     }
@@ -584,9 +584,9 @@ export async function GET(req: NextRequest) {
     const dgs10Extra: ExtraStat[] = [
       {
         label: "Real yield (less 10y breakeven)",
-        value: realYield === null ? "—" : `${realYield.toFixed(2)}%`,
+        value: realYield === null ? "-" : `${realYield.toFixed(2)}%`,
         flag: realYield !== null && realYield >= 2,
-        caption: "Nominal 10y minus market-implied inflation (breakeven) — the rate that actually matters for real economic activity and valuations.",
+        caption: "Nominal 10y minus market-implied inflation (breakeven) - the rate that actually matters for real economic activity and valuations.",
         history: realYieldHist,
         zscore: realYieldStats.zscore,
         threshold: 2,
@@ -645,9 +645,9 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "YoY change",
-          value: indproYoy === null ? "—" : `${indproYoy > 0 ? "+" : ""}${indproYoy.toFixed(1)}%`,
+          value: indproYoy === null ? "-" : `${indproYoy > 0 ? "+" : ""}${indproYoy.toFixed(1)}%`,
           flag: indproYoy !== null && indproYoy < 0,
-          caption: "Standard quoting convention for this series — the level index alone doesn't tell you the growth rate.",
+          caption: "Standard quoting convention for this series - the level index alone doesn't tell you the growth rate.",
           history: indproYoyHist,
           zscore: indproYoyStats.zscore,
           threshold: 0,
@@ -688,7 +688,7 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "3m average",
-          value: umcsent3mAvg === null ? "—" : umcsent3mAvg.toFixed(1),
+          value: umcsent3mAvg === null ? "-" : umcsent3mAvg.toFixed(1),
           caption: "Smooths month-to-month survey noise in a series that's historically volatile.",
           history: umcsent3mLevelHist,
           zscore: umcsent3mLevelStats.zscore,
@@ -727,7 +727,7 @@ export async function GET(req: NextRequest) {
           label: "Days inverted (current streak)",
           value: inversionStreak === 0 ? "Not inverted" : `${inversionStreak}d`,
           flag: inversionStreak > 0,
-          caption: "Inversions have historically preceded recessions by 6-24 months — the un-inversion (crossing back positive) is often the sharper signal.",
+          caption: "Inversions have historically preceded recessions by 6-24 months - the un-inversion (crossing back positive) is often the sharper signal.",
         },
       ],
     });
@@ -759,8 +759,8 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "5s10s breakeven spread",
-          value: breakeven5s10sLatest === null ? "—" : `${breakeven5s10sLatest > 0 ? "+" : ""}${breakeven5s10sLatest.toFixed(2)}%`,
-          caption: "10y breakeven minus 5y — positive means the market expects inflation further out to run hotter than the near term.",
+          value: breakeven5s10sLatest === null ? "-" : `${breakeven5s10sLatest > 0 ? "+" : ""}${breakeven5s10sLatest.toFixed(2)}%`,
+          caption: "10y breakeven minus 5y - positive means the market expects inflation further out to run hotter than the near term.",
           history: breakeven5s10sHist,
           zscore: breakeven5s10sStats.zscore,
           windowLabel: "3y daily",
@@ -796,7 +796,7 @@ export async function GET(req: NextRequest) {
           label: "Days inverted (current streak)",
           value: inversionStreak3m === 0 ? "Not inverted" : `${inversionStreak3m}d`,
           flag: inversionStreak3m > 0,
-          caption: "The NY Fed's own recession model is built on this spread, not 2s10s — it has the better historical hit rate with fewer false positives.",
+          caption: "The NY Fed's own recession model is built on this spread, not 2s10s - it has the better historical hit rate with fewer false positives.",
         },
       ],
     });
@@ -865,8 +865,8 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "vs. 10y breakeven",
-          value: vsBreakevenLatest === null ? "—" : `${vsBreakevenLatest > 0 ? "+" : ""}${vsBreakevenLatest.toFixed(2)}%`,
-          caption: "This is the metric the Fed itself watches most for long-run inflation anchoring — divergence from the 10y breakeven signals near-term vs. long-run views decoupling.",
+          value: vsBreakevenLatest === null ? "-" : `${vsBreakevenLatest > 0 ? "+" : ""}${vsBreakevenLatest.toFixed(2)}%`,
+          caption: "This is the metric the Fed itself watches most for long-run inflation anchoring - divergence from the 10y breakeven signals near-term vs. long-run views decoupling.",
           history: vsBreakevenHist,
           zscore: vsBreakevenStats.zscore,
           windowLabel: "3y daily",
@@ -888,7 +888,7 @@ export async function GET(req: NextRequest) {
       { code: COT_CODES.SILVER, id: "cot:silver", name: "Silver (SI)", note: "Spec net position, COMEX" },
       { code: COT_CODES.NATGAS, id: "cot:natgas", name: "Natural Gas (NG)", note: "Spec net position, NYMEX Henry Hub" },
       { code: COT_CODES.DXY, id: "cot:dxy", name: "Dollar Index (DX)", note: "Spec net position, ICE" },
-      { code: COT_CODES.VIX, id: "cot:vix", name: "VIX Futures", note: "Spec net position — structurally short" },
+      { code: COT_CODES.VIX, id: "cot:vix", name: "VIX Futures", note: "Spec net position - structurally short" },
     ];
 
     const cotSeriesByCode = new Map<string, CotPoint[]>(
@@ -929,9 +929,9 @@ export async function GET(req: NextRequest) {
         extra_stats: [
           {
             label: "COT index (3y)",
-            value: idx === null ? "—" : `${idx.toFixed(0)} / 100`,
+            value: idx === null ? "-" : `${idx.toFixed(0)} / 100`,
             flag: idx !== null && (idx <= 10 || idx >= 90),
-            caption: "Where today's net position sits in its 3-year range. 0 = most short, 100 = most long — readings past 90/10 mark crowded trades that unwind violently.",
+            caption: "Where today's net position sits in its 3-year range. 0 = most short, 100 = most long - readings past 90/10 mark crowded trades that unwind violently.",
             history: idxHist,
             zscore: null,
             threshold: 90,
@@ -939,8 +939,8 @@ export async function GET(req: NextRequest) {
           },
           {
             label: "Net as % of open interest",
-            value: latest.netPctOi === null ? "—" : `${latest.netPctOi > 0 ? "+" : ""}${latest.netPctOi.toFixed(1)}%`,
-            caption: "Normalizes the position by market size — the only way raw contract counts are comparable across years and contracts.",
+            value: latest.netPctOi === null ? "-" : `${latest.netPctOi > 0 ? "+" : ""}${latest.netPctOi.toFixed(1)}%`,
+            caption: "Normalizes the position by market size - the only way raw contract counts are comparable across years and contracts.",
             history: pctHist,
             zscore: pctStats.zscore,
             windowLabel: "3y weekly",
@@ -981,7 +981,7 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "Regime bands",
-          value: vixLatest === null ? "—" : vixLatest < 15 ? "Calm (<15)" : vixLatest < 25 ? "Normal (15-25)" : "Stress (25+)",
+          value: vixLatest === null ? "-" : vixLatest < 15 ? "Calm (<15)" : vixLatest < 25 ? "Normal (15-25)" : "Stress (25+)",
           flag: vixLatest !== null && vixLatest >= 25,
           caption: "Sub-15 = vol-selling regime; sustained 25+ = drawdowns cluster and correlations go to 1.",
         },
@@ -1002,7 +1002,7 @@ export async function GET(req: NextRequest) {
         id: "geo:vix-term",
         panel_id: "volatility",
         name: "VIX Term Structure",
-        note: "VIX3M / VIX — below 1 = backwardation = stress",
+        note: "VIX3M / VIX - below 1 = backwardation = stress",
         value: termLatest.toFixed(3),
         status: statusFromDelta(termLatest, termPrev),
         source: "Yahoo ^VIX3M / ^VIX",
@@ -1015,7 +1015,7 @@ export async function GET(req: NextRequest) {
             label: "Curve shape",
             value: termLatest >= 1 ? `Contango (+${((termLatest - 1) * 100).toFixed(1)}%)` : `BACKWARDATION (${((termLatest - 1) * 100).toFixed(1)}%)`,
             flag: termLatest < 1,
-            caption: "The vol curve inverted (spot above 3-month) in every major drawdown — Feb 2018, Mar 2020, 2022 lows. Inversion = acute stress being priced now.",
+            caption: "The vol curve inverted (spot above 3-month) in every major drawdown - Feb 2018, Mar 2020, 2022 lows. Inversion = acute stress being priced now.",
             history: vixTermHist,
             zscore: null,
             threshold: 1,
@@ -1035,7 +1035,7 @@ export async function GET(req: NextRequest) {
       id: "geo:ovx",
       panel_id: "volatility",
       name: "OVX",
-      note: "Crude oil implied vol — supply-shock gauge",
+      note: "Crude oil implied vol - supply-shock gauge",
       value: fmt(ovxLatest),
       status: statusFromDelta(ovxLatest, ovxPrev),
       source: "FRED OVXCLS",
@@ -1054,7 +1054,7 @@ export async function GET(req: NextRequest) {
       id: "geo:gvz",
       panel_id: "volatility",
       name: "GVZ",
-      note: "Gold implied vol — safe-haven flow gauge",
+      note: "Gold implied vol - safe-haven flow gauge",
       value: fmt(gvzLatest),
       status: statusFromDelta(gvzLatest, gvzPrev),
       source: "FRED GVZCLS",
@@ -1080,7 +1080,7 @@ export async function GET(req: NextRequest) {
         id: "geo:vvix",
         panel_id: "volatility",
         name: "VVIX",
-        note: "Vol-of-vol — implied vol of the VIX itself",
+        note: "Vol-of-vol - implied vol of the VIX itself",
         value: vvixLatest.toFixed(1),
         status: statusFromDelta(vvixLatest, vvixPrev),
         source: "Yahoo ^VVIX",
@@ -1100,7 +1100,7 @@ export async function GET(req: NextRequest) {
         id: "geo:skew",
         panel_id: "volatility",
         name: "CBOE SKEW",
-        note: "Tail-risk gauge — priced crash probability",
+        note: "Tail-risk gauge - priced crash probability",
         value: skewLatest.toFixed(1),
         status: statusFromDelta(skewLatest, skewPrev),
         source: "Yahoo ^SKEW",
@@ -1156,7 +1156,7 @@ export async function GET(req: NextRequest) {
           {
             label: "Why the 30d average",
             value: "Daily prints swing 3x on single headlines",
-            caption: "The raw daily index is far too noisy to read — the smoothed level is what correlates with risk premia.",
+            caption: "The raw daily index is far too noisy to read - the smoothed level is what correlates with risk premia.",
           },
         ],
       });
@@ -1217,7 +1217,7 @@ export async function GET(req: NextRequest) {
         id: "geo:defense-spy",
         panel_id: "geopolitics",
         name: "Defense / Market Ratio",
-        note: "ITA vs SPY — risk-on tilt toward defense names",
+        note: "ITA vs SPY - risk-on tilt toward defense names",
         value: defenseSpyLatest.toFixed(4),
         status: statusFromDelta(defenseSpyLatest, defenseSpyPrev),
         source: "Yahoo Finance ITA / SPY",
@@ -1267,7 +1267,7 @@ export async function GET(req: NextRequest) {
       panel_id: "transmission",
       name: "Financial Conditions (NFCI)",
       note: "Chicago Fed, 0 = average, + = tight",
-      value: nfciLatest === null ? "—" : nfciLatest.toFixed(3),
+      value: nfciLatest === null ? "-" : nfciLatest.toFixed(3),
       status: statusFromDelta(nfciLatest, nfciPrev),
       source: "FRED NFCI",
       zscore: nfciSig.signal,
@@ -1277,7 +1277,7 @@ export async function GET(req: NextRequest) {
       extra_stats: [
         {
           label: "Absolute stance",
-          value: nfciLatest === null ? "—" : nfciLatest > 0 ? "Tighter than average" : "Looser than average",
+          value: nfciLatest === null ? "-" : nfciLatest > 0 ? "Tighter than average" : "Looser than average",
           flag: nfciLatest !== null && nfciLatest > 0,
           caption: "The index is built so 0 = the historical average of US financial conditions. Sign matters as much as direction here.",
           history: nfciHistoryPts,
@@ -1370,12 +1370,12 @@ export async function GET(req: NextRequest) {
     };
 
     const ratioRows = [
-      ratioRow("transmission:copper-gold", "Copper/Gold Ratio", "Growth vs fear — tracks the 10y", "Yahoo Finance HG=F / GC=F", ratioSeriesDated(copperW, goldW)),
+      ratioRow("transmission:copper-gold", "Copper/Gold Ratio", "Growth vs fear - tracks the 10y", "Yahoo Finance HG=F / GC=F", ratioSeriesDated(copperW, goldW)),
       ratioRow("transmission:gold-silver", "Gold/Silver Ratio", "Fear metal vs industrial metal", "Yahoo Finance GC=F / SI=F", ratioSeriesDated(goldW, silverW), 2),
       ratioRow("transmission:crude-natgas", "Crude/NatGas Ratio", "Global vs domestic energy split", "Yahoo Finance CL=F / NG=F", ratioSeriesDated(crudeW, natgasW), 2),
-      ratioRow("transmission:hyg-lqd", "HYG / LQD Ratio", "Junk vs quality — credit risk appetite", "Yahoo Finance HYG / LQD", ratioSeriesDated(hygW, lqdW)),
-      ratioRow("transmission:rsp-spy", "RSP / SPY Ratio", "Equal-weight vs cap-weight — breadth", "Yahoo Finance RSP / SPY", ratioSeriesDated(rspW, spyW)),
-      ratioRow("transmission:smh-spy", "SMH / SPY Ratio", "Semis vs market — cycle leadership", "Yahoo Finance SMH / SPY", ratioSeriesDated(smhW, spyW)),
+      ratioRow("transmission:hyg-lqd", "HYG / LQD Ratio", "Junk vs quality - credit risk appetite", "Yahoo Finance HYG / LQD", ratioSeriesDated(hygW, lqdW)),
+      ratioRow("transmission:rsp-spy", "RSP / SPY Ratio", "Equal-weight vs cap-weight - breadth", "Yahoo Finance RSP / SPY", ratioSeriesDated(rspW, spyW)),
+      ratioRow("transmission:smh-spy", "SMH / SPY Ratio", "Semis vs market - cycle leadership", "Yahoo Finance SMH / SPY", ratioSeriesDated(smhW, spyW)),
     ];
     for (const r of ratioRows) if (r) rows.push(r);
 
@@ -1419,7 +1419,7 @@ export async function GET(req: NextRequest) {
         panel_id: "asset-news",
         name: `${m.label} News`,
         note: "Real indicator events (FRED/CFTC) plus matching headlines, not headline-only sentiment",
-        value: merged.length === 0 ? "—" : `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
+        value: merged.length === 0 ? "-" : `${avgScore >= 0 ? "+" : ""}${avgScore.toFixed(2)}`,
         status: merged.length === 0 ? "flat" : avgScore > 0.05 ? "up" : avgScore < -0.05 ? "down" : "flat",
         source: "FRED · CFTC · CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch",
         zscore: merged.length === 0 ? null : avgScore,
@@ -1464,7 +1464,7 @@ export async function GET(req: NextRequest) {
 
     // ---- Upsert, tolerating a missing payload column (pre-migration DBs) ----
     // updated_at has a DB default that only fires on INSERT, not on the
-    // UPDATE half of an upsert — stamp it explicitly so "synced HH:MM" in
+    // UPDATE half of an upsert - stamp it explicitly so "synced HH:MM" in
     // the UI reflects the actual last refresh, not the row's original insert time.
     const nowIso = new Date().toISOString();
     for (const r of rows) r.updated_at = nowIso;
@@ -1492,7 +1492,7 @@ export async function GET(req: NextRequest) {
       at: new Date().toISOString(),
       ...(payloadColumnMissing && {
         warning:
-          "payload column missing — run `alter table macro_series add column if not exists payload jsonb;` in the Supabase SQL editor to enable the news feed and backtest daily bars",
+          "payload column missing - run `alter table macro_series add column if not exists payload jsonb;` in the Supabase SQL editor to enable the news feed and backtest daily bars",
       }),
     });
   } catch (err) {

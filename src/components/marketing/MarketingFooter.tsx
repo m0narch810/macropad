@@ -40,7 +40,7 @@ export default function MarketingFooter() {
 
       <div className="border-t border-[var(--border)] px-5 py-5 sm:px-8">
         <p className="m-0 font-mono text-[0.7rem] text-[var(--text-faint)]">
-          &copy; {new Date().getFullYear()} Macropad. Data provided for informational purposes only — not investment advice.
+          &copy; {new Date().getFullYear()} Macropad. Data provided for informational purposes only - not investment advice.
         </p>
       </div>
     </footer>

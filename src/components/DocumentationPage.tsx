@@ -128,101 +128,6 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
           </p>
         </Section>
 
-        <Section title="Expanding an indicator row (the dropdowns)">
-          <p className="m-0">
-            Click any indicator row to open it. What appears depends on the indicator, but the layout is always
-            the same set of pieces, top to bottom:
-          </p>
-          <ul className="m-0 flex list-disc flex-col gap-2 pl-5">
-            <li>
-              <span className="text-[var(--text)]">Bias label.</span> A short sentence stating the current read
-              in plain language, colored green for bullish, red for bearish, gray for flat. This comes from the
-              same bias logic used on the Board, so the label here always matches the color you saw before
-              expanding.
-            </li>
-            <li>
-              <span className="text-[var(--text)]">Linked assets.</span> Shown only when this indicator has a
-              defined effect on one or more of the ten tracked assets. Each linked asset shows its own current
-              price context and the direction this indicator is pushing it. If a row has no Linked assets
-              section, it means Macropad has not mapped a direct asset effect for that specific indicator yet,
-              not that the indicator is unimportant.
-            </li>
-            <li>
-              <span className="text-[var(--text)]">Specialized metrics.</span> Extra stats attached to that
-              specific series, each with its own small chart, for example the Sahm Rule reading under
-              Unemployment, the COT index and net-percent-of-open-interest under every positioning series, or
-              the 3m and 6m annualized paces under CPI. A flag or highlighted color on one of these means that
-              specific extra stat has crossed its own separately defined trigger level, which is usually a
-              different threshold than the main indicator's own signal score.
-            </li>
-            <li>
-              <span className="text-[var(--text)]">The method body.</span> A chart and readout specific to
-              whichever scoring method this indicator uses, momentum, anchor, threshold, or positioning. See the
-              next section for what each one shows.
-            </li>
-            <li>
-              <span className="text-[var(--text)]">Source and window.</span> The bottom row of every expanded
-              card, showing exactly where the data comes from (for example FRED CPIAUCSL) and the lookback
-              window and method used to compute the score (for example 3y daily, momentum 20d).
-            </li>
-          </ul>
-          <p className="m-0">
-            A handful of freshly added or thin history series render as a simpler, non expandable card instead,
-            showing just the value, a sparkline, and the raw score bar with no dropdown. That happens
-            automatically whenever a series does not yet have enough history (under 20 data points) for the full
-            method based scoring to run.
-          </p>
-        </Section>
-
-        <Section title="Signal scores and the four scoring methods">
-          <p className="m-0">
-            Most series carry a signal score from negative 1 to positive 1, shown as the small percentage next
-            to the value and as the colored bar on the simpler cards. Despite the historical name z-score living
-            on in one internal field name, this is not a plain statistical z-score. Every indicator is scored
-            with whichever of four methods actually fits how that specific indicator behaves economically, and
-            the search results below list the exact method, reference level, and band used for each one.
-          </p>
-          <ul className="m-0 flex list-disc flex-col gap-3 pl-5">
-            <li>
-              <span className="text-[var(--text)]">Momentum.</span> Used when the level itself is arbitrary or
-              structurally drifting and the direction of change is what actually matters, for example the Fed
-              balance sheet or the 10 year yield. Compares the average of the most recent window of readings
-              against the average of the equal length window right before it, then scales that change by how
-              volatile the series normally is period to period, so a big move in a normally calm series scores
-              higher than the same size move in a normally noisy one.
-            </li>
-            <li>
-              <span className="text-[var(--text)]">Anchor.</span> Used when a real economic reference point
-              exists, for example CPI judged against the Fed's 2 percent target, or the VIX judged against its
-              long run average near 17. The score is simply how far the latest reading sits from that reference,
-              divided by a band width chosen for that indicator, and capped at plus or minus 1. A reading right
-              at the reference scores 0, a reading a full band width away scores the full plus or minus 1.
-            </li>
-            <li>
-              <span className="text-[var(--text)]">Threshold.</span> Used when crossing a specific line is the
-              actual event, not the size of the move on either side of it, for example the 10y-2y yield curve
-              going from positive to negative. Mechanically this is the same distance-from-reference math as
-              anchor, just with a much narrower band, so the score swings hard right around the zero crossing
-              itself rather than building up gradually.
-            </li>
-            <li>
-              <span className="text-[var(--text)]">Positioning.</span> Used for series with no fixed fair value
-              at all, mainly COT futures positioning and cross asset ratios, where the only sensible reference is
-              the indicator's own recent history. Blends a robust z-score (based on the median and typical
-              deviation, resistant to one-off outlier spikes skewing everything) with a percentile rank, both
-              computed over roughly a 2 year window, so the score reflects how crowded or stretched the current
-              reading is relative to where it has actually traded recently.
-            </li>
-          </ul>
-          <p className="m-0">
-            A score near 0 means the indicator is near its neutral zone for whichever method it uses. A score
-            approaching positive 1 or negative 1 means it is at an extreme relative to that method. The window
-            label under each indicator's value states the lookback period and method together, for example 3y
-            daily, momentum 20d, meaning the score is computed over a 3 year daily history using a 20 day
-            momentum window.
-          </p>
-        </Section>
-
         <Section title="News and sentiment scoring">
           <p className="m-0">
             The General tab pools headlines from real macro and policy news desks, CNBC Economy, the Federal
@@ -234,22 +139,23 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
             curated enough not to need that filter.
           </p>
           <p className="m-0">
-            Each asset tab is built from that exact same pool of desks, filtered again down to headlines that
-            match that specific asset's fundamental drivers, oil and OPEC for crude, safe haven and bullion for
-            gold, credit spreads and corporate bonds for the high yield ETF, the yield curve and Treasury
-            auctions for the long bond ETF, and so on for every tracked asset. This replaced an earlier version
-            that pulled a generic per ticker headline feed, which for futures and ETFs mostly returned
-            technical price forecast and retail portfolio content rather than the asset's actual macro drivers.
-            When a specific asset genuinely has no matching headlines in a given refresh cycle, its tab says so
-            rather than padding the feed with unrelated filler.
+            Each asset tab is not headline sentiment at all. It is built from the same real FRED and CFTC
+            indicator data used everywhere else in the app: every tracked asset has a defined list of indicators
+            that actually move it (oil and OPEC data for crude, real yields and safe haven flows for gold,
+            credit spreads for the high yield ETF, the yield curve for the long bond ETF, and so on), and each
+            one becomes a dated event using that indicator's own real signal score, tagged DATA in the feed. A
+            handful of matching real headlines are merged in on top for color, tagged normally, but they are a
+            supplement, not the source of the number. This guarantees every asset has real coverage even on a
+            day when no news desk happens to publish about it.
           </p>
           <p className="m-0">
-            Each headline is scored on its title plus its description or dek when the source provides one,
-            since a one or two sentence summary gives the scorer more to work with than the headline alone. The
-            score itself comes from a finance specific keyword lexicon, a hand built dictionary of bullish and
-            bearish financial terms with assigned weights, plus a negation check so that phrases like not
-            rising flip the expected direction. Two word phrases such as rate cut or soft landing are matched
-            before single words so they are not misread by one of their component words alone.
+            For the general pooled tab, each headline is scored on its title plus its description or dek when
+            the source provides one, since a one or two sentence summary gives the scorer more to work with than
+            the headline alone. The score itself comes from a finance specific keyword lexicon, a hand built
+            dictionary of bullish and bearish financial terms with assigned weights, plus a negation check so
+            that phrases like not rising flip the expected direction. Two word phrases such as rate cut or soft
+            landing are matched before single words so they are not misread by one of their component words
+            alone.
           </p>
           <p className="m-0">
             Raw scores are polarized, meaning mild scores are pulled toward neutral and strong scores are
@@ -260,12 +166,13 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
             back toward neutral as headlines age out of relevance.
           </p>
           <p className="m-0">
-            This is a keyword lexicon, not a language model, so treat it as a noisy directional read across many
-            headlines rather than a verdict on any single one, and expect it to occasionally misfire on sarcasm
-            or a headline where the bullish or bearish word describes a different asset than the one being
-            asked about. The 3D scatter under each feed plots headlines by time on one axis and sentiment score
-            on another, with color marking bullish, bearish, or neutral, so you can see clustering and shifts in
-            tone at a glance without reading every headline.
+            The headline scorer is a keyword lexicon, not a language model, so treat headline sentiment as a
+            noisy directional read across many headlines rather than a verdict on any single one, and expect it
+            to occasionally misfire on sarcasm or a headline where the bullish or bearish word describes a
+            different asset than the one being asked about. DATA tagged events do not have this problem, since
+            their score comes straight from the real indicator reading. The 3D scatter under each feed plots
+            every item by time on one axis and score on another, with color marking bullish, bearish, or
+            neutral, so you can see clustering and shifts in tone at a glance without reading every item.
           </p>
         </Section>
 

@@ -7,7 +7,7 @@ const HIDDEN_PANELS = new Set(["asset-news"]);
 const PANELS = macroPanels.filter((p) => !HIDDEN_PANELS.has(p.id));
 
 export const metadata = {
-  title: "Coverage — Macropad",
+  title: "Coverage - Macropad",
   description: "Every panel and series Macropad tracks: US macro, yield rates, COT positioning, transmission, geopolitics, and volatility.",
 };
 

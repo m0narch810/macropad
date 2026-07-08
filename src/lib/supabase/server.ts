@@ -19,7 +19,7 @@ export async function createSupabaseServerClient() {
               cookieStore.set(name, value, options);
             }
           } catch {
-            // setAll called from a Server Component — safe to ignore since
+            // setAll called from a Server Component - safe to ignore since
             // the proxy already refreshes the session cookie on every request.
           }
         },

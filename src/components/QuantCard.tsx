@@ -77,7 +77,7 @@ function MomentumBadge({
     <div className="flex flex-col gap-1.5 rounded-md bg-[var(--panel-2)] px-2.5 py-2.5">
       <span className="font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">{label}</span>
       <span className="font-mono text-[0.94rem] font-semibold" style={{ color }}>
-        {value === null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(3)}`}
+        {value === null ? "-" : `${value > 0 ? "+" : ""}${value.toFixed(3)}`}
       </span>
       <div className="relative h-1 rounded-full bg-[var(--border)]">
         <div
@@ -153,7 +153,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
               </defs>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} domain={["auto", "auto"]} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), name]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), name]} />
               <Area type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} fill={`url(#q-hist-${series.id})`} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="ma20" stroke="var(--up)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
               <Line type="monotone" dataKey="ma50" stroke="var(--down)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
@@ -178,7 +178,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
                 <ReferenceLine y={0} stroke="var(--border)" />
                 <ReferenceLine y={2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
                 <ReferenceLine y={-2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
-                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(2) + "σ", "z"]} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(2) + "σ", "z"]} />
                 <Line type="monotone" dataKey="z" stroke={dist ? zTone(series.id, dist.zscore) : "var(--accent)"} strokeWidth={1.5} dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -192,7 +192,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
               <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
                 <XAxis dataKey="date" hide />
                 <YAxis tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={false} width={38} domain={[0, "auto"]} />
-                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(4), "σ"]} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(4), "σ"]} />
                 <Area type="monotone" dataKey="vol" stroke="var(--flat)" strokeWidth={1.25} fill="var(--flat)" fillOpacity={0.18} dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -244,7 +244,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
       </div>
 
       <div className="mt-6">
-        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — absolute change vs. N periods ago</div>
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum - absolute change vs. N periods ago</div>
         <div className="grid grid-cols-4 gap-2">
           {(() => {
             const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
@@ -270,7 +270,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
           </div>
           <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-5">
             <Stat label="Std Dev" value={dist.std.toFixed(3)} />
-            <Stat label="Ann. Vol" value={annVol !== null ? annVol.toFixed(3) : "—"} />
+            <Stat label="Ann. Vol" value={annVol !== null ? annVol.toFixed(3) : "-"} />
             <Stat label="Z-score" value={`${dist.zscore > 0 ? "+" : ""}${dist.zscore.toFixed(2)}σ`} color={zTone(series.id, dist.zscore)} />
             <Stat label="N obs" value={String(values.length)} />
             <Stat label="Cadence" value={cadence} />
@@ -320,7 +320,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
               </defs>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} domain={["auto", "auto"]} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), name]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), name]} />
               <Area type="monotone" dataKey="value" stroke="var(--text-faint)" strokeWidth={1.25} fill={`url(#q-mom-${series.id})`} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="trend" stroke="var(--accent)" strokeWidth={2.25} dot={false} isAnimationActive={false} />
             </ComposedChart>
@@ -339,7 +339,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
             <BarChart data={paceData} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 4 }}>
               <XAxis type="number" domain={["auto", "auto"]} tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} />
               <YAxis type="category" dataKey="label" tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={90} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "avg"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "avg"]} />
               <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
                 <Cell fill="var(--text-faint)" />
                 <Cell fill={paceColor} />
@@ -348,12 +348,12 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
           </ResponsiveContainer>
         </div>
         <div className="mt-2 flex items-baseline gap-2 font-mono text-[0.85rem]" style={{ color: paceColor }}>
-          {paceDelta === null ? "—" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)} pace change`}
+          {paceDelta === null ? "-" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)} pace change`}
         </div>
       </div>
 
       <div className="mt-6">
-        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — absolute change vs. N periods ago</div>
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum - absolute change vs. N periods ago</div>
         <div className="grid grid-cols-4 gap-2">
           {(() => {
             const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
@@ -367,7 +367,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
           <Stat label="N obs" value={String(values.length)} />
           <Stat label="Cadence" value={cadence} />
           <Stat label="Pace window" value={`${window}p`} />
-          <Stat label="Pace delta" value={paceDelta === null ? "—" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)}`} color={paceColor} />
+          <Stat label="Pace delta" value={paceDelta === null ? "-" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)}`} color={paceColor} />
         </div>
       </div>
     </>
@@ -413,7 +413,7 @@ function AnchorBody({
             <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis domain={[yMin, yMax]} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "value"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "value"]} />
               <ReferenceArea y1={reference - band} y2={reference + band} fill="var(--accent)" fillOpacity={0.08} />
               <ReferenceLine y={reference} stroke="var(--accent)" strokeDasharray="4 3" label={{ value: `target ${reference}`, position: "insideTopLeft", fill: "var(--accent)", fontSize: 10 }} />
               <Line type="monotone" dataKey="value" stroke="var(--text)" strokeWidth={2} dot={false} isAnimationActive={false} />
@@ -442,7 +442,7 @@ function AnchorBody({
       </div>
 
       <div className="mt-6">
-        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — is it moving toward or away from target?</div>
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum - is it moving toward or away from target?</div>
         <div className="grid grid-cols-4 gap-2">
           {(() => {
             const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
@@ -494,7 +494,7 @@ function ThresholdBody({ series, history, values }: { series: MacroSeries; histo
             <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={50} label={{ value: "Spread", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "spread"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "spread"]} />
               <ReferenceLine y={0} stroke="var(--text-faint)" />
               <Bar dataKey="value" radius={[1, 1, 1, 1]}>
                 {chartData.map((d, i) => (

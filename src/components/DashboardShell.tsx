@@ -19,7 +19,7 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
 
 const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics", "volatility"]);
-/** Catalogue-only panels — carry data (e.g. per-asset news) but never show up as their own nav entry. */
+/** Catalogue-only panels - carry data (e.g. per-asset news) but never show up as their own nav entry. */
 const HIDDEN_PANELS = new Set(["asset-news"]);
 const BOARD_ID = "board";
 const NEWS_ID = "news";

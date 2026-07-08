@@ -14,7 +14,7 @@ function refreshUrl(): string {
 
 /**
  * ISR only regenerates this page (and thus runs this function body) when a
- * real request lands after the revalidate window expires — so this fires on
+ * real request lands after the revalidate window expires - so this fires on
  * actual traffic, at most once per revalidate window, never per-request.
  * That's what caps it against the upstream rate limits (FRED/CFTC/Yahoo):
  * no matter how many users hit /app, the refresh pipeline itself only ever
@@ -32,7 +32,7 @@ export default async function AppPage() {
           cache: "no-store",
         });
       } catch {
-        // best-effort — the Vercel cron remains the source of truth
+        // best-effort - the Vercel cron remains the source of truth
       }
     });
   }

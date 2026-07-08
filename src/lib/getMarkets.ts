@@ -16,7 +16,7 @@ export interface MarketRow {
 
 export async function getMarkets(): Promise<MarketRow[]> {
   if (!supabase) return [];
-  // payload is a later migration — retry without it so a pre-migration DB
+  // payload is a later migration - retry without it so a pre-migration DB
   // still returns markets (just without daily bars for the backtest).
   interface Row {
     id: string;

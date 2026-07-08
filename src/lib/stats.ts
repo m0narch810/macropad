@@ -1,6 +1,6 @@
 /**
  * Latest and previous non-null values, scanning back from the end. FRED
- * series often carry a "." placeholder for holidays/weekends mid-array —
+ * series often carry a "." placeholder for holidays/weekends mid-array -
  * naively reading the last two array slots picks up those nulls and makes
  * a perfectly fresh series read as "pending".
  */
@@ -334,7 +334,7 @@ export function avgChange(monthlyLevels: (number | null)[], months: number): num
 
 /**
  * Sahm Rule: 3-month average unemployment rate minus its own minimum over
- * the trailing 12 months. A real-time recession indicator — NBER-adjacent
+ * the trailing 12 months. A real-time recession indicator - NBER-adjacent
  * research shows >=0.50 has a strong historical hit rate for a recession
  * already being underway.
  */
@@ -364,7 +364,7 @@ export interface HistPoint {
   value: number;
 }
 
-/** Full historical Sahm Rule series — recomputed at every trailing month, not just the latest print. */
+/** Full historical Sahm Rule series - recomputed at every trailing month, not just the latest print. */
 export function sahmRuleHistory(unrateHist: HistPoint[]): HistPoint[] {
   const out: HistPoint[] = [];
   const values = unrateHist.map((p) => p.value);
@@ -403,7 +403,7 @@ function median(sorted: number[]): number {
   return sorted.length % 2 === 0 ? (sorted[mid - 1] + sorted[mid]) / 2 : sorted[mid];
 }
 
-/** Median/MAD z-score of the latest value — outliers and fat tails don't dominate the way mean/std lets them. */
+/** Median/MAD z-score of the latest value - outliers and fat tails don't dominate the way mean/std lets them. */
 export function robustZScore(values: number[]): number | null {
   if (values.length < 5) return null;
   const sorted = [...values].sort((a, b) => a - b);
@@ -424,7 +424,7 @@ export function percentileRankOf(values: number[]): number | null {
   return (below / values.length) * 100;
 }
 
-/** How many trailing observations count as "recent regime" for a given cadence — roughly 2 years. */
+/** How many trailing observations count as "recent regime" for a given cadence - roughly 2 years. */
 export function windowSizeForCadence(cadence: Cadence): number {
   switch (cadence) {
     case "daily":
@@ -464,7 +464,7 @@ export function computeWindowedBias(historyValues: number[], cadence: Cadence): 
 
 /**
  * For indicators where the LEVEL is arbitrary/structurally-shifting but the
- * TREND is the signal — payrolls, WALCL pace, claims, M2, yields as a
+ * TREND is the signal - payrolls, WALCL pace, claims, M2, yields as a
  * financial-conditions read. Compares the mean of the most recent `window`
  * observations against the mean of the `window` before that, normalized by
  * the series' own period-over-period volatility.
@@ -484,7 +484,7 @@ export function momentumSignal(values: number[], window: number): number | null 
 }
 
 /**
- * For indicators with a real economic reference point — inflation vs the
+ * For indicators with a real economic reference point - inflation vs the
  * Fed's 2% target, unemployment vs NAIRU, a spread vs its 0 inversion line.
  * `band` sets how far from `reference` counts as a "full" ±1 read.
  */
@@ -496,7 +496,7 @@ export function distanceSignal(latest: number, reference: number, band: number):
  * Pearson correlation of period-over-period CHANGES between two date-aligned
  * series. Raw levels of any two trending series correlate spuriously (~0.9
  * for a growing payroll level vs a rising index, regardless of any real
- * relationship) — differencing first is what makes the measured correlation
+ * relationship) - differencing first is what makes the measured correlation
  * mean something.
  */
 export function changeCorrelation(

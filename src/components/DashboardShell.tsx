@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MacroPanel } from "@/lib/macroData";
 import type { MarketRow } from "@/lib/getMarkets";
 import SeriesCard from "@/components/SeriesCard";
@@ -8,12 +8,15 @@ import QuantCard from "@/components/QuantCard";
 import NewsFeedCard from "@/components/NewsFeedCard";
 import MarketTicker from "@/components/MarketTicker";
 import PanelIcon from "@/components/PanelIcon";
+import AsciiLogo from "@/components/AsciiLogo";
+import OverviewBoard from "@/components/OverviewBoard";
 import CustomDashboardPage from "@/components/CustomDashboardPage";
 import CustomBiasPage from "@/components/CustomBiasPage";
 import { MARKET_SYMBOLS } from "@/lib/markets";
 import { getSignTone } from "@/lib/bias";
 
 const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics"]);
+const BOARD_ID = "board";
 const NEWS_ID = "news";
 const CUSTOM_DASHBOARD_ID = "custom-dashboard";
 const CUSTOM_BIAS_ID = "custom-bias";
@@ -78,6 +81,19 @@ function NavButton({
   );
 }
 
+/** Sticky page header so the context survives scrolling through dense lists. */
+function PageHead({ title, meta }: { title: string; meta?: React.ReactNode }) {
+  return (
+    <header
+      className="sticky top-0 z-20 -mx-4 mb-6 flex items-baseline gap-3 border-b border-[var(--border)] px-4 py-3 backdrop-blur-md sm:-mx-6 sm:px-6 lg:-mx-9 lg:px-9"
+      style={{ background: "color-mix(in srgb, var(--bg) 84%, transparent)" }}
+    >
+      <h1 className="font-display m-0 text-balance text-[1.35rem] font-semibold leading-none">{title}</h1>
+      {meta && <span className="font-mono text-[0.66rem] text-[var(--text-faint)]">{meta}</span>}
+    </header>
+  );
+}
+
 export default function DashboardShell({
   panels,
   lastUpdated,
@@ -87,19 +103,45 @@ export default function DashboardShell({
   lastUpdated: string | null;
   markets: MarketRow[];
 }) {
-  const [activeId, setActiveId] = useState(panels[0]?.id ?? "");
+  const [activeId, setActiveId] = useState<string>(BOARD_ID);
+  const [focusSeriesId, setFocusSeriesId] = useState<string | null>(null);
   const [assetFilter, setAssetFilter] = useState<string>("");
   const [navOpen, setNavOpen] = useState(false);
   const active = panels.find((p) => p.id === activeId);
   const pickPage = (id: string) => {
     setActiveId(id);
+    setFocusSeriesId(null);
     setNavOpen(false);
   };
+  const openFromBoard = (panelId: string, seriesId: string) => {
+    setActiveId(panelId);
+    setFocusSeriesId(seriesId);
+    setNavOpen(false);
+  };
+
+  useEffect(() => {
+    if (!focusSeriesId) return;
+    const t = setTimeout(() => {
+      document.getElementById(`card-${focusSeriesId}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 90);
+    return () => clearTimeout(t);
+  }, [focusSeriesId, activeId]);
+
+  const isBoard = activeId === BOARD_ID;
   const isNews = activeId === NEWS_ID;
   const isCustomDashboard = activeId === CUSTOM_DASHBOARD_ID;
   const isCustomBias = activeId === CUSTOM_BIAS_ID;
   const assetLabel = MARKET_SYMBOLS.find((m) => m.symbol === assetFilter)?.label ?? null;
   const newsSeries = panels.flatMap((p) => p.series).find((s) => s.id === "geo:news-feed") ?? null;
+
+  const totalSeries = panels.reduce((n, p) => n + p.series.length, 0);
+  const totals = panels.reduce(
+    (acc, p) => {
+      const { bull, bear } = panelSignals(p);
+      return { bull: acc.bull + bull, bear: acc.bear + bear };
+    },
+    { bull: 0, bear: 0 }
+  );
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -117,9 +159,7 @@ export default function DashboardShell({
             <path d="M2 12H14" />
           </svg>
         </button>
-        <div className="font-display text-[1.1rem] leading-none">
-          <span className="text-[var(--accent)]">Macro</span>pad
-        </div>
+        <AsciiLogo tapeLength={10} className="flex items-baseline gap-2.5 [&>div:last-child]:mt-0" />
       </div>
 
       {navOpen && (
@@ -133,29 +173,7 @@ export default function DashboardShell({
           }`}
         >
           <div className="hidden border-b border-[var(--border)] px-5 py-5 lg:block">
-            <div className="flex items-center gap-2.5">
-              <div
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md font-mono text-[0.8rem] font-bold"
-                style={{
-                  background: "color-mix(in srgb, var(--accent) 16%, transparent)",
-                  border: "1px solid color-mix(in srgb, var(--accent) 45%, transparent)",
-                  color: "var(--accent)",
-                  boxShadow: "0 0 14px color-mix(in srgb, var(--accent) 25%, transparent)",
-                }}
-              >
-                M
-              </div>
-              <div className="font-display text-[1.3rem] leading-none">
-                <span className="text-[var(--accent)]">Macro</span>pad
-              </div>
-            </div>
-            <div className="mt-2.5 flex items-center gap-1.5 font-mono text-[0.62rem] uppercase tracking-[0.09em] text-[var(--text-faint)]">
-              <span className="relative flex h-1.5 w-1.5">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--up)] opacity-60" />
-                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--up)]" />
-              </span>
-              {lastUpdated ? `synced ${new Date(lastUpdated).toLocaleTimeString()}` : "not yet synced"}
-            </div>
+            <AsciiLogo tapeLength={18} />
           </div>
 
           <div className="border-b border-[var(--border)] px-3.5 py-3.5">
@@ -199,6 +217,13 @@ export default function DashboardShell({
           </div>
 
           <nav className="flex flex-1 flex-col gap-1 p-3">
+            <NavButton
+              isActive={isBoard}
+              onClick={() => pickPage(BOARD_ID)}
+              icon="board"
+              title="The Board"
+              subtitle="every series · one screen"
+            />
             <NavButton isActive={isNews} onClick={() => pickPage(NEWS_ID)} icon="news" title="News" subtitle="headline sentiment" />
             {panels.map((panel) => {
               const { bull, bear } = panelSignals(panel);
@@ -243,53 +268,76 @@ export default function DashboardShell({
             />
           </nav>
 
-          <div className="border-t border-[var(--border)] px-5 py-3.5 font-mono text-[0.66rem] text-[var(--text-faint)]">
-            {panels.reduce((n, p) => n + p.series.length, 0)} live series
+          <div className="whitespace-nowrap border-t border-[var(--border)] px-4 py-3 font-mono text-[0.64rem] text-[var(--text-faint)]">
+            {totalSeries} series │ {lastUpdated ? `synced ${new Date(lastUpdated).toLocaleTimeString()}` : "not synced"} │{" "}
+            <span className="blink-cursor text-[var(--accent)]">▊</span>
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-9 lg:py-8">
-          {isNews ? (
+        <main className="dotgrid min-w-0 flex-1 px-4 pb-6 sm:px-6 lg:px-9 lg:pb-8">
+          {isBoard ? (
             <>
-              <header className="mb-7">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">News</h1>
-              </header>
+              <PageHead
+                title="The Board"
+                meta={
+                  <>
+                    {totalSeries} series ·{" "}
+                    <span className="text-[var(--up)]">{totals.bull}▲</span>{" "}
+                    <span className="text-[var(--down)]">{totals.bear}▼</span> strong
+                  </>
+                }
+              />
+              <OverviewBoard panels={panels} assetFilter={assetFilter || null} onOpen={openFromBoard} />
+            </>
+          ) : isNews ? (
+            <>
+              <PageHead title="News" />
               {newsSeries ? <NewsFeedCard series={newsSeries} /> : <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No news data yet.</p>}
             </>
           ) : isCustomDashboard ? (
             <>
-              <header className="mb-7">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">Custom Dashboard</h1>
-              </header>
+              <PageHead title="Custom Dashboard" />
               <CustomDashboardPage panels={panels} markets={markets} />
             </>
           ) : isCustomBias ? (
             <>
-              <header className="mb-7">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">Custom Bias</h1>
-              </header>
+              <PageHead title="Custom Bias" />
               <CustomBiasPage panels={panels} />
             </>
           ) : active ? (
             <>
-              <header className="mb-7">
-                <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">{active.title}</h1>
-              </header>
+              <PageHead
+                title={active.title}
+                meta={(() => {
+                  const { bull, bear } = panelSignals(active);
+                  return bull + bear === 0 ? (
+                    "no strong reads"
+                  ) : (
+                    <>
+                      <span className="text-[var(--up)]">{bull}▲</span> <span className="text-[var(--down)]">{bear}▼</span> strong
+                    </>
+                  );
+                })()}
+              />
 
               <div className={DEEP_PANELS.has(active.id) ? "flex flex-col gap-2" : "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"}>
                 {active.series
                   .filter((series) => series.id !== "geo:news-feed")
                   .map((series) =>
                     DEEP_PANELS.has(active.id) ? (
-                      <QuantCard
-                        key={series.id}
-                        series={series}
-                        markets={markets}
-                        assetFilter={assetFilter || null}
-                        assetLabel={assetLabel}
-                      />
+                      <div key={series.id} id={`card-${series.id}`} className="scroll-mt-16">
+                        <QuantCard
+                          series={series}
+                          markets={markets}
+                          assetFilter={assetFilter || null}
+                          assetLabel={assetLabel}
+                          defaultOpen={focusSeriesId === series.id}
+                        />
+                      </div>
                     ) : (
-                      <SeriesCard key={series.id} series={series} assetFilter={assetFilter || null} assetLabel={assetLabel} />
+                      <div key={series.id} id={`card-${series.id}`} className="scroll-mt-16">
+                        <SeriesCard series={series} assetFilter={assetFilter || null} assetLabel={assetLabel} />
+                      </div>
                     )
                   )}
               </div>

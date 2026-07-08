@@ -73,7 +73,15 @@ function daysBetween(a: string, b: string): number {
 }
 
 function SectionHead({ title }: { title: string }) {
-  return <div className="mb-1.5 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">{title}</div>;
+  return (
+    <div className="mb-1.5 flex items-center gap-2 font-mono text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[var(--text-dim)]">
+      <span aria-hidden="true" className="text-[var(--text-faint)]">
+        ┌─
+      </span>
+      <span className="whitespace-nowrap">{title}</span>
+      <span className="h-px flex-1 bg-[var(--border)]" />
+    </div>
+  );
 }
 
 function MomentumBadge({
@@ -556,13 +564,15 @@ export default function QuantCard({
   markets,
   assetFilter = null,
   assetLabel = null,
+  defaultOpen = false,
 }: {
   series: MacroSeries;
   markets: MarketRow[];
   assetFilter?: string | null;
   assetLabel?: string | null;
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const history = series.history;
   const impacts = IMPACTS[series.id] ?? [];
   const isRelevant = !assetFilter || impacts.some((i) => i.symbol === assetFilter);
@@ -592,12 +602,12 @@ export default function QuantCard({
 
   return (
     <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 p-4 text-left sm:gap-4 sm:p-7">
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 p-3.5 text-left sm:gap-4 sm:px-5 sm:py-4">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
-            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipClasses[chipTone]}`}>{chipLabel[chipTone]}</span>
-            <span className="shrink-0 rounded-full border px-2 py-[2px] font-sans text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]" style={{ borderColor: "var(--border)" }} title={config?.rationale}>
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <h3 className="m-0 text-[1rem] font-semibold leading-tight sm:text-[1.1rem]">{series.name}</h3>
+            <span className={`shrink-0 rounded-full border px-2 py-[3px] text-[0.64rem] font-bold uppercase tracking-wide ${chipClasses[chipTone]}`}>{chipLabel[chipTone]}</span>
+            <span className="hidden shrink-0 rounded-full border px-2 py-[2px] font-sans text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--text-faint)] sm:inline" style={{ borderColor: "var(--border)" }} title={config?.rationale}>
               {methodLabel[method]}
             </span>
             {backtest && <BacktestChip evidence={backtest} />}
@@ -607,9 +617,9 @@ export default function QuantCard({
               </span>
             )}
           </div>
-          <p className="m-0 mt-1 truncate font-sans text-[0.86rem] text-[var(--text-faint)]">{series.note}</p>
+          <p className="m-0 mt-1 truncate font-sans text-[0.78rem] text-[var(--text-faint)]">{series.note}</p>
           {bias && (
-            <div className="mt-1 truncate font-sans text-[0.8rem]" style={{ color: biasToneColor }}>
+            <div className="mt-0.5 truncate font-sans text-[0.78rem]" style={{ color: biasToneColor }}>
               {bias.label}
             </div>
           )}
@@ -617,14 +627,14 @@ export default function QuantCard({
 
         {series.sparkline && series.sparkline.length >= 5 && (
           <div className="hidden w-24 shrink-0 md:block">
-            <Sparkline data={series.sparkline} tone={series.status} heightClass="h-10" />
+            <Sparkline data={series.sparkline} tone={series.status} heightClass="h-9" />
           </div>
         )}
 
-        <div className="shrink-0 text-right">
-          <div className="font-mono text-[1.4rem] font-semibold leading-none sm:text-[2.1rem]">{series.value}</div>
+        <div className="min-w-[4.5rem] max-w-[42%] text-right sm:max-w-[19rem]">
+          <div className="font-mono text-[1.05rem] font-semibold leading-tight sm:text-[1.5rem]">{series.value}</div>
           {signal && (
-            <div className="mt-1 font-mono text-[0.8rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
+            <div className="mt-0.5 font-mono text-[0.76rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
               {signal.score > 0 ? "+" : ""}
               {Math.round(signal.score * 100)}%
             </div>
@@ -635,7 +645,7 @@ export default function QuantCard({
       </button>
 
       {open && (
-        <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-7 sm:pt-6">
+        <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-5">
           {bias && (
             <div className="mt-4 rounded-md border p-3.5" style={{ borderColor: `color-mix(in srgb, ${biasToneColor} 35%, var(--border))`, background: `color-mix(in srgb, ${biasToneColor} 7%, transparent)` }}>
               <div className="flex items-center gap-2">

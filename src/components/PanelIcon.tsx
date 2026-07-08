@@ -33,6 +33,19 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M10 3C12.5 5.5 12.5 14.5 10 17C7.5 14.5 7.5 5.5 10 3Z" />
     </>
   ),
+  board: (
+    <>
+      <rect x="3" y="3" width="4" height="4" rx="0.5" />
+      <rect x="8" y="3" width="4" height="4" rx="0.5" />
+      <rect x="13" y="3" width="4" height="4" rx="0.5" />
+      <rect x="3" y="8" width="4" height="4" rx="0.5" />
+      <rect x="8" y="8" width="4" height="4" rx="0.5" />
+      <rect x="13" y="8" width="4" height="4" rx="0.5" />
+      <rect x="3" y="13" width="4" height="4" rx="0.5" />
+      <rect x="8" y="13" width="4" height="4" rx="0.5" />
+      <rect x="13" y="13" width="4" height="4" rx="0.5" />
+    </>
+  ),
   news: (
     <>
       <rect x="3" y="4" width="14" height="12" rx="1.5" />

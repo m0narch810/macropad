@@ -196,9 +196,6 @@ export default function DashboardShell({
             <>
               <header className="mb-7">
                 <h1 className="font-display m-0 text-balance text-[1.5rem] font-semibold">{active.title}</h1>
-                <p className="m-0 mt-1 max-w-[60ch] font-sans text-[0.9rem] text-[var(--text-dim)]">
-                  {active.description}
-                </p>
               </header>
 
               <div className={DEEP_PANELS.has(active.id) ? "flex flex-col gap-2" : "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"}>

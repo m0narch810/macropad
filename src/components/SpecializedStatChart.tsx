@@ -25,8 +25,6 @@ export default function SpecializedStatChart({ stat }: { stat: ExtraStat }) {
       <div className="mt-0.5 font-mono text-[1.05rem] font-semibold" style={stat.flag ? { color: "var(--down)" } : undefined}>
         {stat.value}
       </div>
-      {stat.caption && <p className="m-0 mt-1 text-[0.7rem] leading-snug text-[var(--text-faint)]">{stat.caption}</p>}
-
       {history && history.length >= 10 && (
         <div className="mt-2 h-[86px] w-full">
           <ResponsiveContainer width="100%" height="100%">

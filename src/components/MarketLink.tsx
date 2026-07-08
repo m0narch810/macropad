@@ -46,7 +46,6 @@ export default function MarketLink({
             wt {(impact.weight * 100).toFixed(0)}%
           </span>
         </div>
-        <p className="m-0 mt-0.5 text-[0.7rem] leading-snug text-[var(--text-faint)]">{impact.rationale}</p>
       </div>
       {market?.sparkline && market.sparkline.length >= 5 && (
         <div className="w-14 shrink-0">

@@ -80,10 +80,6 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
                 <div className="mb-1.5 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">
                   Sentiment over time
                 </div>
-                <div className="mb-2 font-sans text-[0.76rem] leading-snug text-[var(--text-faint)]">
-                  Every headline plotted by its individual score — not smoothed, so you can see the actual spread and
-                  clustering, not just an average.
-                </div>
                 <div className="h-[130px] w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <AreaChart data={history} margin={{ top: 4, right: 8, bottom: 0, left: 4 }}>

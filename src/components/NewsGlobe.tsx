@@ -169,12 +169,6 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
         </div>
       </div>
 
-      <p className="mt-2 font-sans text-[0.68rem] leading-snug text-[var(--text-faint)] opacity-90">
-        Dots are arranged decoratively around the sphere — headlines have no real geographic origin, this is not a
-        map. Color is sentiment, scored by a finance-specific keyword lexicon (see the list below for exactly what
-        matched each headline) — a real, inspectable signal but not an NLP model, so treat any single dot skeptically
-        and read the aggregate instead.
-      </p>
     </div>
   );
 }

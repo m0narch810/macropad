@@ -642,7 +642,6 @@ export default function QuantCard({
               <div className="mt-0.5 font-sans text-[0.92rem] font-semibold" style={{ color: biasToneColor }}>
                 {bias.label}
               </div>
-              <p className="m-0 mt-1.5 font-sans text-[0.78rem] leading-snug text-[var(--text-faint)]">{bias.context}</p>
             </div>
           )}
 

@@ -37,6 +37,13 @@ const chipTone: Record<MacroSeries["status"], string> = {
   pending: "text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border-[color-mix(in_srgb,var(--accent)_30%,transparent)]",
 };
 
+const chipLabel: Record<MacroSeries["status"], string> = {
+  up: "bullish",
+  down: "bearish",
+  flat: "neutral",
+  pending: "pending",
+};
+
 export default function NewsFeedCard({ series }: { series: MacroSeries }) {
   const [open, setOpen] = useState(false);
   const headlines = series.payload?.headlines ?? [];
@@ -49,7 +56,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
           <div className="flex items-center gap-2">
             <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
             <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipTone[series.status]}`}>
-              {series.status}
+              {chipLabel[series.status]}
             </span>
           </div>
           <p className="m-0 mt-1 truncate font-sans text-[0.86rem] text-[var(--text-faint)]">{series.note}</p>

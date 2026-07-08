@@ -43,6 +43,14 @@ const chipClasses: Record<MacroSeries["status"], string> = {
   pending: "text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border-[color-mix(in_srgb,var(--accent)_30%,transparent)]",
 };
 
+/** Chip text reads good/bad (bullish/bearish), not literal direction — a chip that says "up" in red is confusing. */
+const chipLabel: Record<MacroSeries["status"], string> = {
+  up: "bullish",
+  down: "bearish",
+  flat: "flat",
+  pending: "pending",
+};
+
 /** Context-aware z-score color: only paints green/red once |z| clears 2σ, else neutral accent. */
 function zTone(seriesId: string, z: number) {
   if (Math.abs(z) < 2) return "var(--accent)";
@@ -585,7 +593,7 @@ export default function QuantCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
             <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
-            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipClasses[chipTone]}`}>{series.status}</span>
+            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipClasses[chipTone]}`}>{chipLabel[chipTone]}</span>
             <span className="shrink-0 rounded-full border px-2 py-[2px] font-sans text-[0.6rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]" style={{ borderColor: "var(--border)" }} title={config?.rationale}>
               {methodLabel[method]}
             </span>

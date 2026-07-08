@@ -11,6 +11,13 @@ const dirGlyph: Record<MacroSeries["status"], string> = {
   pending: "·",
 };
 
+const toneLabel: Record<"up" | "down" | "flat" | "pending", string> = {
+  up: "bullish",
+  down: "bearish",
+  flat: "flat",
+  pending: "pending",
+};
+
 export default function SeriesCard({
   series,
   assetFilter = null,
@@ -39,7 +46,7 @@ export default function SeriesCard({
           <h3 className="m-0 truncate text-[0.9rem] font-semibold text-[var(--text)]">{series.name}</h3>
           <p className="m-0 mt-0.5 truncate text-[0.74rem] text-[var(--text-faint)]">{series.note}</p>
         </div>
-        <span className="shrink-0 font-mono text-[0.78rem]" style={{ color: chipColor }} title={`Last change: ${series.status}`}>
+        <span className="shrink-0 font-mono text-[0.78rem]" style={{ color: chipColor }} title={toneLabel[chipTone]}>
           {dirGlyph[series.status]}
         </span>
       </div>

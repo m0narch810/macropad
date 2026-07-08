@@ -13,7 +13,7 @@ import CustomBiasPage from "@/components/CustomBiasPage";
 import { MARKET_SYMBOLS } from "@/lib/markets";
 import { getSignTone } from "@/lib/bias";
 
-const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics"]);
+const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics", "volatility"]);
 const NEWS_ID = "news";
 const CUSTOM_DASHBOARD_ID = "custom-dashboard";
 const CUSTOM_BIAS_ID = "custom-bias";

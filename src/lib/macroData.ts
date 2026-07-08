@@ -152,16 +152,28 @@ export const macroPanels: MacroPanel[] = [
   },
   {
     id: "geopolitics",
-    title: "Geopolitics & Vol",
-    description:
-      "What markets are actually pricing for risk — the volatility complex and its term structure, not headlines.",
+    title: "Geopolitics",
+    description: "Policy and macro uncertainty, and how markets are positioning around it — not headlines.",
+    series: [
+      blank("geo:epu", "US Policy Uncertainty (EPU)", "News-based daily index, 30d average", "FRED USEPUINDXD"),
+      blank("geo:gepu", "Global Policy Uncertainty", "GDP-weighted across major economies", "FRED GEPUCURRENT"),
+      blank("geo:equity-uncertainty", "Equity Market Uncertainty", "News + options-based, daily", "FRED WLEMUINDXD"),
+      blank("geo:defense-spy", "Defense / Market Ratio", "ITA vs SPY — risk-on tilt toward defense names", "Yahoo Finance ITA / SPY"),
+      blank("geo:news-feed", "News Sentiment", "Pooled headlines, keyword-lexicon scored", "Yahoo Finance RSS"),
+    ],
+  },
+  {
+    id: "volatility",
+    title: "Volatility",
+    description: "What markets are actually pricing for risk — the implied-vol complex and its term structure.",
     series: [
       blank("geo:vix", "VIX", "S&P 500 implied vol, 30d", "FRED VIXCLS"),
       blank("geo:vix-term", "VIX Term Structure", "VIX3M / VIX — below 1 = backwardation = stress", "Yahoo ^VIX3M / ^VIX"),
+      blank("geo:vvix", "VVIX", "Vol-of-vol — implied vol of the VIX itself", "Yahoo ^VVIX"),
+      blank("geo:skew", "CBOE SKEW", "Tail-risk gauge — priced crash probability", "Yahoo ^SKEW"),
       blank("geo:ovx", "OVX", "Crude oil implied vol — supply-shock gauge", "FRED OVXCLS"),
       blank("geo:gvz", "GVZ", "Gold implied vol — safe-haven flow gauge", "FRED GVZCLS"),
-      blank("geo:epu", "Policy Uncertainty (EPU)", "News-based daily index, 30d average", "FRED USEPUINDXD"),
-      blank("geo:news-feed", "News Sentiment", "Pooled headlines, keyword-lexicon scored", "Yahoo Finance RSS"),
+      blank("geo:move", "MOVE Index", "Bond market implied vol", "Yahoo ^MOVE"),
     ],
   },
 ];

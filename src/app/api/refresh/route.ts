@@ -966,7 +966,7 @@ export async function GET(req: NextRequest) {
     const vixSig = signalStats("geo:vix", vixHistoryPts);
     rows.push({
       id: "geo:vix",
-      panel_id: "geopolitics",
+      panel_id: "volatility",
       name: "VIX",
       note: "S&P 500 implied vol, 30d",
       value: fmt(vixLatest),
@@ -998,7 +998,7 @@ export async function GET(req: NextRequest) {
       const termPrev = vixTermHist[vixTermHist.length - 2]?.value ?? null;
       rows.push({
         id: "geo:vix-term",
-        panel_id: "geopolitics",
+        panel_id: "volatility",
         name: "VIX Term Structure",
         note: "VIX3M / VIX — below 1 = backwardation = stress",
         value: termLatest.toFixed(3),
@@ -1031,7 +1031,7 @@ export async function GET(req: NextRequest) {
     const ovxSig = signalStats("geo:ovx", ovxHistoryPts);
     rows.push({
       id: "geo:ovx",
-      panel_id: "geopolitics",
+      panel_id: "volatility",
       name: "OVX",
       note: "Crude oil implied vol — supply-shock gauge",
       value: fmt(ovxLatest),
@@ -1050,7 +1050,7 @@ export async function GET(req: NextRequest) {
     const gvzSig = signalStats("geo:gvz", gvzHistoryPts);
     rows.push({
       id: "geo:gvz",
-      panel_id: "geopolitics",
+      panel_id: "volatility",
       name: "GVZ",
       note: "Gold implied vol — safe-haven flow gauge",
       value: fmt(gvzLatest),
@@ -1061,6 +1061,73 @@ export async function GET(req: NextRequest) {
       window_label: "3y daily · anchor 17",
       history: gvzHistoryPts,
     });
+
+    // ---- VVIX / SKEW / MOVE ----
+    const [vvixDaily, skewDaily, moveDaily] = await Promise.all([
+      fetchYahooHistory("^VVIX", "2y", "1d"),
+      fetchYahooHistory("^SKEW", "2y", "1d"),
+      fetchYahooHistory("^MOVE", "2y", "1d"),
+    ]);
+
+    const vvixHistoryPts = toDatedSeries(vvixDaily);
+    if (vvixHistoryPts.length > 20) {
+      const vvixSig = signalStats("geo:vvix", vvixHistoryPts);
+      const vvixLatest = vvixHistoryPts[vvixHistoryPts.length - 1].value;
+      const vvixPrev = vvixHistoryPts[vvixHistoryPts.length - 2]?.value ?? null;
+      rows.push({
+        id: "geo:vvix",
+        panel_id: "volatility",
+        name: "VVIX",
+        note: "Vol-of-vol — implied vol of the VIX itself",
+        value: vvixLatest.toFixed(1),
+        status: statusFromDelta(vvixLatest, vvixPrev),
+        source: "Yahoo ^VVIX",
+        zscore: vvixSig.signal,
+        sparkline: vvixSig.sparkline,
+        window_label: "2y daily · anchor 90",
+        history: vvixHistoryPts,
+      });
+    }
+
+    const skewHistoryPts = toDatedSeries(skewDaily);
+    if (skewHistoryPts.length > 20) {
+      const skewSig = signalStats("geo:skew", skewHistoryPts);
+      const skewLatest = skewHistoryPts[skewHistoryPts.length - 1].value;
+      const skewPrev = skewHistoryPts[skewHistoryPts.length - 2]?.value ?? null;
+      rows.push({
+        id: "geo:skew",
+        panel_id: "volatility",
+        name: "CBOE SKEW",
+        note: "Tail-risk gauge — priced crash probability",
+        value: skewLatest.toFixed(1),
+        status: statusFromDelta(skewLatest, skewPrev),
+        source: "Yahoo ^SKEW",
+        zscore: skewSig.signal,
+        sparkline: skewSig.sparkline,
+        window_label: "2y daily · anchor 120",
+        history: skewHistoryPts,
+      });
+    }
+
+    const moveHistoryPts = toDatedSeries(moveDaily);
+    if (moveHistoryPts.length > 20) {
+      const moveSig = signalStats("geo:move", moveHistoryPts);
+      const moveLatest = moveHistoryPts[moveHistoryPts.length - 1].value;
+      const movePrev = moveHistoryPts[moveHistoryPts.length - 2]?.value ?? null;
+      rows.push({
+        id: "geo:move",
+        panel_id: "volatility",
+        name: "MOVE Index",
+        note: "Bond market implied vol",
+        value: moveLatest.toFixed(1),
+        status: statusFromDelta(moveLatest, movePrev),
+        source: "Yahoo ^MOVE",
+        zscore: moveSig.signal,
+        sparkline: moveSig.sparkline,
+        window_label: "2y daily · anchor 100",
+        history: moveHistoryPts,
+      });
+    }
 
     // ---- Economic Policy Uncertainty (30d MA of the daily index) ----
     const epuHist = await fetchFredHistory("USEPUINDXD", fredKey, 750);
@@ -1090,6 +1157,72 @@ export async function GET(req: NextRequest) {
             caption: "The raw daily index is far too noisy to read — the smoothed level is what correlates with risk premia.",
           },
         ],
+      });
+    }
+
+    // ---- Global Economic Policy Uncertainty (monthly) ----
+    const gepuHist = await fetchFredHistory("GEPUCURRENT", fredKey, 240);
+    const gepuHistoryPts = toHistory(gepuHist.map((p) => p.date), gepuHist.map((p) => p.value));
+    if (gepuHistoryPts.length >= 10) {
+      const gepuSig = signalStats("geo:gepu", gepuHistoryPts);
+      const gepuLatest = gepuHistoryPts[gepuHistoryPts.length - 1].value;
+      const gepuPrev = gepuHistoryPts[gepuHistoryPts.length - 2]?.value ?? null;
+      rows.push({
+        id: "geo:gepu",
+        panel_id: "geopolitics",
+        name: "Global Policy Uncertainty",
+        note: "GDP-weighted across major economies",
+        value: gepuLatest.toFixed(0),
+        status: statusFromDelta(gepuLatest, gepuPrev),
+        source: "FRED GEPUCURRENT",
+        zscore: gepuSig.signal,
+        sparkline: gepuSig.sparkline,
+        window_label: "20y monthly · positioning 2y",
+        history: gepuHistoryPts,
+      });
+    }
+
+    // ---- Equity Market-related Economic Uncertainty (daily) ----
+    const equNcHist = await fetchFredHistory("WLEMUINDXD", fredKey, 750);
+    const equNcHistoryPts = toHistory(equNcHist.map((p) => p.date), equNcHist.map((p) => p.value));
+    if (equNcHistoryPts.length >= 10) {
+      const equNcSig = signalStats("geo:equity-uncertainty", equNcHistoryPts);
+      const equNcLatest = equNcHistoryPts[equNcHistoryPts.length - 1].value;
+      const equNcPrev = equNcHistoryPts[equNcHistoryPts.length - 2]?.value ?? null;
+      rows.push({
+        id: "geo:equity-uncertainty",
+        panel_id: "geopolitics",
+        name: "Equity Market Uncertainty",
+        note: "News + options-based, daily",
+        value: equNcLatest.toFixed(0),
+        status: statusFromDelta(equNcLatest, equNcPrev),
+        source: "FRED WLEMUINDXD",
+        zscore: equNcSig.signal,
+        sparkline: equNcSig.sparkline,
+        window_label: "3y daily · positioning 2y",
+        history: equNcHistoryPts,
+      });
+    }
+
+    // ---- Defense sector vs market (ITA / SPY) ----
+    const [itaW, spyGeoW] = await Promise.all([fetchYahooHistory("ITA", "2y"), fetchYahooHistory("SPY", "2y")]);
+    const defenseSpyHist = ratioSeriesDated(itaW, spyGeoW);
+    if (defenseSpyHist.length >= 20) {
+      const defenseSpySig = signalStats("geo:defense-spy", defenseSpyHist);
+      const defenseSpyLatest = defenseSpyHist[defenseSpyHist.length - 1].value;
+      const defenseSpyPrev = defenseSpyHist[defenseSpyHist.length - 2]?.value ?? null;
+      rows.push({
+        id: "geo:defense-spy",
+        panel_id: "geopolitics",
+        name: "Defense / Market Ratio",
+        note: "ITA vs SPY — risk-on tilt toward defense names",
+        value: defenseSpyLatest.toFixed(4),
+        status: statusFromDelta(defenseSpyLatest, defenseSpyPrev),
+        source: "Yahoo Finance ITA / SPY",
+        zscore: defenseSpySig.signal,
+        sparkline: defenseSpySig.sparkline,
+        window_label: "2y weekly · positioning 2y",
+        history: defenseSpyHist,
       });
     }
 

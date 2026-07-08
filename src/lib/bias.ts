@@ -306,6 +306,48 @@ const CONFIG: Record<string, BiasConfig> = {
     low: { label: "Policy environment quiet", tone: "up" },
     neutral: "Policy uncertainty near its usual level.",
   },
+  "geo:gepu": {
+    context:
+      "GDP-weighted policy uncertainty across major economies, not just the US — captures global shocks (trade wars, elections, central bank surprises) that a US-only index misses.",
+    high: { label: "Global policy uncertainty elevated", tone: "down" },
+    low: { label: "Global policy environment quiet", tone: "up" },
+    neutral: "Global policy uncertainty near its usual level.",
+  },
+  "geo:equity-uncertainty": {
+    context:
+      "Combines news coverage and options-implied measures specifically around equity markets — a faster-moving, more market-focused cousin of the broad EPU index.",
+    high: { label: "Equity market uncertainty elevated", tone: "down" },
+    low: { label: "Equity market uncertainty low", tone: "up" },
+    neutral: "Equity market uncertainty near its usual level.",
+  },
+  "geo:defense-spy": {
+    context:
+      "Defense-sector stocks (ITA) relative to the broad market. Defense names have historically outperformed during escalating geopolitical tension and underperformed once tension eases — a market-based read on how seriously investors are pricing conflict risk.",
+    high: { label: "Defense sector outperforming — conflict risk being priced", tone: "down" },
+    low: { label: "Defense sector lagging — conflict risk fading", tone: "up" },
+    neutral: "Defense/market ratio near its usual range.",
+  },
+  "geo:vvix": {
+    context:
+      "VVIX is the implied volatility of the VIX itself — how much the market expects volatility to move. It spikes ahead of or alongside major VIX regime shifts, sometimes leading them.",
+    high: { label: "Vol-of-vol elevated — regime shift risk", tone: "down" },
+    low: { label: "Vol-of-vol calm", tone: "up" },
+    neutral: "VVIX near its usual range.",
+  },
+  "geo:skew": {
+    context:
+      "CBOE SKEW prices the cost of far out-of-the-money S&P put protection — a direct read on how much tail/crash risk the options market is pricing, independent of the VIX level.",
+    high: { label: "Tail risk richly priced", tone: "down" },
+    low: { label: "Tail risk cheaply priced", tone: "up" },
+    neutral: "SKEW near its usual range.",
+  },
+  "geo:move": {
+    context:
+      "The bond market's VIX — implied volatility on Treasury options. Rate uncertainty transmits directly into every duration-sensitive asset, and MOVE often leads equity vol at the start of a stress episode.",
+    high: { label: "Bond market vol elevated — rate uncertainty high", tone: "down" },
+    low: { label: "Bond market vol calm", tone: "up" },
+    neutral: "MOVE near its usual range.",
+  },
   // --- Transmission ---
   "transmission:nfci": {
     context:

@@ -33,6 +33,11 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M10 3C12.5 5.5 12.5 14.5 10 17C7.5 14.5 7.5 5.5 10 3Z" />
     </>
   ),
+  volatility: (
+    <>
+      <path d="M3 12C5 12 5 6 7 6S9 15 11 15S13 5 15 5S17 12 17 12" />
+    </>
+  ),
   news: (
     <>
       <rect x="3" y="4" width="14" height="12" rx="1.5" />

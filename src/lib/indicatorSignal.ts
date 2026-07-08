@@ -153,7 +153,13 @@ const SIGNAL_CONFIG: Record<string, SignalConfig> = {
   },
   "geo:ovx": { method: "anchor", reference: 35, band: 15, rationale: "Crude vol runs structurally higher than equity vol — judged against its typical ~30-40 range." },
   "geo:gvz": { method: "anchor", reference: 17, band: 7, rationale: "Gold vol's typical range is close to VIX's — judged the same way." },
+  "geo:vvix": { method: "anchor", reference: 90, band: 30, rationale: "VVIX has a well-known regime range (~80-100 normal, 120+ marks vol-of-vol stress on top of elevated VIX itself)." },
+  "geo:skew": { method: "anchor", reference: 120, band: 25, rationale: "SKEW's long-run average sits near 120; readings above ~140 price meaningfully fatter tail/crash risk than normal." },
+  "geo:move": { method: "anchor", reference: 100, band: 40, rationale: "MOVE's calm-era average is ~80-100; 2022-23 policy shock regimes pushed it well above 140 — judged against that structural range." },
   "geo:epu": { method: "positioning", rationale: "A news-count index with no natural unit — its own range is the only sensible reference." },
+  "geo:gepu": { method: "positioning", rationale: "Same as US EPU — a GDP-weighted news-count index with no fixed fair value." },
+  "geo:equity-uncertainty": { method: "positioning", rationale: "News- and options-derived uncertainty index with no fixed fair value — judged against its own range." },
+  "geo:defense-spy": { method: "positioning", rationale: "Relative-performance ratio with no fair value — its own range is the reference." },
 };
 
 export interface IndicatorSignal {

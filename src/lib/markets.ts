@@ -198,6 +198,28 @@ export const IMPACTS: Record<string, Impact[]> = {
   "geo:epu": [
     { symbol: "^GSPC", sign: -1, weight: 0.3, rationale: "Policy uncertainty raises the equity risk premium — a headwind to multiples." },
   ],
+  "geo:gepu": [
+    { symbol: "^GSPC", sign: -1, weight: 0.3, rationale: "Global (not just US) policy shocks raise the equity risk premium." },
+    { symbol: "GC=F", sign: 1, weight: 0.3, rationale: "Global uncertainty is a classic driver of safe-haven gold demand." },
+    { symbol: "DX-Y.NYB", sign: 1, weight: 0.3, rationale: "Global stress typically flows into the dollar as the reserve safe haven." },
+  ],
+  "geo:equity-uncertainty": [
+    { symbol: "^GSPC", sign: -1, weight: 0.4, rationale: "Purpose-built to track equity-specific uncertainty — the most direct of the uncertainty gauges for this asset." },
+  ],
+  "geo:defense-spy": [
+    { symbol: "CL=F", sign: 1, weight: 0.3, rationale: "Escalating conflict risk that lifts defense names also tends to lift oil via supply-disruption fears." },
+    { symbol: "GC=F", sign: 1, weight: 0.3, rationale: "Same conflict-risk premium that lifts defense stocks lifts gold as a hedge." },
+  ],
+  "geo:vvix": [
+    { symbol: "^GSPC", sign: -1, weight: 0.4, rationale: "Vol-of-vol spikes typically precede or accompany equity stress regimes." },
+  ],
+  "geo:skew": [
+    { symbol: "^GSPC", sign: -1, weight: 0.25, rationale: "Richly priced tail risk is the options market's own crash-insurance signal, independent of VIX level." },
+  ],
+  "geo:move": [
+    { symbol: "TLT", sign: -1, weight: 0.5, rationale: "Elevated rate volatility is a direct headwind to holding duration." },
+    { symbol: "HYG", sign: -1, weight: 0.35, rationale: "Bond-market vol spikes have historically spilled into credit spreads." },
+  ],
   // --- Transmission: is the macro impulse reaching markets? ---
   "transmission:nfci": [
     { symbol: "^GSPC", sign: -1, weight: 0.9, rationale: "NFCI above 0 = financial conditions tighter than average — the single best summary of whether policy is biting." },

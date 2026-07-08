@@ -64,7 +64,7 @@ function EntryRow({
           <div className="truncate font-mono text-[0.62rem] text-[var(--text-faint)]">{panelTitle}</div>
         </div>
         <div className="shrink-0 text-right font-mono text-[0.8rem]" style={{ color: toneColor(tone) }}>
-          {score === null ? "-" : `${score > 0 ? "+" : ""}${Math.round(score * 100)}%`}
+          {score === null ? "-" : `${score > 0 ? "+" : ""}${score.toFixed(2)}`}
         </div>
         <button onClick={onRemove} className="shrink-0 font-mono text-[0.72rem] text-[var(--text-faint)] hover:text-[var(--down)]">
           remove
@@ -179,7 +179,7 @@ export default function CustomBiasPage({ panels }: { panels: MacroPanel[] }) {
               }}
             >
               {netScore > 0 ? "+" : ""}
-              {Math.round(netScore * 100)}%
+              {netScore.toFixed(2)}
             </span>
           </div>
           <div className="mt-3">

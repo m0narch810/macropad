@@ -48,7 +48,7 @@ export default function BoardPage({ panels, newsSeries }: { panels: MacroPanel[]
                       {s.zscore !== null && (
                         <span className="ml-1.5 text-[0.66rem]" style={{ color }}>
                           {s.zscore > 0 ? "+" : ""}
-                          {Math.round(s.zscore * 100)}%
+                          {s.zscore.toFixed(2)}
                         </span>
                       )}
                     </span>

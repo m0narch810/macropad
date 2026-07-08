@@ -26,7 +26,7 @@ export default function ZScoreBar({ z, tone }: { z: number; tone?: "up" | "down"
       </div>
       <span className="w-12 shrink-0 text-right font-mono text-[0.72rem] font-medium" style={{ color }}>
         {z > 0 ? "+" : ""}
-        {Math.round(z * 100)}%
+        {z.toFixed(2)}
       </span>
     </div>
   );

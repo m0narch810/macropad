@@ -570,10 +570,10 @@ export default function QuantCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2.5">
             <h3 className="m-0 truncate text-[1.15rem] font-semibold">{series.name}</h3>
-            {bias && bias.tone !== "flat" && (
+            {bias && (
               <span className="shrink-0 text-[0.72rem] font-semibold uppercase tracking-wide" style={{ color: biasToneColor }}>
-                {bias.tone === "up" ? "bullish" : "bearish"}
-                {signal && ` ${signal.score > 0 ? "+" : ""}${Math.round(signal.score * 100)}%`}
+                {bias.tone === "up" ? "bullish" : bias.tone === "down" ? "bearish" : "neutral"}
+                {signal && ` ${signal.score > 0 ? "+" : ""}${signal.score.toFixed(2)}`}
               </span>
             )}
             {!isRelevant && (
@@ -596,7 +596,7 @@ export default function QuantCard({
           {signal && (
             <div className="mt-1.5 font-mono text-[0.8rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
               {signal.score > 0 ? "+" : ""}
-              {Math.round(signal.score * 100)}%
+              {signal.score.toFixed(2)}
             </div>
           )}
         </div>

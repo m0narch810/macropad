@@ -19,7 +19,7 @@ function TickerItem({ s }: { s: MacroSeries }) {
           {s.zscore !== null && (
             <span className="font-mono text-[0.66rem] leading-none" style={{ color }}>
               {s.zscore > 0 ? "+" : ""}
-              {Math.round(s.zscore * 100)}%
+              {s.zscore.toFixed(2)}
             </span>
           )}
         </div>

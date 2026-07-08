@@ -239,7 +239,7 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
                     {r.reference !== null && r.band !== null && (
                       <span>
                         {" "}
-                        Reference {r.reference}, band ±{r.band} for a full ±100% score.
+                        Reference {r.reference}, band ±{r.band} for a full ±1 score.
                       </span>
                     )}
                   </p>

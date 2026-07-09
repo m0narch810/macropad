@@ -1,21 +1,19 @@
 import type { MacroSeries } from "@/lib/macroData";
 import Sparkline from "@/components/Sparkline";
 import ZScoreBar from "@/components/ZScoreBar";
-import { getBias, getDirectionTone, getSignTone } from "@/lib/bias";
+import { getBias, getSignTone } from "@/lib/bias";
 import { seriesAffectsSymbol, IMPACTS } from "@/lib/markets";
 
-const dirGlyph: Record<MacroSeries["status"], string> = {
+const dirGlyph: Record<"up" | "down" | "flat", string> = {
   up: "▲",
   down: "▼",
   flat: "→",
-  pending: "·",
 };
 
-const toneLabel: Record<"up" | "down" | "flat" | "pending", string> = {
+const toneLabel: Record<"up" | "down" | "flat", string> = {
   up: "bullish",
   down: "bearish",
   flat: "flat",
-  pending: "pending",
 };
 
 export default function SeriesCard({
@@ -31,23 +29,23 @@ export default function SeriesCard({
   const hasSignal = series.zscore !== null;
   const isRelevant = !assetFilter || seriesAffectsSymbol(series.id, assetFilter);
   const bias = getBias(series.id, series.zscore);
-  const chipTone = getDirectionTone(series.id, series.status);
-  const chipColor =
-    chipTone === "up" ? "var(--up)" : chipTone === "down" ? "var(--down)" : "var(--text-faint)";
+  // Glyph, label, and bar all key off the same score-derived tone - no
+  // separate literal-direction tone to ever disagree with the bias label.
   const signalTone = getSignTone(series.id, series.zscore);
+  const chipColor = signalTone === "up" ? "var(--up)" : signalTone === "down" ? "var(--down)" : "var(--text-faint)";
 
   return (
     <div
-      className="rounded border border-[var(--border)] bg-[var(--panel)] p-4"
+      className="border-b border-[var(--border)] py-5"
       style={!isRelevant ? { opacity: 0.4 } : undefined}
     >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h3 className="m-0 truncate text-[0.9rem] font-semibold text-[var(--text)]">{series.name}</h3>
-          <p className="m-0 mt-0.5 truncate text-[0.74rem] text-[var(--text-faint)]">{series.note}</p>
+          <h3 className="m-0 truncate text-[0.92rem] font-semibold text-[var(--text)]">{series.name}</h3>
+          <p className="m-0 mt-0.5 truncate text-[0.78rem] text-[var(--text-dim)]">{series.note}</p>
         </div>
-        <span className="shrink-0 font-mono text-[0.78rem]" style={{ color: chipColor }} title={toneLabel[chipTone]}>
-          {dirGlyph[series.status]}
+        <span className="shrink-0 font-mono text-[0.78rem]" style={{ color: chipColor }} title={toneLabel[signalTone]}>
+          {dirGlyph[signalTone]}
         </span>
       </div>
 

@@ -7,7 +7,7 @@ function TickerItem({ m }: { m: MarketRow }) {
   return (
     <div className="flex shrink-0 items-center gap-2.5 px-5">
       <div>
-        <div className="font-sans text-[0.62rem] leading-none text-[var(--text-faint)]">{m.name}</div>
+        <div className="font-mono text-[0.62rem] uppercase leading-none tracking-wide text-[var(--text-faint)]">{m.name}</div>
         <div className="mt-0.5 flex items-baseline gap-1.5">
           <span
             className="font-mono text-[0.88rem] font-semibold leading-none"

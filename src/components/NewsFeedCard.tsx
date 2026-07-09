@@ -2,7 +2,7 @@
 
 import { AreaChart, Area, ReferenceLine, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import type { MacroSeries } from "@/lib/macroData";
-import NewsGlobe from "@/components/NewsGlobe";
+import NewsScatter3D from "@/components/NewsScatter3D";
 
 function fmtDateTime(d: string) {
   return new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -14,11 +14,11 @@ const toneColor: Record<"bullish" | "bearish" | "neutral", string> = {
   neutral: "var(--flat)",
 };
 
-const chipTone: Record<MacroSeries["status"], string> = {
-  up: "text-[var(--up)] bg-[color-mix(in_srgb,var(--up)_14%,transparent)] border-[color-mix(in_srgb,var(--up)_35%,transparent)]",
-  down: "text-[var(--down)] bg-[color-mix(in_srgb,var(--down)_14%,transparent)] border-[color-mix(in_srgb,var(--down)_35%,transparent)]",
-  flat: "text-[var(--flat)] bg-[color-mix(in_srgb,var(--flat)_14%,transparent)] border-[color-mix(in_srgb,var(--flat)_35%,transparent)]",
-  pending: "text-[var(--accent)] bg-[color-mix(in_srgb,var(--accent)_12%,transparent)] border-[color-mix(in_srgb,var(--accent)_30%,transparent)]",
+const chipColor: Record<MacroSeries["status"], string> = {
+  up: "var(--up)",
+  down: "var(--down)",
+  flat: "var(--flat)",
+  pending: "var(--accent)",
 };
 
 const chipLabel: Record<MacroSeries["status"], string> = {
@@ -33,29 +33,30 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
   const history = series.history ?? [];
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)]">
-      <div className="flex w-full items-center gap-3 p-4 text-left sm:gap-4 sm:p-7">
+    <div className="border-b border-[var(--border)]">
+      <div className="flex w-full items-center gap-3 py-6 text-left sm:gap-6">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <h3 className="m-0 truncate text-[1.2rem] font-semibold">{series.name}</h3>
-            <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[0.7rem] font-bold uppercase tracking-wide ${chipTone[series.status]}`}>
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h3 className="m-0 truncate text-[1.15rem] font-semibold">{series.name}</h3>
+            <span className="shrink-0 text-[0.72rem] font-semibold uppercase tracking-wide" style={{ color: chipColor[series.status] }}>
               {chipLabel[series.status]}
+              {series.zscore !== null && ` ${series.zscore > 0 ? "+" : ""}${series.zscore.toFixed(2)}`}
             </span>
           </div>
-          <p className="m-0 mt-1 truncate font-sans text-[0.86rem] text-[var(--text-faint)]">{series.note}</p>
+          <p className="m-0 mt-1.5 truncate font-sans text-[0.86rem] text-[var(--text-dim)]">{series.note}</p>
         </div>
         <div className="shrink-0 text-right">
           <div className="font-mono text-[1.5rem] font-semibold leading-none">{series.value}</div>
-          <div className="mt-1 font-mono text-[0.72rem] text-[var(--text-faint)]">{series.windowLabel}</div>
+          <div className="mt-1.5 font-mono text-[0.72rem] text-[var(--text-faint)]">{series.windowLabel}</div>
         </div>
       </div>
 
-      <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-7 sm:pt-6">
+      <div className="pb-8">
         {headlines.length === 0 ? (
-            <p className="m-0 font-sans text-[0.85rem] text-[var(--text-faint)]">No headlines available right now.</p>
+            <p className="m-0 font-sans text-[0.85rem] text-[var(--text-faint)]">No data for this asset yet.</p>
           ) : (
             <>
-              <NewsGlobe headlines={headlines} />
+              <NewsScatter3D headlines={headlines} />
 
               <div className="mt-6">
                 <div className="mb-1.5 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">
@@ -86,7 +87,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
 
               <div className="mt-6">
                 <div className="mb-2 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">
-                  All {headlines.length} headlines, newest first
+                  All {headlines.length} items, newest first
                 </div>
                 <div className="flex max-h-[360px] flex-col gap-1.5 overflow-y-auto pr-1">
                   {headlines.map((h, i) => (
@@ -102,12 +103,22 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
                         {h.sentimentScore.toFixed(2)}
                       </span>
                       <div className="min-w-0 flex-1">
-                        {h.link ? (
-                          <a href={h.link} target="_blank" rel="noopener noreferrer" className="font-sans text-[0.8rem] leading-snug text-[var(--text)] hover:text-[var(--accent)] hover:underline">
-                            {h.title}
-                          </a>
-                        ) : (
-                          <span className="font-sans text-[0.8rem] leading-snug text-[var(--text)]">{h.title}</span>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {h.kind && h.kind !== "headline" && (
+                            <span className="shrink-0 font-mono text-[0.58rem] font-bold uppercase tracking-wide text-[var(--text-faint)]">
+                              [DATA]
+                            </span>
+                          )}
+                          {h.link ? (
+                            <a href={h.link} target="_blank" rel="noopener noreferrer" className="font-sans text-[0.8rem] leading-snug text-[var(--text)] hover:text-[var(--accent)] hover:underline">
+                              {h.title}
+                            </a>
+                          ) : (
+                            <span className="font-sans text-[0.8rem] leading-snug text-[var(--text)]">{h.title}</span>
+                          )}
+                        </div>
+                        {h.description && (
+                          <p className="m-0 mt-0.5 font-sans text-[0.74rem] leading-snug text-[var(--text-dim)]">{h.description}</p>
                         )}
                         <div className="mt-0.5 font-mono text-[0.64rem] text-[var(--text-faint)]">
                           {h.source} · {fmtDateTime(h.pubDate)}

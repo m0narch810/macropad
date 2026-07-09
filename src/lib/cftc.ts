@@ -1,7 +1,7 @@
 const BASE = "https://publicreporting.cftc.gov/resource/6dca-aqww.json";
 
 /**
- * CFTC legacy futures-only COT, queried by contract market code — NOT display
+ * CFTC legacy futures-only COT, queried by contract market code - NOT display
  * name. The commission renames contracts ("10-YEAR U.S. TREASURY NOTES" became
  * "UST 10Y NOTE", "U.S. DOLLAR INDEX" became "USD INDEX", the NQ e-mini became
  * "NASDAQ MINI"), and a name-based query silently returns nothing after a
@@ -32,7 +32,7 @@ export interface CotPoint {
   date: string;
   /** Net non-commercial position, contracts. */
   net: number;
-  /** Net as % of open interest — comparable across time and contracts. */
+  /** Net as % of open interest - comparable across time and contracts. */
   netPctOi: number | null;
 }
 
@@ -71,7 +71,7 @@ export async function fetchCotSeries(code: string, limit = 156): Promise<CotPoin
 /**
  * COT Index: where the latest net position sits in its trailing range,
  * 0 = most short of the window, 100 = most long. The standard way COT is
- * actually read — raw contract counts are meaningless across contracts and
+ * actually read - raw contract counts are meaningless across contracts and
  * across years of changing open interest.
  */
 export function cotIndex(series: CotPoint[], window = 156): number | null {
@@ -85,7 +85,7 @@ export function cotIndex(series: CotPoint[], window = 156): number | null {
 }
 
 export function fmtNet(n: number | null): string {
-  if (n === null) return "—";
+  if (n === null) return "-";
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toLocaleString("en-US")}`;
 }

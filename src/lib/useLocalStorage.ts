@@ -23,7 +23,7 @@ export function useLocalStorage<T>(key: string, initial: T): [T, (v: T | ((prev:
     try {
       window.localStorage.setItem(key, JSON.stringify(value));
     } catch {
-      // storage full or unavailable — silently skip persistence
+      // storage full or unavailable - silently skip persistence
     }
   }, [key, value, loaded]);
 

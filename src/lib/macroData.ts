@@ -1,3 +1,5 @@
+import { MARKET_SYMBOLS } from "@/lib/markets";
+
 export type SeriesStatus = "up" | "down" | "flat" | "pending";
 
 export interface HistoryPoint {
@@ -23,6 +25,10 @@ export interface NewsHeadlinePayload {
   source: string;
   sentimentScore: number;
   sentimentLabel: "bullish" | "bearish" | "neutral";
+  /** "headline" = real scraped article. "indicator"/"metric" = generated from actual FRED/CFTC data, not text. */
+  kind?: "headline" | "indicator" | "metric";
+  /** Explanation shown for indicator/metric events instead of a clickable link (there is no article to link to). */
+  description?: string;
 }
 
 /** Row-specific extra data too structured for extra_stats: scored headlines, daily price bars. */
@@ -62,7 +68,7 @@ const blank = (
   id,
   name,
   note,
-  value: "—",
+  value: "-",
   status: "pending",
   zscore: null,
   sparkline: null,
@@ -77,17 +83,17 @@ export const macroPanels: MacroPanel[] = [
   {
     id: "us-macro",
     title: "US Macroeconomics",
-    description: "Liquidity, rates, inflation, labor, growth, and consumer — full macro stack.",
+    description: "Liquidity, rates, inflation, labor, growth, and consumer - full macro stack.",
     series: [
       blank("us-macro:h41-balance-sheet", "H.4.1 Fed Balance Sheet", "Weekly, Fed H.4.1 release", "FRED WALCL"),
       blank("us-macro:sofr-effr-iorb", "SOFR / EFFR / IORB", "Funding rate spread stack", "FRED SOFR/EFFR/IORB"),
       blank("us-macro:hy-credit-spread", "High Yield Credit Spread", "ICE BofA HY OAS", "FRED BAMLH0A0HYM2"),
       blank("us-macro:cpi-yoy", "CPI Inflation (YoY)", "Headline CPI, year-over-year", "FRED CPIAUCSL"),
-      blank("us-macro:core-cpi", "Core CPI (YoY)", "Ex food & energy — the sticky part", "FRED CPILFESL"),
+      blank("us-macro:core-cpi", "Core CPI (YoY)", "Ex food & energy - the sticky part", "FRED CPILFESL"),
       blank("us-macro:core-pce", "Core PCE (YoY)", "The Fed's actual target metric", "FRED PCEPILFE"),
       blank("us-macro:unemployment", "Unemployment Rate", "U-3 headline unemployment", "FRED UNRATE"),
       blank("us-macro:payrolls", "Nonfarm Payrolls", "3m average monthly gain", "FRED PAYEMS"),
-      blank("us-macro:jobless-claims", "Initial Jobless Claims", "Weekly — earliest hard labor data", "FRED ICSA"),
+      blank("us-macro:jobless-claims", "Initial Jobless Claims", "Weekly - earliest hard labor data", "FRED ICSA"),
       blank("us-macro:gdp", "Real GDP (YoY)", "Judged against ~2% trend growth", "FRED GDPC1"),
       blank("us-macro:m2", "M2 Money Supply", "YoY growth of broad money", "FRED M2SL"),
       blank("us-macro:reverse-repo", "Reverse Repo (RRP)", "Liquidity parked at the Fed, $B", "FRED RRPONTSYD"),
@@ -118,7 +124,7 @@ export const macroPanels: MacroPanel[] = [
     id: "cot-positioning",
     title: "COT Positioning",
     description:
-      "Non-commercial (spec) net positioning per market — with COT index and net-as-%-of-open-interest, the two normalizations that make raw contract counts readable.",
+      "Non-commercial (spec) net positioning per market - with COT index and net-as-%-of-open-interest, the two normalizations that make raw contract counts readable.",
     series: [
       blank("cot:es", "S&P 500 (ES)", "Spec net position, e-mini", "CFTC Legacy COT 13874A"),
       blank("cot:nq", "Nasdaq-100 (NQ)", "Spec net position, e-mini", "CFTC Legacy COT 209742"),
@@ -130,7 +136,7 @@ export const macroPanels: MacroPanel[] = [
       blank("cot:silver", "Silver (SI)", "Spec net position, COMEX", "CFTC Legacy COT 084691"),
       blank("cot:natgas", "Natural Gas (NG)", "Spec net position, NYMEX Henry Hub", "CFTC Legacy COT 023651"),
       blank("cot:dxy", "Dollar Index (DX)", "Spec net position, ICE", "CFTC Legacy COT 098662"),
-      blank("cot:vix", "VIX Futures", "Spec net position — structurally short", "CFTC Legacy COT 1170E1"),
+      blank("cot:vix", "VIX Futures", "Spec net position - structurally short", "CFTC Legacy COT 1170E1"),
     ],
   },
   {
@@ -142,26 +148,49 @@ export const macroPanels: MacroPanel[] = [
       blank("transmission:nfci", "Financial Conditions (NFCI)", "Chicago Fed, 0 = average, + = tight", "FRED NFCI"),
       blank("transmission:real-10y", "10y Real Yield (TIPS)", "The true discount rate", "FRED DFII10"),
       blank("transmission:broad-dollar", "Broad Dollar Index", "Fed trade-weighted, global tightening proxy", "FRED DTWEXBGS"),
-      blank("transmission:copper-gold", "Copper/Gold Ratio", "Growth vs fear — tracks the 10y", "Yahoo Finance HG=F / GC=F"),
+      blank("transmission:copper-gold", "Copper/Gold Ratio", "Growth vs fear - tracks the 10y", "Yahoo Finance HG=F / GC=F"),
       blank("transmission:gold-silver", "Gold/Silver Ratio", "Fear metal vs industrial metal", "Yahoo Finance GC=F / SI=F"),
       blank("transmission:crude-natgas", "Crude/NatGas Ratio", "Global vs domestic energy split", "Yahoo Finance CL=F / NG=F"),
-      blank("transmission:hyg-lqd", "HYG / LQD Ratio", "Junk vs quality — credit risk appetite", "Yahoo Finance HYG / LQD"),
-      blank("transmission:rsp-spy", "RSP / SPY Ratio", "Equal-weight vs cap-weight — breadth", "Yahoo Finance RSP / SPY"),
-      blank("transmission:smh-spy", "SMH / SPY Ratio", "Semis vs market — cycle leadership", "Yahoo Finance SMH / SPY"),
+      blank("transmission:hyg-lqd", "HYG / LQD Ratio", "Junk vs quality - credit risk appetite", "Yahoo Finance HYG / LQD"),
+      blank("transmission:rsp-spy", "RSP / SPY Ratio", "Equal-weight vs cap-weight - breadth", "Yahoo Finance RSP / SPY"),
+      blank("transmission:smh-spy", "SMH / SPY Ratio", "Semis vs market - cycle leadership", "Yahoo Finance SMH / SPY"),
     ],
   },
   {
     id: "geopolitics",
-    title: "Geopolitics & Vol",
-    description:
-      "What markets are actually pricing for risk — the volatility complex and its term structure, not headlines.",
+    title: "Geopolitics",
+    description: "Policy and macro uncertainty, and how markets are positioning around it - not headlines.",
+    series: [
+      blank("geo:epu", "US Policy Uncertainty (EPU)", "News-based daily index, 30d average", "FRED USEPUINDXD"),
+      blank("geo:gepu", "Global Policy Uncertainty", "GDP-weighted across major economies", "FRED GEPUCURRENT"),
+      blank("geo:equity-uncertainty", "Equity Market Uncertainty", "News + options-based, daily", "FRED WLEMUINDXD"),
+      blank("geo:defense-spy", "Defense / Market Ratio", "ITA vs SPY - risk-on tilt toward defense names", "Yahoo Finance ITA / SPY"),
+      blank("geo:news-feed", "News Sentiment", "Pooled macro headlines, keyword-lexicon scored", "CNBC · Fed · WSJ · Yahoo · FXStreet"),
+    ],
+  },
+  {
+    // Not shown in the main nav - pulled directly by id from the News page's
+    // asset tabs. Kept as its own panel only so getPanels() has a catalogue
+    // entry to hydrate against.
+    id: "asset-news",
+    title: "Asset News",
+    description: "Per-asset headline sentiment.",
+    series: MARKET_SYMBOLS.map((m) =>
+      blank(`asset-news:${m.symbol}`, `${m.label} News`, "Real indicator events (FRED/CFTC) plus matching headlines, not headline-only sentiment", "FRED · CFTC · CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch")
+    ),
+  },
+  {
+    id: "volatility",
+    title: "Volatility",
+    description: "What markets are actually pricing for risk - the implied-vol complex and its term structure.",
     series: [
       blank("geo:vix", "VIX", "S&P 500 implied vol, 30d", "FRED VIXCLS"),
-      blank("geo:vix-term", "VIX Term Structure", "VIX3M / VIX — below 1 = backwardation = stress", "Yahoo ^VIX3M / ^VIX"),
-      blank("geo:ovx", "OVX", "Crude oil implied vol — supply-shock gauge", "FRED OVXCLS"),
-      blank("geo:gvz", "GVZ", "Gold implied vol — safe-haven flow gauge", "FRED GVZCLS"),
-      blank("geo:epu", "Policy Uncertainty (EPU)", "News-based daily index, 30d average", "FRED USEPUINDXD"),
-      blank("geo:news-feed", "News Sentiment", "Pooled headlines, keyword-lexicon scored", "Yahoo Finance RSS"),
+      blank("geo:vix-term", "VIX Term Structure", "VIX3M / VIX - below 1 = backwardation = stress", "Yahoo ^VIX3M / ^VIX"),
+      blank("geo:vvix", "VVIX", "Vol-of-vol - implied vol of the VIX itself", "Yahoo ^VVIX"),
+      blank("geo:skew", "CBOE SKEW", "Tail-risk gauge - priced crash probability", "Yahoo ^SKEW"),
+      blank("geo:ovx", "OVX", "Crude oil implied vol - supply-shock gauge", "FRED OVXCLS"),
+      blank("geo:gvz", "GVZ", "Gold implied vol - safe-haven flow gauge", "FRED GVZCLS"),
+      blank("geo:move", "MOVE Index", "Bond market implied vol", "Yahoo ^MOVE"),
     ],
   },
 ];

@@ -31,27 +31,10 @@ import ZHeatmap from "@/components/ZHeatmap";
 import MarketLink from "@/components/MarketLink";
 import SpecializedStatChart from "@/components/SpecializedStatChart";
 import NewsFeedCard from "@/components/NewsFeedCard";
-import { getBias, getDirectionTone, getSignTone } from "@/lib/bias";
-import { getBacktestEvidence } from "@/lib/backtestImportance";
-import BacktestChip from "@/components/BacktestChip";
+import { getBias, getSignTone } from "@/lib/bias";
 import { IMPACTS, marketRowId } from "@/lib/markets";
 import { computeIndicatorSignal, getSignalConfig, type SignalMethod } from "@/lib/indicatorSignal";
 import type { MarketRow } from "@/lib/getMarkets";
-
-const chipColor: Record<MacroSeries["status"], string> = {
-  up: "var(--up)",
-  down: "var(--down)",
-  flat: "var(--flat)",
-  pending: "var(--text-faint)",
-};
-
-/** Chip text reads good/bad (bullish/bearish), not literal direction — a chip that says "up" in red is confusing. */
-const chipLabel: Record<MacroSeries["status"], string> = {
-  up: "bullish",
-  down: "bearish",
-  flat: "flat",
-  pending: "pending",
-};
 
 /** Context-aware z-score color: only paints green/red once |z| clears 2σ, else neutral accent. */
 function zTone(seriesId: string, z: number) {
@@ -73,12 +56,7 @@ function daysBetween(a: string, b: string): number {
 }
 
 function SectionHead({ title }: { title: string }) {
-  return (
-    <div className="mb-2 flex items-center gap-3 font-mono text-[0.62rem] font-medium uppercase tracking-[0.14em] text-[var(--text-faint)]">
-      <span className="whitespace-nowrap">{title}</span>
-      <span className="h-px flex-1 bg-[var(--border)]" />
-    </div>
-  );
+  return <div className="mb-1.5 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">{title}</div>;
 }
 
 function MomentumBadge({
@@ -99,7 +77,7 @@ function MomentumBadge({
     <div className="flex flex-col gap-1.5 rounded-md bg-[var(--panel-2)] px-2.5 py-2.5">
       <span className="font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">{label}</span>
       <span className="font-mono text-[0.94rem] font-semibold" style={{ color }}>
-        {value === null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(3)}`}
+        {value === null ? "-" : `${value > 0 ? "+" : ""}${value.toFixed(3)}`}
       </span>
       <div className="relative h-1 rounded-full bg-[var(--border)]">
         <div
@@ -139,13 +117,6 @@ function Stat({ label, value, color }: { label: string; value: string; color?: s
   );
 }
 
-const methodLabel: Record<SignalMethod, string> = {
-  positioning: "Positioning read",
-  momentum: "Momentum read",
-  anchor: "Anchor read",
-  threshold: "Threshold read",
-};
-
 /** ---------------- Positioning layout: genuinely mean-reverting series (COT, sentiment, ratios) ---------------- */
 function PositioningBody({ series, history, values }: { series: MacroSeries; history: HistoryPoint[]; values: number[] }) {
   const dist = computeDistStats(values);
@@ -182,7 +153,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
               </defs>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} domain={["auto", "auto"]} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), name]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), name]} />
               <Area type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} fill={`url(#q-hist-${series.id})`} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="ma20" stroke="var(--up)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
               <Line type="monotone" dataKey="ma50" stroke="var(--down)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
@@ -207,7 +178,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
                 <ReferenceLine y={0} stroke="var(--border)" />
                 <ReferenceLine y={2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
                 <ReferenceLine y={-2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
-                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(2) + "σ", "z"]} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(2) + "σ", "z"]} />
                 <Line type="monotone" dataKey="z" stroke={dist ? zTone(series.id, dist.zscore) : "var(--accent)"} strokeWidth={1.5} dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -221,7 +192,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
               <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
                 <XAxis dataKey="date" hide />
                 <YAxis tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={false} width={38} domain={[0, "auto"]} />
-                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(4), "σ"]} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(4), "σ"]} />
                 <Area type="monotone" dataKey="vol" stroke="var(--flat)" strokeWidth={1.25} fill="var(--flat)" fillOpacity={0.18} dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -273,7 +244,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
       </div>
 
       <div className="mt-6">
-        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — absolute change vs. N periods ago</div>
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum - absolute change vs. N periods ago</div>
         <div className="grid grid-cols-4 gap-2">
           {(() => {
             const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
@@ -299,7 +270,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
           </div>
           <div className="mt-4 grid grid-cols-3 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-5">
             <Stat label="Std Dev" value={dist.std.toFixed(3)} />
-            <Stat label="Ann. Vol" value={annVol !== null ? annVol.toFixed(3) : "—"} />
+            <Stat label="Ann. Vol" value={annVol !== null ? annVol.toFixed(3) : "-"} />
             <Stat label="Z-score" value={`${dist.zscore > 0 ? "+" : ""}${dist.zscore.toFixed(2)}σ`} color={zTone(series.id, dist.zscore)} />
             <Stat label="N obs" value={String(values.length)} />
             <Stat label="Cadence" value={cadence} />
@@ -349,7 +320,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
               </defs>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} domain={["auto", "auto"]} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), name]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), name]} />
               <Area type="monotone" dataKey="value" stroke="var(--text-faint)" strokeWidth={1.25} fill={`url(#q-mom-${series.id})`} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="trend" stroke="var(--accent)" strokeWidth={2.25} dot={false} isAnimationActive={false} />
             </ComposedChart>
@@ -368,7 +339,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
             <BarChart data={paceData} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 4 }}>
               <XAxis type="number" domain={["auto", "auto"]} tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} />
               <YAxis type="category" dataKey="label" tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={90} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "avg"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "avg"]} />
               <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
                 <Cell fill="var(--text-faint)" />
                 <Cell fill={paceColor} />
@@ -377,12 +348,12 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
           </ResponsiveContainer>
         </div>
         <div className="mt-2 flex items-baseline gap-2 font-mono text-[0.85rem]" style={{ color: paceColor }}>
-          {paceDelta === null ? "—" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)} pace change`}
+          {paceDelta === null ? "-" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)} pace change`}
         </div>
       </div>
 
       <div className="mt-6">
-        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — absolute change vs. N periods ago</div>
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum - absolute change vs. N periods ago</div>
         <div className="grid grid-cols-4 gap-2">
           {(() => {
             const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
@@ -396,7 +367,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
           <Stat label="N obs" value={String(values.length)} />
           <Stat label="Cadence" value={cadence} />
           <Stat label="Pace window" value={`${window}p`} />
-          <Stat label="Pace delta" value={paceDelta === null ? "—" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)}`} color={paceColor} />
+          <Stat label="Pace delta" value={paceDelta === null ? "-" : `${paceDelta > 0 ? "+" : ""}${paceDelta.toFixed(3)}`} color={paceColor} />
         </div>
       </div>
     </>
@@ -442,7 +413,7 @@ function AnchorBody({
             <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis domain={[yMin, yMax]} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "value"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "value"]} />
               <ReferenceArea y1={reference - band} y2={reference + band} fill="var(--accent)" fillOpacity={0.08} />
               <ReferenceLine y={reference} stroke="var(--accent)" strokeDasharray="4 3" label={{ value: `target ${reference}`, position: "insideTopLeft", fill: "var(--accent)", fontSize: 10 }} />
               <Line type="monotone" dataKey="value" stroke="var(--text)" strokeWidth={2} dot={false} isAnimationActive={false} />
@@ -471,7 +442,7 @@ function AnchorBody({
       </div>
 
       <div className="mt-6">
-        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum — is it moving toward or away from target?</div>
+        <div className="mb-1.5 font-sans text-[0.68rem] uppercase tracking-wide text-[var(--text-faint)]">Momentum - is it moving toward or away from target?</div>
         <div className="grid grid-cols-4 gap-2">
           {(() => {
             const maxAbs = Math.max(1e-9, ...momentum.map((m) => (m.value === null ? 0 : Math.abs(m.value))));
@@ -523,7 +494,7 @@ function ThresholdBody({ series, history, values }: { series: MacroSeries; histo
             <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={50} label={{ value: "Spread", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "—" : Number(v).toFixed(3), "spread"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "spread"]} />
               <ReferenceLine y={0} stroke="var(--text-faint)" />
               <Bar dataKey="value" radius={[1, 1, 1, 1]}>
                 {chartData.map((d, i) => (
@@ -561,15 +532,13 @@ export default function QuantCard({
   markets,
   assetFilter = null,
   assetLabel = null,
-  defaultOpen = false,
 }: {
   series: MacroSeries;
   markets: MarketRow[];
   assetFilter?: string | null;
   assetLabel?: string | null;
-  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(false);
   const history = series.history;
   const impacts = IMPACTS[series.id] ?? [];
   const isRelevant = !assetFilter || impacts.some((i) => i.symbol === assetFilter);
@@ -593,55 +562,41 @@ export default function QuantCard({
   const method: SignalMethod = config?.method ?? "positioning";
 
   const bias = getBias(series.id, signal?.score ?? null);
-  const backtest = getBacktestEvidence(series.id);
   const biasToneColor = bias ? (bias.tone === "up" ? "var(--up)" : bias.tone === "down" ? "var(--down)" : "var(--text-faint)") : "var(--text-faint)";
-  const chipTone = getDirectionTone(series.id, series.status);
 
   return (
-    <div className="rounded-lg border border-[var(--border)] bg-[var(--panel)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
-      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 p-3.5 text-left sm:gap-4 sm:px-5 sm:py-4">
+    <div className="border-b border-[var(--border)] transition-opacity duration-150" style={!isRelevant ? { opacity: 0.42 } : undefined}>
+      <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 py-6 text-left sm:gap-6">
         <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-            <h3 className="m-0 text-[1rem] font-semibold leading-tight sm:text-[1.1rem]">{series.name}</h3>
-            <span
-              className="shrink-0 rounded border px-1.5 py-[2px] font-mono text-[0.58rem] font-semibold uppercase tracking-[0.12em]"
-              style={{ color: chipColor[chipTone], borderColor: "var(--border-strong)" }}
-            >
-              {chipLabel[chipTone]}
-            </span>
-            <span
-              className="hidden shrink-0 rounded border border-[var(--border)] px-1.5 py-[2px] font-mono text-[0.58rem] uppercase tracking-[0.12em] text-[var(--text-faint)] sm:inline"
-              title={config?.rationale}
-            >
-              {methodLabel[method]}
-            </span>
-            {backtest && <BacktestChip evidence={backtest} />}
+          <div className="flex flex-wrap items-center gap-2.5">
+            <h3 className="m-0 truncate text-[1.15rem] font-semibold">{series.name}</h3>
+            {bias && (
+              <span className="shrink-0 text-[0.72rem] font-semibold uppercase tracking-wide" style={{ color: biasToneColor }}>
+                {bias.tone === "up" ? "bullish" : bias.tone === "down" ? "bearish" : "neutral"}
+                {signal && ` ${signal.score > 0 ? "+" : ""}${signal.score.toFixed(2)}`}
+              </span>
+            )}
             {!isRelevant && (
-              <span className="shrink-0 whitespace-nowrap rounded border border-[var(--border)] px-1.5 py-[2px] font-mono text-[0.58rem] uppercase tracking-[0.12em] text-[var(--text-faint)]">
-                no {assetLabel ?? assetFilter} link
+              <span className="shrink-0 whitespace-nowrap font-sans text-[0.62rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]">
+                Not linked to {assetLabel ?? assetFilter}
               </span>
             )}
           </div>
-          <p className="m-0 mt-1 truncate font-sans text-[0.78rem] text-[var(--text-faint)]">{series.note}</p>
-          {bias && (
-            <div className="mt-0.5 truncate font-sans text-[0.78rem]" style={{ color: biasToneColor }}>
-              {bias.label}
-            </div>
-          )}
+          <p className="m-0 mt-1.5 truncate font-sans text-[0.86rem] text-[var(--text-dim)]">{series.note}</p>
         </div>
 
         {series.sparkline && series.sparkline.length >= 5 && (
           <div className="hidden w-24 shrink-0 md:block">
-            <Sparkline data={series.sparkline} tone={series.status} heightClass="h-9" />
+            <Sparkline data={series.sparkline} tone={series.status} heightClass="h-10" />
           </div>
         )}
 
-        <div className="min-w-[4.5rem] max-w-[42%] text-right sm:max-w-[19rem]">
-          <div className="font-mono text-[1.05rem] font-semibold leading-tight sm:text-[1.5rem]">{series.value}</div>
+        <div className="shrink-0 text-right">
+          <div className="font-mono text-[1.4rem] font-semibold leading-none sm:text-[1.9rem]">{series.value}</div>
           {signal && (
-            <div className="mt-0.5 font-mono text-[0.76rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
+            <div className="mt-1.5 font-mono text-[0.8rem]" style={{ color: toneColorFor(getSignTone(series.id, signal.score)) }}>
               {signal.score > 0 ? "+" : ""}
-              {Math.round(signal.score * 100)}%
+              {signal.score.toFixed(2)}
             </div>
           )}
         </div>
@@ -650,17 +605,10 @@ export default function QuantCard({
       </button>
 
       {open && (
-        <div className="border-t border-[var(--border)] p-4 pt-5 sm:p-5">
+        <div className="pb-8">
           {bias && (
-            <div className="mt-4 rounded-md border p-3.5" style={{ borderColor: `color-mix(in srgb, ${biasToneColor} 35%, var(--border))`, background: `color-mix(in srgb, ${biasToneColor} 7%, transparent)` }}>
-              <div className="flex items-center gap-2">
-                <span className="font-sans text-[0.68rem] font-bold uppercase tracking-wide" style={{ color: biasToneColor }}>
-                  {bias.strength === "strong" ? "Strong read" : bias.strength === "mild" ? "Mild read" : "Neutral"}
-                </span>
-              </div>
-              <div className="mt-0.5 font-sans text-[0.92rem] font-semibold" style={{ color: biasToneColor }}>
-                {bias.label}
-              </div>
+            <div className="font-sans text-[0.92rem] font-semibold" style={{ color: biasToneColor }}>
+              {bias.label}
             </div>
           )}
 
@@ -692,21 +640,6 @@ export default function QuantCard({
             <ThresholdBody series={series} history={history} values={values} />
           ) : (
             <PositioningBody series={series} history={history} values={values} />
-          )}
-
-          {backtest && (
-            <div className="mt-6">
-              <SectionHead title="Backtest evidence" />
-              <div className="grid grid-cols-2 gap-x-3 gap-y-3 font-mono text-[0.82rem] sm:grid-cols-4">
-                <Stat label="ES weekly" value={backtest.esWeekly !== null ? `${(backtest.esWeekly * 100).toFixed(1)}%` : "—"} />
-                <Stat label="NQ weekly" value={backtest.nqWeekly !== null ? `${(backtest.nqWeekly * 100).toFixed(1)}%` : "—"} />
-                <Stat label="ES daily" value={backtest.esDaily !== null ? `${(backtest.esDaily * 100).toFixed(1)}%` : "—"} />
-                <Stat label="NQ daily" value={backtest.nqDaily !== null ? `${(backtest.nqDaily * 100).toFixed(1)}%` : "—"} />
-              </div>
-              <p className="m-0 mt-2 font-sans text-[0.72rem] text-[var(--text-faint)]">
-                Share of RandomForest feature importance in the walk-forward return backtests (rank {backtest.rank} of {backtest.rankedCount} weekly). Relevance evidence — not a directional signal.
-              </p>
-            </div>
           )}
 
           <div className="mt-5 flex items-center justify-between font-mono text-[0.7rem] text-[var(--text-faint)]">

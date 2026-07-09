@@ -5,8 +5,6 @@ import type { MacroPanel, MacroSeries } from "@/lib/macroData";
 import { useLocalStorage } from "@/lib/useLocalStorage";
 import { computeIndicatorSignal } from "@/lib/indicatorSignal";
 import { inferCadence } from "@/lib/stats";
-import { getBacktestEvidence } from "@/lib/backtestImportance";
-import BacktestChip from "@/components/BacktestChip";
 
 interface CustomEntry {
   seriesId: string;
@@ -62,17 +60,11 @@ function EntryRow({
     <div className="rounded-md border border-[var(--border)] bg-[var(--panel)] px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="truncate font-sans text-[0.85rem] font-semibold">{series.name}</span>
-            {(() => {
-              const ev = getBacktestEvidence(series.id);
-              return ev ? <BacktestChip evidence={ev} /> : null;
-            })()}
-          </div>
+          <div className="truncate font-sans text-[0.85rem] font-semibold">{series.name}</div>
           <div className="truncate font-mono text-[0.62rem] text-[var(--text-faint)]">{panelTitle}</div>
         </div>
         <div className="shrink-0 text-right font-mono text-[0.8rem]" style={{ color: toneColor(tone) }}>
-          {score === null ? "—" : `${score > 0 ? "+" : ""}${Math.round(score * 100)}%`}
+          {score === null ? "-" : `${score > 0 ? "+" : ""}${score.toFixed(2)}`}
         </div>
         <button onClick={onRemove} className="shrink-0 font-mono text-[0.72rem] text-[var(--text-faint)] hover:text-[var(--down)]">
           remove
@@ -141,14 +133,7 @@ export default function CustomBiasPage({ panels }: { panels: MacroPanel[] }) {
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
     const chosenIds = new Set(entries.map((e) => e.seriesId));
-    const pool = allSeries
-      .filter(({ series }) => !chosenIds.has(series.id))
-      // Backtest-validated inputs float to the top of the picker so the user
-      // sees what has historically mattered first; order within is by name.
-      .sort((a, b) => {
-        const share = (s: MacroSeries) => getBacktestEvidence(s.id)?.weeklyShare ?? 0;
-        return share(b.series) - share(a.series) || a.series.name.localeCompare(b.series.name);
-      });
+    const pool = allSeries.filter(({ series }) => !chosenIds.has(series.id));
     if (!q) return pool;
     return pool.filter(({ series }) => series.name.toLowerCase().includes(q) || series.note.toLowerCase().includes(q));
   }, [allSeries, entries, query]);
@@ -194,7 +179,7 @@ export default function CustomBiasPage({ panels }: { panels: MacroPanel[] }) {
               }}
             >
               {netScore > 0 ? "+" : ""}
-              {Math.round(netScore * 100)}%
+              {netScore.toFixed(2)}
             </span>
           </div>
           <div className="mt-3">
@@ -227,13 +212,7 @@ export default function CustomBiasPage({ panels }: { panels: MacroPanel[] }) {
                     <div className="truncate font-sans text-[0.78rem]">{series.name}</div>
                     <div className="truncate font-mono text-[0.62rem] text-[var(--text-faint)]">{panelTitle}</div>
                   </div>
-                  <span className="flex shrink-0 items-center gap-2">
-                    {(() => {
-                      const ev = getBacktestEvidence(series.id);
-                      return ev ? <BacktestChip evidence={ev} /> : null;
-                    })()}
-                    <span className="font-mono text-[0.9rem] text-[var(--accent)]">+</span>
-                  </span>
+                  <span className="shrink-0 font-mono text-[0.9rem] text-[var(--accent)]">+</span>
                 </button>
               ))}
             </div>

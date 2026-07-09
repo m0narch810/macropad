@@ -1,27 +1,17 @@
 const ICONS: Record<string, React.ReactNode> = {
   board: (
     <>
-      <rect x="3" y="3" width="6" height="6" />
-      <rect x="11" y="3" width="6" height="6" />
-      <rect x="3" y="11" width="6" height="6" />
-      <path d="M11 14H17" />
-      <path d="M14 11V17" />
-    </>
-  ),
-  news: (
-    <>
-      <rect x="3" y="4" width="14" height="12" />
-      <path d="M6 8H14" />
-      <path d="M6 11H14" />
-      <path d="M6 13.5H10.5" />
+      <rect x="2.5" y="2.5" width="15" height="15" rx="1.5" />
+      <path d="M2.5 8H17.5" />
+      <path d="M7 8V17.5" />
+      <path d="M12.5 8V17.5" />
     </>
   ),
   "us-macro": (
     <>
-      <path d="M3 17V9" />
-      <path d="M7.5 17V5" />
-      <path d="M12 17V11" />
-      <path d="M16.5 17V7" />
+      <rect x="3" y="4" width="14" height="3" rx="1" />
+      <rect x="3" y="8.5" width="11" height="3" rx="1" />
+      <rect x="3" y="13" width="8" height="3" rx="1" />
     </>
   ),
   "yield-rates": (
@@ -34,15 +24,14 @@ const ICONS: Record<string, React.ReactNode> = {
     <>
       <path d="M10 3V17" />
       <path d="M3 6H17" />
-      <path d="M3 6L1.5 10.5H6.5L5 6" />
-      <path d="M15 6L13.5 10.5H18.5L17 6" />
+      <path d="M3 6L1.5 10.5A2.5 2.5 0 0 0 6.5 10.5L5 6" />
+      <path d="M15 6L13.5 10.5A2.5 2.5 0 0 0 18.5 10.5L17 6" />
     </>
   ),
   transmission: (
     <>
-      <circle cx="6" cy="10" r="3.2" />
-      <circle cx="14" cy="10" r="3.2" />
-      <path d="M9.2 10H10.8" />
+      <rect x="2.5" y="7" width="7" height="6" rx="3" />
+      <rect x="10.5" y="7" width="7" height="6" rx="3" />
     </>
   ),
   geopolitics: (
@@ -52,12 +41,25 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M10 3C12.5 5.5 12.5 14.5 10 17C7.5 14.5 7.5 5.5 10 3Z" />
     </>
   ),
+  volatility: (
+    <>
+      <path d="M3 12C5 12 5 6 7 6S9 15 11 15S13 5 15 5S17 12 17 12" />
+    </>
+  ),
+  news: (
+    <>
+      <rect x="3" y="4" width="14" height="12" rx="1.5" />
+      <path d="M6 8H14" />
+      <path d="M6 11H14" />
+      <path d="M6 13.5H10.5" />
+    </>
+  ),
   "custom-dashboard": (
     <>
-      <rect x="3" y="3" width="6.2" height="6.2" />
-      <rect x="10.8" y="3" width="6.2" height="6.2" />
-      <rect x="3" y="10.8" width="6.2" height="6.2" />
-      <rect x="10.8" y="10.8" width="6.2" height="6.2" />
+      <rect x="3" y="3" width="6.5" height="6.5" rx="1" />
+      <rect x="10.5" y="3" width="6.5" height="6.5" rx="1" />
+      <rect x="3" y="10.5" width="6.5" height="6.5" rx="1" />
+      <rect x="10.5" y="10.5" width="6.5" height="6.5" rx="1" />
     </>
   ),
   "custom-bias": (
@@ -65,6 +67,14 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M3 15A7 7 0 0 1 17 15" />
       <path d="M10 15L13.5 9" />
       <circle cx="10" cy="15" r="1.3" />
+    </>
+  ),
+  docs: (
+    <>
+      <path d="M5 3H12.5L16 6.5V17H5Z" />
+      <path d="M12.5 3V6.5H16" />
+      <circle cx="10.3" cy="12.3" r="2.3" />
+      <path d="M12 14L13.5 15.5" />
     </>
   ),
 };
@@ -82,14 +92,14 @@ export default function PanelIcon({
   if (!icon) return null;
   return (
     <svg
-      width="16"
-      height="16"
+      width="18"
+      height="18"
       viewBox="0 0 20 20"
       fill="none"
       stroke="currentColor"
-      strokeWidth="1.3"
-      strokeLinecap="square"
-      strokeLinejoin="miter"
+      strokeWidth="1.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className={className}
       style={style}
     >

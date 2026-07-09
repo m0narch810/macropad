@@ -8,10 +8,10 @@ import { rollingZScore } from "@/lib/stats";
  * Rolling z-score swept across several lookback windows, as a window × time
  * heat grid. A reading that stays hot down an entire column is robust to
  * window choice; one hot in a single row is a lookback artifact. Replaces
- * the old 3D surface — same data, actually readable.
+ * the old 3D surface - same data, actually readable.
  *
  * Diverging scale: steel (below trailing mean) ↔ neutral ↔ brass (above).
- * Deliberately NOT green/red — raw sign is not good/bad; that mapping
+ * Deliberately NOT green/red - raw sign is not good/bad; that mapping
  * belongs to the bias layer.
  */
 export default function ZHeatmap({ history }: { history: HistoryPoint[] }) {
@@ -43,7 +43,7 @@ export default function ZHeatmap({ history }: { history: HistoryPoint[] }) {
     if (z === null) return "transparent";
     const t = Math.max(-1, Math.min(1, z / 2.5));
     const alpha = Math.abs(t) * 0.92 + 0.04;
-    // steel for negative, brass for positive — neutral fades to the surface
+    // steel for negative, brass for positive - neutral fades to the surface
     return t >= 0 ? `rgba(189, 130, 38, ${alpha})` : `rgba(94, 150, 216, ${alpha})`;
   };
 

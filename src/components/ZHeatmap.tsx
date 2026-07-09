@@ -43,8 +43,8 @@ export default function ZHeatmap({ history }: { history: HistoryPoint[] }) {
     if (z === null) return "transparent";
     const t = Math.max(-1, Math.min(1, z / 2.5));
     const alpha = Math.abs(t) * 0.92 + 0.04;
-    // steel for negative, brass for positive - neutral fades to the surface
-    return t >= 0 ? `rgba(189, 130, 38, ${alpha})` : `rgba(94, 150, 216, ${alpha})`;
+    // steel for negative, amber for positive - neutral fades to the surface
+    return t >= 0 ? `rgba(207, 163, 90, ${alpha})` : `rgba(120, 166, 240, ${alpha})`;
   };
 
   const fmtDate = (d: string) =>
@@ -110,11 +110,11 @@ export default function ZHeatmap({ history }: { history: HistoryPoint[] }) {
 
       <div className="mt-1.5 flex items-center gap-3 text-[0.64rem] text-[var(--text-faint)]">
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-[2px]" style={{ background: "rgba(94,150,216,0.9)" }} />
+          <span className="inline-block h-2 w-2 rounded-[2px]" style={{ background: "rgba(120,166,240,0.9)" }} />
           below trailing mean
         </span>
         <span className="flex items-center gap-1">
-          <span className="inline-block h-2 w-2 rounded-[2px]" style={{ background: "rgba(189,130,38,0.9)" }} />
+          <span className="inline-block h-2 w-2 rounded-[2px]" style={{ background: "rgba(207,163,90,0.9)" }} />
           above trailing mean
         </span>
         <span>rows = lookback windows</span>

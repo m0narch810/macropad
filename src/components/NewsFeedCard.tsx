@@ -1,8 +1,15 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { AreaChart, Area, ReferenceLine, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts";
 import type { MacroSeries } from "@/lib/macroData";
-import NewsScatter3D from "@/components/NewsScatter3D";
+
+// three.js is by far the heaviest dependency in the app - keep it out of
+// the main bundle and only fetch it when a news card actually renders.
+const NewsGlobe = dynamic(() => import("@/components/NewsGlobe"), {
+  ssr: false,
+  loading: () => <div className="h-[360px] w-full border border-[var(--border)] bg-[var(--panel)]" aria-hidden />,
+});
 
 function fmtDateTime(d: string) {
   return new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
@@ -56,7 +63,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
             <p className="m-0 font-sans text-[0.85rem] text-[var(--text-faint)]">No data for this asset yet.</p>
           ) : (
             <>
-              <NewsScatter3D headlines={headlines} />
+              <NewsGlobe headlines={headlines} />
 
               <div className="mt-6">
                 <div className="mb-1.5 font-sans text-[0.7rem] font-semibold uppercase tracking-wide text-[var(--text-dim)]">
@@ -75,7 +82,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
                       <YAxis domain={[-1, 1]} tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={false} width={30} ticks={[-1, 0, 1]} />
                       <ReferenceLine y={0} stroke="var(--border)" />
                       <Tooltip
-                        contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 11 }}
+                        contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 11 }}
                         labelFormatter={(d) => fmtDateTime(String(d))}
                         formatter={(v) => [Number(v).toFixed(2), "sentiment"]}
                       />

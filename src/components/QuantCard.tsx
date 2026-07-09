@@ -153,17 +153,17 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
               </defs>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} domain={["auto", "auto"]} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), name]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), name]} />
               <Area type="monotone" dataKey="value" stroke="var(--accent)" strokeWidth={2} fill={`url(#q-hist-${series.id})`} dot={false} isAnimationActive={false} />
-              <Line type="monotone" dataKey="ma20" stroke="var(--up)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
-              <Line type="monotone" dataKey="ma50" stroke="var(--down)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
+              <Line type="monotone" dataKey="ma20" stroke="var(--steel)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
+              <Line type="monotone" dataKey="ma50" stroke="var(--text-faint)" strokeWidth={1.5} dot={false} isAnimationActive={false} strokeOpacity={0.85} />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
         <div className="mt-1 flex gap-4 font-sans text-[0.72rem] text-[var(--text-faint)]">
           <span><span className="text-[var(--accent)]">■</span> value</span>
-          <span><span className="text-[var(--up)]">■</span> MA{maShortWindow}</span>
-          <span><span className="text-[var(--down)]">■</span> MA{maLongWindow}</span>
+          <span><span className="text-[var(--steel)]">■</span> MA{maShortWindow}</span>
+          <span><span className="text-[var(--text-faint)]">■</span> MA{maLongWindow}</span>
         </div>
       </div>
 
@@ -178,7 +178,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
                 <ReferenceLine y={0} stroke="var(--border)" />
                 <ReferenceLine y={2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
                 <ReferenceLine y={-2} stroke="var(--down)" strokeDasharray="3 3" strokeOpacity={0.5} />
-                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(2) + "σ", "z"]} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(2) + "σ", "z"]} />
                 <Line type="monotone" dataKey="z" stroke={dist ? zTone(series.id, dist.zscore) : "var(--accent)"} strokeWidth={1.5} dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -192,7 +192,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
               <ComposedChart data={chartData} margin={{ top: 2, right: 8, bottom: 0, left: 4 }}>
                 <XAxis dataKey="date" hide />
                 <YAxis tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={false} width={38} domain={[0, "auto"]} />
-                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(4), "σ"]} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 12 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(4), "σ"]} />
                 <Area type="monotone" dataKey="vol" stroke="var(--flat)" strokeWidth={1.25} fill="var(--flat)" fillOpacity={0.18} dot={false} isAnimationActive={false} />
               </ComposedChart>
             </ResponsiveContainer>
@@ -213,7 +213,7 @@ function PositioningBody({ series, history, values }: { series: MacroSeries; his
               <BarChart data={hist} margin={{ top: 2, right: 8, bottom: 0, left: 0 }}>
                 <XAxis dataKey="bucket" hide />
                 <YAxis hide />
-                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} labelFormatter={(b) => `≈ ${Number(b).toFixed(3)}`} formatter={(v) => [v, "count"]} />
+                <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 12 }} labelFormatter={(b) => `≈ ${Number(b).toFixed(3)}`} formatter={(v) => [v, "count"]} />
                 <Bar dataKey="count" radius={[2, 2, 0, 0]}>
                   {hist.map((h, i) => (
                     <Cell key={i} fill={dist && Math.abs(h.bucket - dist.latest) < (dist.max - dist.min) / 14 ? "var(--accent)" : "var(--border)"} />
@@ -320,7 +320,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
               </defs>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} domain={["auto", "auto"]} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), name]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v, name) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), name]} />
               <Area type="monotone" dataKey="value" stroke="var(--text-faint)" strokeWidth={1.25} fill={`url(#q-mom-${series.id})`} dot={false} isAnimationActive={false} />
               <Line type="monotone" dataKey="trend" stroke="var(--accent)" strokeWidth={2.25} dot={false} isAnimationActive={false} />
             </ComposedChart>
@@ -339,7 +339,7 @@ function MomentumBody({ series, history, values, momentumWindow }: { series: Mac
             <BarChart data={paceData} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 4 }}>
               <XAxis type="number" domain={["auto", "auto"]} tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} />
               <YAxis type="category" dataKey="label" tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={90} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12 }} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "avg"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 12 }} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "avg"]} />
               <Bar dataKey="avg" radius={[0, 3, 3, 0]}>
                 <Cell fill="var(--text-faint)" />
                 <Cell fill={paceColor} />
@@ -413,7 +413,7 @@ function AnchorBody({
             <ComposedChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis domain={[yMin, yMax]} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={58} label={{ value: "Value", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "value"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "value"]} />
               <ReferenceArea y1={reference - band} y2={reference + band} fill="var(--accent)" fillOpacity={0.08} />
               <ReferenceLine y={reference} stroke="var(--accent)" strokeDasharray="4 3" label={{ value: `target ${reference}`, position: "insideTopLeft", fill: "var(--accent)", fontSize: 10 }} />
               <Line type="monotone" dataKey="value" stroke="var(--text)" strokeWidth={2} dot={false} isAnimationActive={false} />
@@ -494,7 +494,7 @@ function ThresholdBody({ series, history, values }: { series: MacroSeries; histo
             <BarChart data={chartData} margin={{ top: 4, right: 8, bottom: 22, left: 4 }}>
               <XAxis dataKey="date" tickFormatter={fmtDate} tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} minTickGap={70} label={{ value: "Date", position: "insideBottom", offset: -14, fill: "var(--text-faint)", fontSize: 11 }} />
               <YAxis tick={{ fill: "var(--text-faint)", fontSize: 11 }} tickLine={false} axisLine={false} width={50} label={{ value: "Spread", angle: -90, position: "insideLeft", offset: 10, fill: "var(--text-faint)", fontSize: 11 }} />
-              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 6, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "spread"]} />
+              <Tooltip contentStyle={{ background: "var(--panel-2)", border: "1px solid var(--border)", borderRadius: 3, fontSize: 12.5 }} labelFormatter={(d) => fmtDate(String(d))} formatter={(v) => [v === null || v === undefined ? "-" : Number(v).toFixed(3), "spread"]} />
               <ReferenceLine y={0} stroke="var(--text-faint)" />
               <Bar dataKey="value" radius={[1, 1, 1, 1]}>
                 {chartData.map((d, i) => (
@@ -571,9 +571,9 @@ export default function QuantCard({
           <div className="flex flex-wrap items-center gap-2.5">
             <h3 className="m-0 truncate text-[1.15rem] font-semibold">{series.name}</h3>
             {bias && (
-              <span className="shrink-0 text-[0.72rem] font-semibold uppercase tracking-wide" style={{ color: biasToneColor }}>
-                {bias.tone === "up" ? "bullish" : bias.tone === "down" ? "bearish" : "neutral"}
-                {signal && ` ${signal.score > 0 ? "+" : ""}${signal.score.toFixed(2)}`}
+              <span className="shrink-0 font-mono text-[0.66rem] font-semibold uppercase tracking-[0.08em]" style={{ color: biasToneColor }}>
+                [{bias.tone === "up" ? "BULL" : bias.tone === "down" ? "BEAR" : "FLAT"}
+                {signal && ` ${signal.score > 0 ? "+" : ""}${signal.score.toFixed(2)}`}]
               </span>
             )}
             {!isRelevant && (

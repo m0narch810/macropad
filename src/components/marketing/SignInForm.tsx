@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
+const inputClass =
+  "w-full border border-[var(--border-strong)] bg-[var(--panel)] px-3.5 py-2.5 font-mono text-[0.85rem] text-[var(--text)] outline-none transition-colors duration-150 focus:border-[var(--text-dim)]";
+
 export default function SignInForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -33,55 +36,35 @@ export default function SignInForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm">
-      <div className="eyebrow mb-4">Sign in</div>
-      <h1 className="font-display m-0 text-[2rem] uppercase leading-[0.98] tracking-[-0.02em]">
-        Welcome back.
-      </h1>
+    <div>
+      <div className="partno mb-4">AUTH / SIGN IN</div>
+      <h1 className="font-display m-0 text-[1.7rem] leading-[1.05]">Welcome back.</h1>
 
       <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
         <label className="flex flex-col gap-1.5">
-          <span className="font-sans text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]">Email</span>
-          <input
-            type="email"
-            required
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border px-3.5 py-2.5 font-sans text-[0.9rem] outline-none"
-            style={{ borderColor: "var(--border-strong)", background: "var(--panel)", color: "var(--text)" }}
-          />
+          <span className="partno">&gt; EMAIL</span>
+          <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
         </label>
 
         <label className="flex flex-col gap-1.5">
-          <span className="font-sans text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]">Password</span>
-          <input
-            type="password"
-            required
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border px-3.5 py-2.5 font-sans text-[0.9rem] outline-none"
-            style={{ borderColor: "var(--border-strong)", background: "var(--panel)", color: "var(--text)" }}
-          />
+          <span className="partno">&gt; PASSWORD</span>
+          <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
         </label>
 
         {error && (
-          <p className="m-0 font-sans text-[0.82rem] leading-relaxed" style={{ color: "var(--down)" }}>
-            {error}
+          <p className="m-0 font-mono text-[0.72rem] leading-relaxed" style={{ color: "var(--down)" }}>
+            ERR: {error}
           </p>
         )}
 
-        <button
-          type="submit"
-          disabled={pending}
-          className="mt-2 border border-[var(--accent)] bg-[var(--accent)] py-3 text-center font-sans text-[0.85rem] font-semibold uppercase tracking-wide text-black transition-opacity hover:opacity-85 disabled:opacity-50"
-        >
-          {pending ? "Signing in..." : "Sign in"}
+        <button type="submit" disabled={pending} className="btn btn-primary mt-2 w-full disabled:opacity-50">
+          {pending ? "Signing in…" : "Sign in"}
         </button>
       </form>
 
       <p className="mt-6 font-sans text-[0.85rem] text-[var(--text-dim)]">
         No account yet?{" "}
-        <Link href="/signup" className="font-semibold text-[var(--text)] hover:text-[var(--accent)]">
+        <Link href="/signup" className="font-semibold text-[var(--text)] underline decoration-[var(--border-strong)] underline-offset-4 transition-colors duration-150 hover:decoration-[var(--text-dim)]">
           Start your free trial
         </Link>
       </p>

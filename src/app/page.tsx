@@ -1,32 +1,44 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
-import DecryptText from "@/components/marketing/DecryptText";
+import RegimeStrip from "@/components/marketing/RegimeStrip";
+import AsciiContour from "@/components/fx/AsciiContour";
+import Reveal from "@/components/fx/Reveal";
+import { macroPanels } from "@/lib/macroData";
 
-const COVERAGE_TEASER = ["US Macroeconomics", "Yield Rates", "COT Positioning", "Transmission Check", "Geopolitics", "Volatility"];
+const HIDDEN_PANELS = new Set(["asset-news"]);
+const PANELS = macroPanels.filter((p) => !HIDDEN_PANELS.has(p.id));
+const TOTAL_SERIES = PANELS.reduce((n, p) => n + p.series.length, 0);
 
-const FEATURES = [
+const SOURCES = ["FRED", "CFTC", "US TREASURY", "BLS", "CBOE", "YAHOO FINANCE"];
+
+const MODULES = [
   {
-    n: "01",
-    title: "One screen, no noise",
-    desc: "Every regime signal on a single dense board. No dashboards to build, no charts to hunt through.",
+    tag: "BOARD",
+    title: "Every indicator on one screen",
+    desc: `${PANELS.length} panels — US macro, rates, COT positioning, transmission, geopolitics, volatility — compressed to a single dense board. No dashboards to build, no charts to hunt through.`,
   },
   {
-    n: "02",
-    title: "Per-asset net bias",
-    desc: "Every macro read rolled into a directional bias per ticker - bullish, bearish, or flat, with the reasoning behind it.",
+    tag: "SIGNALS",
+    title: "Scores that fit the indicator",
+    desc: "Each series is scored −1 to +1 by the method its behavior calls for: distance from an anchor (CPI vs target), threshold state (curve inversion), pace (payroll momentum), or positioning extremes (COT). No one-size z-score.",
   },
   {
-    n: "03",
-    title: "Recency-weighted sentiment",
-    desc: "Headlines scored on a finance lexicon and decayed on a half-life - recent news moves the number more than yesterday's.",
+    tag: "NEWS",
+    title: "Sentiment from events, not word-counting",
+    desc: "Headlines are scored against real indicator events and recency-weighted, so the number moves when the macro picture moves — not when a journalist gets excited.",
   },
   {
-    n: "04",
-    title: "Synced automatically",
-    desc: "Refreshes on schedule, every session. Open it and the desk is already current.",
+    tag: "CUSTOM",
+    title: "Your bias, your weights",
+    desc: "Set sign, weight, and threshold per indicator and compose your own net bias per asset. The desk gives you evidence; the call stays yours.",
   },
 ];
+
+function StripSkeleton() {
+  return <div className="h-[280px] border border-[var(--border)] bg-[var(--panel)]" aria-hidden />;
+}
 
 export default function LandingPage() {
   return (
@@ -34,22 +46,20 @@ export default function LandingPage() {
       <MarketingNav />
 
       <main className="flex-1">
-        {/* Hero */}
+        {/* Hero — the regime as terrain */}
         <section className="relative overflow-hidden border-b border-[var(--border)]">
+          <AsciiContour className="pointer-events-none absolute inset-0 h-full w-full" maxAlpha={0.5} />
           <div
             aria-hidden
             className="pointer-events-none absolute inset-0"
             style={{
-              backgroundImage:
-                "linear-gradient(color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--border) 55%, transparent) 1px, transparent 1px)",
-              backgroundSize: "56px 56px",
-              maskImage: "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
-              WebkitMaskImage: "radial-gradient(ellipse 80% 60% at 50% 0%, black 30%, transparent 75%)",
+              background:
+                "radial-gradient(ellipse 70% 60% at 30% 28%, transparent 0%, color-mix(in srgb, var(--bg) 82%, transparent) 60%, var(--bg) 92%)",
             }}
           />
 
-          <div className="relative mx-auto max-w-[1180px] px-5 pb-20 pt-20 sm:px-8 sm:pb-28 sm:pt-28">
-            <div className="eyebrow mb-5 flex items-center gap-1.5">
+          <div className="relative mx-auto max-w-[1120px] px-5 pt-20 sm:px-8 sm:pt-28">
+            <div className="eyebrow mb-6 flex items-center gap-2">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--up)] opacity-60" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--up)]" />
@@ -57,124 +67,142 @@ export default function LandingPage() {
               Live macro desk
             </div>
 
-            <h1 className="font-display m-0 flex max-w-3xl flex-wrap items-center gap-x-4 text-[2.6rem] uppercase leading-[0.98] tracking-[-0.02em] sm:text-[4.2rem]">
-              <span>
-                Read the <span className="glow-accent" style={{ color: "var(--accent)" }}>regime</span>,
-                <br />
-                not the noise.
-              </span>
-              <DecryptText
-                text="[DECRYPTED]"
-                className="self-start font-mono text-[0.62rem] font-bold uppercase tracking-[0.14em] normal-case"
-                style={{ color: "var(--accent)" }}
-              />
+            <h1 className="display-hero m-0 max-w-3xl text-balance text-[2.9rem] sm:text-[4.6rem]">
+              Read the regime, not the noise.
             </h1>
 
             <p className="mt-6 max-w-xl font-sans text-[1.02rem] leading-relaxed text-[var(--text-dim)] sm:text-[1.1rem]">
-              Macropad compresses US macro, rates, positioning, transmission, geopolitics, and vol into one dense
-              board - with a live per-asset bias derived from all of it.
+              Macropad compresses {TOTAL_SERIES} macro series — liquidity, rates, positioning, transmission,
+              geopolitics, volatility — into one dense board, with every read scored and every score sourced.
             </p>
 
-            <div className="mt-9 flex flex-wrap items-center gap-4">
-              <Link
-                href="/signup"
-                className="border border-[var(--accent)] bg-[var(--accent)] px-6 py-3 font-sans text-[0.85rem] font-semibold uppercase tracking-wide text-black transition-opacity hover:opacity-85"
-              >
+            <div className="mt-9 flex flex-wrap items-center gap-3">
+              <Link href="/signup" className="btn btn-primary">
                 Launch the desk
               </Link>
-              <Link
-                href="/pricing"
-                className="border border-[var(--border-strong)] px-6 py-3 font-sans text-[0.85rem] font-semibold uppercase tracking-wide text-[var(--text)] transition-colors hover:border-[var(--text-dim)]"
-              >
-                See pricing
+              <Link href="/coverage" className="btn btn-ghost">
+                See what it tracks
               </Link>
             </div>
 
-            <div className="mt-16 flex flex-wrap gap-x-10 gap-y-4 border-t border-[var(--border)] pt-8">
-              {[
-                ["6", "signal panels"],
-                ["10", "assets scored"],
-                ["24/5", "refresh cycle"],
-                ["1", "screen, zero scrolling"],
-              ].map(([stat, label]) => (
-                <div key={label}>
-                  <div className="font-display text-[1.6rem] leading-none">{stat}</div>
-                  <div className="eyebrow mt-1.5">{label}</div>
-                </div>
+            <div className="partno mt-8">
+              SRC: FRED · CFTC · US TREASURY · CBOE — SYNCED DAILY 13:00 UTC
+            </div>
+
+            <div className="relative mt-14 pb-20 sm:pb-24">
+              <Suspense fallback={<StripSkeleton />}>
+                <RegimeStrip />
+              </Suspense>
+            </div>
+          </div>
+        </section>
+
+        {/* Data provenance strip */}
+        <section className="border-b border-[var(--border)]">
+          <div className="mx-auto flex max-w-[1120px] flex-wrap items-center gap-x-8 gap-y-3 px-5 py-6 sm:px-8">
+            <span className="eyebrow shrink-0">Data sources</span>
+            {SOURCES.map((s) => (
+              <span key={s} className="font-mono text-[0.72rem] tracking-[0.08em] text-[var(--text-faint)]">
+                {s}
+              </span>
+            ))}
+          </div>
+        </section>
+
+        {/* System — spec-sheet rows, not feature cards */}
+        <section id="system" className="border-b border-[var(--border)]">
+          <div className="mx-auto max-w-[1120px] px-5 py-24 sm:px-8">
+            <Reveal>
+              <div className="eyebrow mb-3">System</div>
+              <h2 className="font-display m-0 max-w-xl text-[1.9rem] leading-[1.08] sm:text-[2.5rem]">
+                Built for people who trade the regime, not the headline.
+              </h2>
+            </Reveal>
+
+            <div className="mt-14 flex flex-col">
+              {MODULES.map((m, i) => (
+                <Reveal key={m.tag} delay={i * 60}>
+                  <div className="grid grid-cols-1 gap-x-10 gap-y-2 border-t border-[var(--border)] py-7 sm:grid-cols-[8rem_16rem_1fr]">
+                    <span className="partno pt-1">[{m.tag}]</span>
+                    <h3 className="m-0 text-[1.05rem] font-semibold leading-snug">{m.title}</h3>
+                    <p className="m-0 font-sans text-[0.9rem] leading-relaxed text-[var(--text-dim)]">{m.desc}</p>
+                  </div>
+                </Reveal>
               ))}
             </div>
           </div>
         </section>
 
-        {/* Product / features */}
-        <section id="product" className="border-b border-[var(--border)]">
-          <div className="mx-auto max-w-[1180px] px-5 py-20 sm:px-8">
-            <div className="eyebrow mb-3">Product</div>
-            <h2 className="font-display m-0 max-w-lg text-[1.9rem] uppercase leading-[1.05] tracking-[-0.02em] sm:text-[2.4rem]">
-              Built for people who trade on regime, not headlines.
-            </h2>
-
-            <div className="mt-14 grid grid-cols-1 gap-x-10 gap-y-12 sm:grid-cols-2">
-              {FEATURES.map((f) => (
-                <div key={f.n} className="border-t border-[var(--border)] pt-5">
-                  <div className="eyebrow" style={{ color: "var(--accent)" }}>{f.n}</div>
-                  <h3 className="m-0 mt-2.5 text-[1.15rem] font-semibold">{f.title}</h3>
-                  <p className="m-0 mt-2 font-sans text-[0.9rem] leading-relaxed text-[var(--text-dim)]">{f.desc}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Coverage teaser */}
+        {/* Coverage catalog teaser */}
         <section className="border-b border-[var(--border)] bg-[var(--panel)]">
-          <div className="mx-auto max-w-[1180px] px-5 py-16 sm:px-8">
-            <div className="flex flex-col gap-6 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <div className="eyebrow mb-3">Coverage</div>
-                <h2 className="font-display m-0 max-w-lg text-[1.6rem] uppercase leading-[1.05] tracking-[-0.02em] sm:text-[2rem]">
-                  Six panels. Every regime input that matters.
-                </h2>
+          <div className="mx-auto max-w-[1120px] px-5 py-24 sm:px-8">
+            <Reveal>
+              <div className="flex flex-col gap-6 sm:flex-row sm:items-end sm:justify-between">
+                <div>
+                  <div className="eyebrow mb-3">Coverage</div>
+                  <h2 className="font-display m-0 max-w-lg text-[1.7rem] leading-[1.08] sm:text-[2.1rem]">
+                    {PANELS.length} panels. {TOTAL_SERIES} series. Zero black boxes.
+                  </h2>
+                </div>
+                <Link href="/coverage" className="btn btn-ghost shrink-0 self-start sm:self-auto">
+                  Full catalog
+                </Link>
               </div>
-              <Link
-                href="/coverage"
-                className="shrink-0 border border-[var(--border-strong)] px-5 py-2.5 font-sans text-[0.78rem] font-semibold uppercase tracking-wide text-[var(--text)] transition-colors hover:border-[var(--text-dim)]"
-              >
-                See full coverage
-              </Link>
-            </div>
+            </Reveal>
 
-            <div className="mt-10 flex flex-wrap gap-3">
-              {COVERAGE_TEASER.map((c) => (
-                <span key={c} className="border border-[var(--border)] px-3.5 py-2 font-sans text-[0.78rem] text-[var(--text-dim)]">
-                  {c}
-                </span>
-              ))}
-            </div>
+            <Reveal delay={80}>
+              <div className="mt-10 grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-3">
+                {PANELS.map((p, i) => (
+                  <Link
+                    key={p.id}
+                    href={`/coverage#${p.id}`}
+                    className="group bg-[var(--panel)] px-5 py-4 transition-colors duration-150 hover:bg-[var(--panel-2)]"
+                  >
+                    <div className="flex items-baseline justify-between">
+                      <span className="partno">MP-{String(i + 1).padStart(2, "0")}</span>
+                      <span className="font-mono text-[0.62rem] text-[var(--text-faint)]">
+                        {p.series.length} series
+                      </span>
+                    </div>
+                    <div className="mt-2 font-sans text-[0.95rem] font-semibold text-[var(--text)]">{p.title}</div>
+                    <div className="mt-1 truncate font-sans text-[0.76rem] text-[var(--text-faint)]">
+                      {p.series
+                        .slice(0, 3)
+                        .map((s) => s.name)
+                        .join(" · ")}
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            </Reveal>
           </div>
         </section>
 
         {/* CTA */}
-        <section className="mx-auto max-w-[1180px] px-5 py-24 text-center sm:px-8">
-          <h2 className="font-display m-0 text-[2rem] uppercase leading-[1.05] tracking-[-0.02em] sm:text-[2.8rem]">
-            Stop rebuilding this in a spreadsheet.
-          </h2>
-          <p className="mx-auto mt-4 max-w-md font-sans text-[0.95rem] leading-relaxed text-[var(--text-dim)]">
-            One board, synced daily, zero setup.
-          </p>
-          <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
-            <Link
-              href="/signup"
-              className="border border-[var(--accent)] bg-[var(--accent)] px-6 py-3 font-sans text-[0.85rem] font-semibold uppercase tracking-wide text-black transition-opacity hover:opacity-85"
-            >
-              Launch the desk
-            </Link>
-            <Link
-              href="/pricing"
-              className="border border-[var(--border-strong)] px-6 py-3 font-sans text-[0.85rem] font-semibold uppercase tracking-wide text-[var(--text)] transition-colors hover:border-[var(--text-dim)]"
-            >
-              See pricing
-            </Link>
+        <section className="relative overflow-hidden">
+          <AsciiContour className="pointer-events-none absolute inset-0 h-full w-full" maxAlpha={0.24} />
+          <div
+            aria-hidden
+            className="pointer-events-none absolute inset-0"
+            style={{ background: "radial-gradient(ellipse 55% 60% at 50% 50%, var(--bg) 25%, transparent 100%)" }}
+          />
+          <div className="relative mx-auto max-w-[1120px] px-5 py-28 text-center sm:px-8">
+            <Reveal>
+              <h2 className="font-display m-0 text-[2rem] leading-[1.05] sm:text-[2.8rem]">
+                Stop rebuilding this in a spreadsheet.
+              </h2>
+              <p className="mx-auto mt-4 max-w-md font-sans text-[0.95rem] leading-relaxed text-[var(--text-dim)]">
+                One board, synced daily, zero setup. Free during launch.
+              </p>
+              <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
+                <Link href="/signup" className="btn btn-primary">
+                  Launch the desk
+                </Link>
+                <Link href="/pricing" className="btn btn-ghost">
+                  See pricing
+                </Link>
+              </div>
+            </Reveal>
           </div>
         </section>
       </main>

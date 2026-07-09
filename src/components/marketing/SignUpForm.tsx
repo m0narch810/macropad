@@ -5,6 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
+const inputClass =
+  "w-full border border-[var(--border-strong)] bg-[var(--panel)] px-3.5 py-2.5 font-mono text-[0.85rem] text-[var(--text)] outline-none transition-colors duration-150 focus:border-[var(--text-dim)]";
+
 export default function SignUpForm() {
   const router = useRouter();
 
@@ -41,17 +44,18 @@ export default function SignUpForm() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-sm">
-      <div className="eyebrow mb-4">Free trial</div>
-      <h1 className="font-display m-0 text-[2rem] uppercase leading-[0.98] tracking-[-0.02em]">
-        Launch the desk.
-      </h1>
-      <p className="mt-3 font-sans text-[0.9rem] leading-relaxed text-[var(--text-dim)]">
-        Every feature, no card required. Pro pricing is coming later, you&apos;ll get notice first.
+    <div>
+      <div className="partno mb-4">AUTH / FREE TRIAL</div>
+      <h1 className="font-display m-0 text-[1.7rem] leading-[1.05]">Launch the desk.</h1>
+      <p className="mt-3 font-sans text-[0.88rem] leading-relaxed text-[var(--text-dim)]">
+        Every feature, no card required. Pro pricing comes later — you&apos;ll get notice first.
       </p>
 
       {checkEmail ? (
-        <div className="mt-8 border p-5" style={{ borderColor: "var(--accent)", background: "color-mix(in srgb, var(--accent) 5%, var(--panel))" }}>
+        <div className="mt-8 border border-[var(--border-strong)] bg-[var(--panel-2)] p-5">
+          <div className="partno mb-2" style={{ color: "var(--up)" }}>
+            SENT
+          </div>
           <p className="m-0 font-sans text-[0.88rem] leading-relaxed text-[var(--text)]">
             Check <span className="font-semibold">{email}</span> for a confirmation link to finish setting up
             your account.
@@ -60,50 +64,39 @@ export default function SignUpForm() {
       ) : (
         <form onSubmit={handleSubmit} className="mt-8 flex flex-col gap-4">
           <label className="flex flex-col gap-1.5">
-            <span className="font-sans text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]">Email</span>
-            <input
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-md border px-3.5 py-2.5 font-sans text-[0.9rem] outline-none"
-              style={{ borderColor: "var(--border-strong)", background: "var(--panel)", color: "var(--text)" }}
-            />
+            <span className="partno">&gt; EMAIL</span>
+            <input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} />
           </label>
 
           <label className="flex flex-col gap-1.5">
-            <span className="font-sans text-[0.72rem] font-semibold uppercase tracking-wide text-[var(--text-faint)]">Password</span>
+            <span className="partno">&gt; PASSWORD</span>
             <input
               type="password"
               required
               minLength={6}
+              autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="w-full rounded-md border px-3.5 py-2.5 font-sans text-[0.9rem] outline-none"
-              style={{ borderColor: "var(--border-strong)", background: "var(--panel)", color: "var(--text)" }}
+              className={inputClass}
             />
-            <span className="font-sans text-[0.72rem] text-[var(--text-faint)]">At least 6 characters.</span>
+            <span className="font-mono text-[0.66rem] text-[var(--text-faint)]">min 6 characters</span>
           </label>
 
           {error && (
-            <p className="m-0 font-sans text-[0.82rem] leading-relaxed" style={{ color: "var(--down)" }}>
-              {error}
+            <p className="m-0 font-mono text-[0.72rem] leading-relaxed" style={{ color: "var(--down)" }}>
+              ERR: {error}
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={pending}
-            className="mt-2 border border-[var(--accent)] bg-[var(--accent)] py-3 text-center font-sans text-[0.85rem] font-semibold uppercase tracking-wide text-black transition-opacity hover:opacity-85 disabled:opacity-50"
-          >
-            {pending ? "Creating account..." : "Start free trial"}
+          <button type="submit" disabled={pending} className="btn btn-primary mt-2 w-full disabled:opacity-50">
+            {pending ? "Creating account…" : "Start free trial"}
           </button>
         </form>
       )}
 
       <p className="mt-6 font-sans text-[0.85rem] text-[var(--text-dim)]">
         Already have an account?{" "}
-        <Link href="/signin" className="font-semibold text-[var(--text)] hover:text-[var(--accent)]">
+        <Link href="/signin" className="font-semibold text-[var(--text)] underline decoration-[var(--border-strong)] underline-offset-4 transition-colors duration-150 hover:decoration-[var(--text-dim)]">
           Sign in
         </Link>
       </p>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { MacroPanel } from "@/lib/macroData";
 import type { MarketRow } from "@/lib/getMarkets";
 import SeriesCard from "@/components/SeriesCard";
@@ -16,6 +16,8 @@ import DocumentationPage from "@/components/DocumentationPage";
 import { MARKET_SYMBOLS } from "@/lib/markets";
 import { getSignTone } from "@/lib/bias";
 import SignOutButton from "@/components/marketing/SignOutButton";
+import BrandMark from "@/components/fx/BrandMark";
+import AsciiContour from "@/components/fx/AsciiContour";
 
 const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics", "volatility"]);
 /** Catalogue-only panels - carry data (e.g. per-asset news) but never show up as their own nav entry. */
@@ -25,6 +27,15 @@ const NEWS_ID = "news";
 const CUSTOM_DASHBOARD_ID = "custom-dashboard";
 const CUSTOM_BIAS_ID = "custom-bias";
 const DOCS_ID = "docs";
+
+const SHORT_LABEL: Record<string, string> = {
+  "us-macro": "US MACRO",
+  "yield-rates": "RATES",
+  "cot-positioning": "COT",
+  transmission: "TRANSMISSION",
+  geopolitics: "GEOPOLITICS",
+  volatility: "VOLATILITY",
+};
 
 /** Count of strong reads (|score| >= 0.5 on the -1..1 method scale) per panel, split by good/bad tone. */
 function panelSignals(panel: MacroPanel): { bull: number; bear: number } {
@@ -39,44 +50,94 @@ function panelSignals(panel: MacroPanel): { bull: number; bear: number } {
   return { bull, bear };
 }
 
-function NavButton({
+/** Brand mark + wordmark; the one always-on ambient animation in the chrome. */
+function Wordmark({ compact = false }: { compact?: boolean }) {
+  return (
+    <span className="flex select-none items-center gap-2.5 whitespace-nowrap">
+      <BrandMark size={compact ? 18 : 22} className="shrink-0" />
+      <span className={`font-mono font-bold tracking-[0.2em] text-[var(--text)] ${compact ? "text-[0.8rem]" : "text-[0.88rem]"}`}>
+        MACROPAD<span className="blink-cursor text-[var(--text-faint)]">_</span>
+      </span>
+    </span>
+  );
+}
+
+/** Title text that resolves out of a short character scramble whenever it changes. */
+function Scramble({ text }: { text: string }) {
+  const [txt, setTxt] = useState(text);
+  useEffect(() => {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setTxt(text);
+      return;
+    }
+    const CH = "<>/#%*+=?";
+    let frame = 0;
+    const id = setInterval(() => {
+      frame++;
+      const reveal = Math.floor((frame * text.length) / 12);
+      if (reveal >= text.length) {
+        setTxt(text);
+        clearInterval(id);
+        return;
+      }
+      setTxt(
+        text
+          .split("")
+          .map((c, i) => (c === " " || i <= reveal ? c : CH[Math.floor(Math.random() * CH.length)]))
+          .join("")
+      );
+    }, 28);
+    return () => clearInterval(id);
+  }, [text]);
+  return <>{txt}</>;
+}
+
+/** Live local clock for the statusline; blank until mounted so SSR matches. */
+function Clock() {
+  const [t, setT] = useState("");
+  useEffect(() => {
+    const tick = () => setT(new Date().toLocaleTimeString("en-US", { hour12: false }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="font-mono tabular-nums">{t}</span>;
+}
+
+function NavItem({
+  index,
+  id,
+  label,
   isActive,
   onClick,
-  icon,
-  title,
-  subtitle,
+  bull,
+  bear,
 }: {
+  index: number;
+  id: string;
+  label: string;
   isActive: boolean;
   onClick: () => void;
-  icon: string;
-  title: string;
-  subtitle: React.ReactNode;
+  bull?: number;
+  bear?: number;
 }) {
   return (
     <button
       onClick={onClick}
-      className="group relative flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-left font-sans transition-all duration-150"
-      style={
-        isActive
-          ? {
-              background: "color-mix(in srgb, var(--accent) 11%, transparent)",
-              boxShadow: "inset 0 0 0 1px color-mix(in srgb, var(--accent) 30%, transparent)",
-            }
-          : undefined
-      }
+      className={`group relative flex w-full items-center gap-3 px-4 py-[9px] text-left font-mono text-[0.7rem] tracking-wide transition-colors duration-150 ${
+        isActive ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-dim)]"
+      }`}
     >
-      {isActive && <span className="absolute left-0 top-1/2 h-full w-[3px] -translate-y-1/2" style={{ background: "var(--accent)" }} />}
-      <PanelIcon id={icon} className="shrink-0 transition-colors" style={{ color: isActive ? "var(--accent)" : "var(--text-faint)" }} />
-      <div className="min-w-0 flex-1">
-        <div
-          className={`truncate text-[0.85rem] font-semibold transition-colors ${
-            isActive ? "text-[var(--text)]" : "text-[var(--text-dim)] group-hover:text-[var(--text)]"
-          }`}
-        >
-          {title}
-        </div>
-        <div className="mt-0.5 text-[0.66rem] text-[var(--text-faint)]">{subtitle}</div>
-      </div>
+      {isActive && <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-[var(--text)]" />}
+      <span className="w-4 shrink-0 text-[0.56rem] text-[var(--text-faint)]">{String(index).padStart(2, "0")}</span>
+      <PanelIcon id={id} className="shrink-0" style={{ color: isActive ? "var(--text)" : "var(--text-faint)" }} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      {(bull ?? 0) + (bear ?? 0) > 0 && (
+        <span className="shrink-0 text-[0.6rem]">
+          {bull ? <span className="text-[var(--up)]">{bull}▲</span> : null}
+          {bear ? <span className="text-[var(--down)]">{bear}▼</span> : null}
+        </span>
+      )}
     </button>
   );
 }
@@ -114,17 +175,43 @@ export default function DashboardShell({
     ...MARKET_SYMBOLS.map((m) => allSeries.find((s) => s.id === `asset-news:${m.symbol}`) ?? null),
   ].filter((s): s is NonNullable<typeof s> => s !== null);
   const tickerSeries = visiblePanels.flatMap((p) => p.series).filter((s) => s.id !== "geo:news-feed");
+  const indicatorCount = visiblePanels.reduce((n, p) => n + p.series.filter((s) => s.id !== "geo:news-feed").length, 0);
+  const strongReads = visiblePanels.reduce(
+    (acc, p) => {
+      const s = panelSignals(p);
+      acc.bull += s.bull;
+      acc.bear += s.bear;
+      return acc;
+    },
+    { bull: 0, bear: 0 }
+  );
+
+  // Sequential nav indexing: board, news, panels, customs, docs.
+  let navIndex = -1;
+  const nextIndex = () => ++navIndex;
+
+  const pageTitle = isBoard
+    ? "Board"
+    : isNews
+      ? "News"
+      : isCustomDashboard
+        ? "Custom Dashboard"
+        : isCustomBias
+          ? "Custom Bias"
+          : isDocs
+            ? "Documentation"
+            : active?.title ?? "";
 
   return (
     <div className="flex min-h-screen flex-col">
       <MarketTicker markets={markets} />
       <IndicatorTicker series={tickerSeries} />
 
-      <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel-2)] px-4 py-3 lg:hidden">
+      <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-3 lg:hidden">
         <button
           onClick={() => setNavOpen((v) => !v)}
           aria-label="Toggle navigation"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-[var(--border)] text-[var(--text-dim)]"
+          className="flex h-8 w-8 shrink-0 items-center justify-center border border-[var(--border)] text-[var(--text-dim)]"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
             <path d="M2 4H14" />
@@ -132,26 +219,28 @@ export default function DashboardShell({
             <path d="M2 12H14" />
           </svg>
         </button>
-        <a href="/" className="font-display text-[1.05rem] uppercase leading-none tracking-[-0.01em]">
-          MACRO<span className="glow-accent" style={{ color: "var(--accent)" }}>PAD</span>
+        <a href="/" className="flex items-center">
+          <Wordmark compact />
         </a>
       </div>
 
       {navOpen && (
-        <div className="fixed inset-0 z-30 bg-black/50 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden="true" />
+        <div className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden="true" />
       )}
 
       <div className="flex flex-1">
         <aside
-          className={`fixed inset-y-0 left-0 z-40 flex w-[248px] shrink-0 -translate-x-full flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--panel-2)] transition-transform duration-200 lg:static lg:translate-x-0 ${
+          className={`fixed inset-y-0 left-0 z-40 flex w-[236px] shrink-0 -translate-x-full flex-col overflow-y-auto border-r border-[var(--border)] bg-[var(--panel)] transition-transform duration-200 lg:static lg:translate-x-0 ${
             navOpen ? "translate-x-0" : ""
           }`}
+          style={{ transitionTimingFunction: "var(--ease-out)" }}
         >
-          <div className="hidden px-6 pb-6 pt-8 lg:block">
-            <a href="/" className="font-display block text-[1.9rem] uppercase leading-none tracking-[-0.03em]">
-              MACRO<span className="glow-accent" style={{ color: "var(--accent)" }}>PAD</span>
+          <div className="relative hidden overflow-hidden border-b border-[var(--border)] px-4 pb-5 pt-6 lg:block">
+            <AsciiContour className="pointer-events-none absolute inset-0 h-full w-full" cell={11} maxAlpha={0.14} />
+            <a href="/" className="relative block">
+              <Wordmark />
             </a>
-            <div className="mt-3 flex items-center gap-1.5 eyebrow">
+            <div className="relative mt-3 flex items-center gap-1.5 eyebrow">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--up)] opacity-60" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--up)]" />
@@ -160,78 +249,84 @@ export default function DashboardShell({
             </div>
           </div>
 
-          <nav className="flex flex-1 flex-col gap-1 p-3">
-            <NavButton isActive={isBoard} onClick={() => pickPage(BOARD_ID)} icon="board" title="Board" subtitle="everything, one screen" />
+          <nav className="flex flex-1 flex-col py-3">
+            <NavItem index={nextIndex()} id="board" label="BOARD" isActive={isBoard} onClick={() => pickPage(BOARD_ID)} />
 
-            <div className="my-2 border-t border-[var(--border)]" />
+            <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
-            <NavButton isActive={isNews} onClick={() => pickPage(NEWS_ID)} icon="news" title="News" subtitle="headline sentiment" />
+            <NavItem index={nextIndex()} id="news" label="NEWS" isActive={isNews} onClick={() => pickPage(NEWS_ID)} />
             {visiblePanels.map((panel) => {
               const { bull, bear } = panelSignals(panel);
               return (
-                <NavButton
+                <NavItem
                   key={panel.id}
+                  index={nextIndex()}
+                  id={panel.id}
+                  label={SHORT_LABEL[panel.id] ?? panel.title.toUpperCase()}
                   isActive={panel.id === activeId}
                   onClick={() => pickPage(panel.id)}
-                  icon={panel.id}
-                  title={panel.title}
-                  subtitle={
-                    bull + bear === 0 ? (
-                      "no strong reads"
-                    ) : (
-                      <span className="font-mono">
-                        {bull > 0 && <span className="text-[var(--up)]">{bull} bull</span>}
-                        {bull > 0 && bear > 0 && " · "}
-                        {bear > 0 && <span className="text-[var(--down)]">{bear} bear</span>}
-                        <span> strong</span>
-                      </span>
-                    )
-                  }
+                  bull={bull}
+                  bear={bear}
                 />
               );
             })}
 
-            <div className="my-2 border-t border-[var(--border)]" />
+            <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
-            <NavButton
+            <NavItem
+              index={nextIndex()}
+              id="custom-dashboard"
+              label="CUSTOM DASH"
               isActive={isCustomDashboard}
               onClick={() => pickPage(CUSTOM_DASHBOARD_ID)}
-              icon="custom-dashboard"
-              title="Custom Dashboard"
-              subtitle="pick your own indicators"
             />
-            <NavButton
+            <NavItem
+              index={nextIndex()}
+              id="custom-bias"
+              label="CUSTOM BIAS"
               isActive={isCustomBias}
               onClick={() => pickPage(CUSTOM_BIAS_ID)}
-              icon="custom-bias"
-              title="Custom Bias"
-              subtitle="your own weights + thresholds"
             />
 
-            <div className="my-2 border-t border-[var(--border)]" />
+            <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
-            <NavButton
-              isActive={isDocs}
-              onClick={() => pickPage(DOCS_ID)}
-              icon="docs"
-              title="Documentation"
-              subtitle="how the board works"
-            />
+            <NavItem index={nextIndex()} id="docs" label="DOCS" isActive={isDocs} onClick={() => pickPage(DOCS_ID)} />
           </nav>
 
-          <div className="shrink-0 border-t border-[var(--border)] px-5 py-3.5">
-            <div className="flex items-center justify-end gap-2">
-              <SignOutButton className="font-sans text-[0.68rem] font-semibold uppercase tracking-wide text-[var(--text-faint)] transition-colors hover:text-[var(--text)] disabled:opacity-50" />
+          <div className="shrink-0 border-t border-[var(--border)] px-4 py-3">
+            <div className="flex items-center justify-between font-mono text-[0.62rem] text-[var(--text-faint)]">
+              <Clock />
+              <SignOutButton className="font-mono text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-[var(--text-faint)] transition-colors duration-150 hover:text-[var(--text)] disabled:opacity-50" />
             </div>
           </div>
         </aside>
 
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-14 lg:py-12">
+        <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-12 lg:py-10">
           {isBoard ? (
             <>
-              <header className="mb-4 flex items-baseline gap-3">
-                <h1 className="font-display m-0 text-[1.4rem] uppercase leading-none tracking-[-0.02em]">Board</h1>
-                <span className="eyebrow">{visiblePanels.reduce((n, p) => n + p.series.filter((s) => s.id !== "geo:news-feed").length, 0)} indicators, one screen</span>
+              <header className="relative mb-6 overflow-hidden border border-[var(--border)] bg-[var(--panel)]">
+                <AsciiContour className="pointer-events-none absolute inset-0 h-full w-full" cell={12} maxAlpha={0.2} />
+                <div className="relative flex flex-wrap items-end justify-between gap-4 px-5 pb-4 pt-5">
+                  <div>
+                    <h1 className="font-display m-0 text-[1.6rem] leading-none">
+                      <Scramble text="Board" />
+                    </h1>
+                    <span className="eyebrow mt-1.5 block">{indicatorCount} indicators · one screen</span>
+                  </div>
+                  <div className="flex flex-wrap gap-px bg-[var(--border)] p-px">
+                    {[
+                      ["STRONG BULL", <span key="b" style={{ color: "var(--up)" }}>{strongReads.bull}▲</span>],
+                      ["STRONG BEAR", <span key="s" style={{ color: "var(--down)" }}>{strongReads.bear}▼</span>],
+                      ["INDICATORS", String(indicatorCount)],
+                      ["LAST SYNC", lastUpdated ? new Date(lastUpdated).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"],
+                    ].map(([label, value]) => (
+                      <div key={label as string} className="flex min-w-[6.5rem] flex-col gap-1 bg-[var(--panel)] px-3.5 py-2.5">
+                        <span className="font-mono text-[0.56rem] uppercase tracking-[0.16em] text-[var(--text-faint)]">{label}</span>
+                        <span className="font-mono text-[1rem] font-semibold leading-none text-[var(--text)]">{value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </header>
               <BoardPage panels={visiblePanels} newsSeries={boardNewsSeries} />
             </>
@@ -239,35 +334,28 @@ export default function DashboardShell({
             <>
               <header className="mb-6">
                 <div className="eyebrow mb-2">Headline sentiment</div>
-                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">News</h1>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text="News" />
+                </h1>
               </header>
 
               <div className="mb-6 flex flex-wrap gap-1.5">
-                <button
-                  onClick={() => setNewsAssetTab("")}
-                  className="rounded-full border px-3 py-1.5 font-mono text-[0.72rem] font-semibold uppercase tracking-wide transition-colors"
-                  style={
-                    newsAssetTab === ""
-                      ? { borderColor: "var(--accent)", color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)" }
-                      : { borderColor: "var(--border)", color: "var(--text-faint)" }
-                  }
-                >
-                  General
-                </button>
-                {MARKET_SYMBOLS.map((m) => (
-                  <button
-                    key={m.symbol}
-                    onClick={() => setNewsAssetTab(m.symbol)}
-                    className="rounded-full border px-3 py-1.5 font-mono text-[0.72rem] font-semibold uppercase tracking-wide transition-colors"
-                    style={
-                      newsAssetTab === m.symbol
-                        ? { borderColor: "var(--accent)", color: "var(--accent)", background: "color-mix(in srgb, var(--accent) 10%, transparent)" }
-                        : { borderColor: "var(--border)", color: "var(--text-faint)" }
-                    }
-                  >
-                    {m.label}
-                  </button>
-                ))}
+                {[{ symbol: "", label: "General" }, ...MARKET_SYMBOLS].map((m) => {
+                  const isOn = newsAssetTab === m.symbol;
+                  return (
+                    <button
+                      key={m.symbol || "general"}
+                      onClick={() => setNewsAssetTab(m.symbol)}
+                      className={`border px-3 py-1.5 font-mono text-[0.66rem] font-semibold uppercase tracking-[0.1em] transition-colors duration-150 ${
+                        isOn
+                          ? "border-[var(--text-dim)] bg-[var(--panel-2)] text-[var(--text)]"
+                          : "border-[var(--border)] text-[var(--text-faint)] hover:border-[var(--border-strong)] hover:text-[var(--text-dim)]"
+                      }`}
+                    >
+                      {m.label}
+                    </button>
+                  );
+                })}
               </div>
 
               {activeNewsSeries ? (
@@ -278,32 +366,43 @@ export default function DashboardShell({
             </>
           ) : isCustomDashboard ? (
             <>
-              <header className="mb-10">
+              <header className="mb-8">
                 <div className="eyebrow mb-2">Watchlist</div>
-                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">Custom Dashboard</h1>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text="Custom Dashboard" />
+                </h1>
               </header>
               <CustomDashboardPage panels={panels} markets={markets} />
             </>
           ) : isCustomBias ? (
             <>
-              <header className="mb-10">
+              <header className="mb-8">
                 <div className="eyebrow mb-2">Weights + thresholds</div>
-                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">Custom Bias</h1>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text="Custom Bias" />
+                </h1>
               </header>
               <CustomBiasPage panels={panels} />
             </>
           ) : isDocs ? (
             <>
-              <header className="mb-10">
+              <header className="mb-8">
                 <div className="eyebrow mb-2">Reference</div>
-                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">Documentation</h1>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text="Documentation" />
+                </h1>
               </header>
               <DocumentationPage panels={panels} />
             </>
           ) : active ? (
             <>
-              <header className="mb-10">
-                <h1 className="font-display m-0 text-balance text-[2.6rem] uppercase leading-none tracking-[-0.03em] sm:text-[3.4rem]">{active.title}</h1>
+              <header className="mb-8">
+                <div className="partno mb-2">
+                  MP-{String(visiblePanels.findIndex((p) => p.id === active.id) + 1).padStart(2, "0")}
+                </div>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text={pageTitle} />
+                </h1>
               </header>
 
               <div className={DEEP_PANELS.has(active.id) ? "flex flex-col gap-2" : "grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3"}>

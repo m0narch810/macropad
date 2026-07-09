@@ -1,18 +1,18 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Canvas } from "@react-three/fiber";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { Canvas, useLoader } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { NewsHeadlinePayload } from "@/lib/macroData";
 import { locateHeadline, type GeoPoint } from "@/lib/geoNews";
-import { LAND_DOTS } from "@/lib/landDots";
 
 /*
- * Navigable news globe: a dot-matrix Earth (one Points draw call) with each
- * headline pinned to its inferred location - central-bank capitals, market
- * centers, conflict regions - and colored by sentiment. Drag to rotate,
- * scroll to zoom, hover a particle to read the story.
+ * Navigable news globe: real NASA Earth imagery - a dimly lit day map with
+ * the Black Marble city-lights layer glowing through the night side - with
+ * each headline pinned to its inferred location (central-bank capitals,
+ * market centers, conflict regions) and colored by sentiment. Drag to
+ * rotate, scroll to zoom, hover a particle to read the story.
  */
 
 const R = 2.6;
@@ -21,14 +21,18 @@ function toneColor(label: NewsHeadlinePayload["sentimentLabel"]): string {
   return label === "bullish" ? "#3ecf8e" : label === "bearish" ? "#f0555d" : "#9c9ca3";
 }
 
+/**
+ * Matches three.js SphereGeometry UVs, so lat/lon lands on the right spot
+ * of an equirectangular Earth texture.
+ */
 function latLonToVec3(lat: number, lon: number, radius: number): [number, number, number] {
   const phi = ((90 - lat) * Math.PI) / 180;
   const theta = ((lon + 180) * Math.PI) / 180;
   return [-radius * Math.sin(phi) * Math.cos(theta), radius * Math.cos(phi), radius * Math.sin(phi) * Math.sin(theta)];
 }
 
-/** Soft round-dot texture so points render as glows, not hard squares. */
-function makeDotTexture(hardness: number): THREE.Texture {
+/** Soft round glow texture for story particles. */
+function makeGlowTexture(): THREE.Texture {
   const size = 64;
   const c = document.createElement("canvas");
   c.width = size;
@@ -36,7 +40,7 @@ function makeDotTexture(hardness: number): THREE.Texture {
   const ctx = c.getContext("2d")!;
   const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
   g.addColorStop(0, "rgba(255,255,255,1)");
-  g.addColorStop(hardness, "rgba(255,255,255,0.85)");
+  g.addColorStop(0.12, "rgba(255,255,255,0.85)");
   g.addColorStop(1, "rgba(255,255,255,0)");
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, size, size);
@@ -45,47 +49,24 @@ function makeDotTexture(hardness: number): THREE.Texture {
   return tex;
 }
 
-function hash01(i: number): number {
-  const x = Math.sin(i * 78.233) * 43758.5453;
-  return x - Math.floor(x);
-}
-
-function LandDots() {
-  const texture = useMemo(() => makeDotTexture(0.4), []);
-  const geometry = useMemo(() => {
-    const n = LAND_DOTS.length / 2;
-    const positions = new Float32Array(n * 3);
-    const colors = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) {
-      const [x, y, z] = latLonToVec3(LAND_DOTS[i * 2], LAND_DOTS[i * 2 + 1], R);
-      positions[i * 3] = x;
-      positions[i * 3 + 1] = y;
-      positions[i * 3 + 2] = z;
-      // Uneven brightness so the landmass reads as texture, not a stencil.
-      const b = 0.45 + hash01(i) * 0.55;
-      colors[i * 3] = b * 0.94;
-      colors[i * 3 + 1] = b * 0.95;
-      colors[i * 3 + 2] = b;
-    }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    geo.setAttribute("color", new THREE.BufferAttribute(colors, 3));
-    return geo;
-  }, []);
-
+function Earth() {
+  const [day, lights] = useLoader(THREE.TextureLoader, ["/textures/earth_day.jpg", "/textures/earth_lights.png"]);
+  day.colorSpace = THREE.SRGBColorSpace;
+  lights.colorSpace = THREE.SRGBColorSpace;
+  day.anisotropy = 4;
+  lights.anisotropy = 4;
   return (
-    <points geometry={geometry}>
-      <pointsMaterial
-        map={texture}
-        vertexColors
-        size={0.075}
-        sizeAttenuation
-        transparent
-        opacity={0.85}
-        depthWrite={false}
-        alphaTest={0.05}
+    <mesh>
+      <sphereGeometry args={[R, 64, 64]} />
+      <meshStandardMaterial
+        map={day}
+        emissiveMap={lights}
+        emissive="#ffd9a0"
+        emissiveIntensity={1.15}
+        roughness={1}
+        metalness={0}
       />
-    </points>
+    </mesh>
   );
 }
 
@@ -98,11 +79,11 @@ function Atmosphere() {
     c.height = size;
     const ctx = c.getContext("2d")!;
     const g = ctx.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-    g.addColorStop(0.0, "rgba(255,255,255,0)");
-    g.addColorStop(0.64, "rgba(255,255,255,0)");
-    g.addColorStop(0.72, "rgba(190,205,255,0.16)");
-    g.addColorStop(0.78, "rgba(190,205,255,0.05)");
-    g.addColorStop(1.0, "rgba(255,255,255,0)");
+    g.addColorStop(0.0, "rgba(120,166,240,0)");
+    g.addColorStop(0.64, "rgba(120,166,240,0)");
+    g.addColorStop(0.72, "rgba(140,180,255,0.22)");
+    g.addColorStop(0.8, "rgba(140,180,255,0.06)");
+    g.addColorStop(1.0, "rgba(140,180,255,0)");
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, size, size);
     const tex = new THREE.CanvasTexture(c);
@@ -114,26 +95,6 @@ function Atmosphere() {
     <sprite scale={[R * 2.9, R * 2.9, 1]} renderOrder={-1}>
       <spriteMaterial map={texture} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
     </sprite>
-  );
-}
-
-/** Occludes far-side land dots and gives the sphere a barely-there body. */
-function Body() {
-  return (
-    <mesh>
-      <sphereGeometry args={[R - 0.04, 48, 48]} />
-      <meshBasicMaterial color="#070708" />
-    </mesh>
-  );
-}
-
-function Graticule() {
-  const geo = useMemo(() => new THREE.SphereGeometry(R - 0.03, 24, 16), []);
-  return (
-    <lineSegments>
-      <edgesGeometry args={[geo]} />
-      <lineBasicMaterial color="#f4f4f5" transparent opacity={0.045} />
-    </lineSegments>
   );
 }
 
@@ -187,7 +148,7 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
   const [pinnedIdx, setPinnedIdx] = useState<number | null>(null);
   const [inView, setInView] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
-  const glowTexture = useMemo(() => (typeof document !== "undefined" ? makeDotTexture(0.12) : null), []);
+  const glowTexture = useMemo(() => (typeof document !== "undefined" ? makeGlowTexture() : null), []);
 
   useEffect(() => {
     const el = containerRef.current;
@@ -234,9 +195,11 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
         >
           {inView ? (
             <Canvas camera={{ position: [2.85, 3.1, 3.4], fov: 42 }} dpr={[1, 1.6]}>
-              <Body />
-              <Graticule />
-              <LandDots />
+              <ambientLight intensity={0.32} />
+              <directionalLight position={[4, 2.5, 4]} intensity={0.85} color="#dfe8ff" />
+              <Suspense fallback={null}>
+                <Earth />
+              </Suspense>
               <Atmosphere />
               {glowTexture &&
                 points.map((p, i) => (

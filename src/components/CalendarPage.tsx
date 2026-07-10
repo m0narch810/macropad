@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import type { MacroPanel } from "@/lib/macroData";
 import { getCalendarEvents } from "@/lib/econCalendar";
+import { getSignTone } from "@/lib/bias";
 
 function daysUntil(dateStr: string): number {
   const today = new Date();
@@ -30,7 +31,31 @@ const IMPORTANCE_STYLE: Record<"high" | "medium" | "low", { border: string; weig
 
 type EventWithDays = ReturnType<typeof getCalendarEvents>[number] & { days: number };
 
-function EventRow({ e, currentValue }: { e: EventWithDays; currentValue: string | null }) {
+/**
+ * No consensus-estimate source is wired up (FRED doesn't carry one), so this
+ * reads "beat/miss vs the prior release" instead of "vs expected" - same
+ * bullish/bearish question, different baseline. Tone comes straight from
+ * bias.ts's existing high/low direction table for the linked indicator, so
+ * e.g. unemployment printing above its prior reading colors bearish even
+ * though "beat" reads positive - the same inversion getSignTone already
+ * applies everywhere else on the board.
+ */
+function SurpriseBadge({ e }: { e: EventWithDays }) {
+  if (e.actual == null || e.previous == null) return null;
+  const delta = e.actual - e.previous;
+  const pctChange = e.previous !== 0 ? (delta / Math.abs(e.previous)) * 100 : null;
+  const tone = getSignTone(e.relatedIndicatorId, delta);
+  const color = tone === "up" ? "var(--up)" : tone === "down" ? "var(--down)" : "var(--text-faint)";
+  const arrow = delta > 0 ? "▲" : delta < 0 ? "▼" : "●";
+  const readLabel = tone === "up" ? "bullish" : tone === "down" ? "bearish" : "in line";
+  return (
+    <div className="truncate font-mono text-[0.64rem]" style={{ color }}>
+      {arrow} {pctChange === null ? "" : `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}% `}vs prior · {readLabel}
+    </div>
+  );
+}
+
+function EventRow({ e, currentValue, showSurprise }: { e: EventWithDays; currentValue: string | null; showSurprise: boolean }) {
   const style = IMPORTANCE_STYLE[e.importance];
   return (
     <div className="flex items-center gap-3 rounded-md border-l-[3px] bg-[var(--panel)] py-2.5 pl-3 pr-4" style={{ borderLeftColor: style.border }}>
@@ -39,7 +64,7 @@ function EventRow({ e, currentValue }: { e: EventWithDays; currentValue: string 
       </div>
       <div className="min-w-0 flex-1">
         <div className={`truncate font-sans text-[0.8rem] ${style.weight}`}>{e.label}</div>
-        {currentValue && <div className="truncate font-mono text-[0.64rem] text-[var(--text-faint)]">Currently: {currentValue}</div>}
+        {showSurprise ? <SurpriseBadge e={e} /> : currentValue && <div className="truncate font-mono text-[0.64rem] text-[var(--text-faint)]">Currently: {currentValue}</div>}
       </div>
       {style.tag && (
         <span className="shrink-0 rounded-full border px-1.5 py-0.5 font-mono text-[0.56rem] font-bold tracking-wide text-[var(--accent)]" style={{ borderColor: "var(--accent)" }}>
@@ -51,7 +76,7 @@ function EventRow({ e, currentValue }: { e: EventWithDays; currentValue: string 
   );
 }
 
-function EventList({ events, valueFor }: { events: EventWithDays[]; valueFor: (id: string) => string | null }) {
+function EventList({ events, valueFor, showSurprise = false }: { events: EventWithDays[]; valueFor: (id: string) => string | null; showSurprise?: boolean }) {
   let lastMonth = "";
   return (
     <div className="flex flex-col gap-2">
@@ -64,7 +89,7 @@ function EventList({ events, valueFor }: { events: EventWithDays[]; valueFor: (i
             {showMonth && (
               <div className="mb-2 mt-4 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-[var(--text-faint)] first:mt-0">{month}</div>
             )}
-            <EventRow e={e} currentValue={valueFor(e.relatedIndicatorId)} />
+            <EventRow e={e} currentValue={valueFor(e.relatedIndicatorId)} showSurprise={showSurprise} />
           </div>
         );
       })}
@@ -103,7 +128,7 @@ export default function CalendarPage({ panels }: { panels: MacroPanel[] }) {
         {done.length === 0 ? (
           <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No recent releases yet.</p>
         ) : (
-          <EventList events={done} valueFor={valueFor} />
+          <EventList events={done} valueFor={valueFor} showSurprise />
         )}
       </div>
     </div>

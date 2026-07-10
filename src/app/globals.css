@@ -19,7 +19,9 @@
   --text: #f4f4f5;
   --text-dim: #9c9ca3;
   --text-faint: #5d5d64;
-  --accent: #f4f4f5;
+  /* "Mono" default - the ink itself, no hue. A user-picked accent preset
+     (data-accent, below) overrides this with a fixed color regardless of theme. */
+  --accent: var(--text);
   --up: #3ecf8e;
   --down: #f0555d;
   --amber: #cfa35a;
@@ -30,6 +32,45 @@
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --ease-reveal: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/*
+ * Light mode - same monochrome-futurist structure inverted, not a separate
+ * design. Opt-in via the theme switcher; dark stays the default look.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+  --bg: #f6f6f7;
+  --panel: #ffffff;
+  --panel-2: #eff0f1;
+  --panel-3: #e6e7e9;
+  --border: #dfe0e3;
+  --border-strong: #c6c8cc;
+  --text: #0b0b0c;
+  --text-dim: #55555c;
+  --text-faint: #8b8b93;
+  --up: #1a8f5c;
+  --down: #d0424b;
+  --amber: #9c7530;
+  --steel: #3f6fc9;
+  --flat: #6b6b73;
+}
+
+/* Accent presets - retint interactive/active ink only; surfaces stay monochrome. */
+:root[data-accent="green"] {
+  --accent: #3ecf8e;
+}
+:root[data-accent="blue"] {
+  --accent: #5b9bf7;
+}
+:root[data-accent="amber"] {
+  --accent: #cfa35a;
+}
+:root[data-accent="purple"] {
+  --accent: #a679f0;
+}
+:root[data-accent="red"] {
+  --accent: #f0555d;
 }
 
 @theme inline {

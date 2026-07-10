@@ -1,8 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { MacroPanel } from "@/lib/macroData";
-import { computeMacroBias, TIMEFRAMES, DEFAULT_TIMEFRAME, ASSET_SCOPES, DEFAULT_ASSET_SCOPE } from "@/lib/macroBias";
+import {
+  computeMacroBias,
+  TIMEFRAMES,
+  DEFAULT_TIMEFRAME,
+  ASSET_SCOPES,
+  DEFAULT_ASSET_SCOPE,
+  type TimeframeDef,
+} from "@/lib/macroBias";
 import { toneColor, verdictLabel, Bar, SegmentedControl, PillarCard } from "@/components/BiasView";
 
 function earliestDate(panels: MacroPanel[]): string {
@@ -27,8 +34,42 @@ function latestDate(panels: MacroPanel[]): string {
   return max ?? new Date().toISOString().slice(0, 10);
 }
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Raw series history often reaches back decades further than the composite
+ * can actually score (positioning/credit/liquidity series only start
+ * mid-2000s), so the earliest raw date is not a usable replay floor -
+ * scrubbing there just lands on "Insufficient data". Binary-search for the
+ * first date the *current* timeframe/scope combo actually resolves a score
+ * for, and use that as the slider's true minimum. Assumes monotonicity
+ * (once enough series have history, they don't lose it going forward),
+ * which holds for accumulating time series.
+ */
+function findEarliestUsableDate(
+  panels: MacroPanel[],
+  rawMinDate: string,
+  maxDate: string,
+  options: { historyDays: number | null; indicatorWeights: Record<string, number>; horizon: TimeframeDef["horizon"] }
+): string {
+  const usable = (date: string) => computeMacroBias(panels, { ...options, asOfDate: date }).overall.score !== null;
+
+  let lo = new Date(rawMinDate).getTime();
+  let hi = new Date(maxDate).getTime();
+  if (!usable(maxDate)) return rawMinDate; // nothing resolves anywhere - don't hide the whole range
+  if (usable(rawMinDate)) return rawMinDate;
+
+  while (hi - lo > DAY_MS) {
+    const mid = lo + Math.floor((hi - lo) / (2 * DAY_MS)) * DAY_MS;
+    const midDate = new Date(mid).toISOString().slice(0, 10);
+    if (usable(midDate)) hi = mid;
+    else lo = mid;
+  }
+  return new Date(hi).toISOString().slice(0, 10);
+}
+
 export default function ReplayPage({ panels }: { panels: MacroPanel[] }) {
-  const minDate = useMemo(() => earliestDate(panels), [panels]);
+  const rawMinDate = useMemo(() => earliestDate(panels), [panels]);
   const maxDate = useMemo(() => latestDate(panels), [panels]);
 
   const [timeframeId, setTimeframeId] = useState(DEFAULT_TIMEFRAME);
@@ -37,6 +78,20 @@ export default function ReplayPage({ panels }: { panels: MacroPanel[] }) {
 
   const scope = ASSET_SCOPES.find((s) => s.id === assetScopeId) ?? ASSET_SCOPES[0];
   const timeframe = TIMEFRAMES.find((t) => t.id === timeframeId) ?? TIMEFRAMES[TIMEFRAMES.length - 1];
+
+  const minDate = useMemo(
+    () =>
+      findEarliestUsableDate(panels, rawMinDate, maxDate, {
+        historyDays: timeframe.days,
+        indicatorWeights: scope.indicatorWeights,
+        horizon: timeframe.horizon,
+      }),
+    [panels, rawMinDate, maxDate, timeframe.days, timeframe.horizon, scope.indicatorWeights]
+  );
+
+  useEffect(() => {
+    if (asOfDate < minDate) setAsOfDate(minDate);
+  }, [asOfDate, minDate]);
 
   const bias = useMemo(
     () =>

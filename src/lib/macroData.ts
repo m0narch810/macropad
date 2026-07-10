@@ -37,6 +37,10 @@ export interface CalendarEventPayload {
   label: string;
   relatedIndicatorId: string;
   importance: "high" | "medium" | "low";
+  /** The linked series' value at/just after this release date, read back from its own history - null if not yet released or the series has no history. */
+  actual?: number | null;
+  /** The value from the prior release, for a beat/miss read (no consensus-estimate source is wired up yet, so this is the baseline). */
+  previous?: number | null;
 }
 
 /** Row-specific extra data too structured for extra_stats: scored headlines, daily price bars. */

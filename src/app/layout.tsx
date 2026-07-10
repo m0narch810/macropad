@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import TerrainBackdrop from "@/components/fx/TerrainBackdrop";
+import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -30,7 +31,10 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${jetMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${geistSans.variable} ${jetMono.variable} h-full antialiased`} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col bg-[var(--bg)] text-[var(--text)]">
         <TerrainBackdrop />
         <div className="relative flex min-h-full flex-1 flex-col">{children}</div>

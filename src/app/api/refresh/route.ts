@@ -1669,8 +1669,30 @@ export async function GET(req: NextRequest) {
     const releaseDateEntries = await Promise.all(
       RELEASES.map(async (r) => [r, await fetchReleaseDates(r.fredReleaseId, fredKey, 30)] as const)
     );
+    // Beat/miss read for past releases: no consensus-estimate source is wired
+    // up (FRED doesn't carry one), so "actual" and "previous" are read back
+    // from the linked series' own history - the print that was newest as of
+    // the release date, and the one before it. History is chronological
+    // (oldest -> newest) everywhere else in this file, same assumption here.
+    const historyByIndicatorId = new Map(rows.map((r) => [r.id, r.history ?? null]));
+    function actualAndPreviousAt(indicatorId: string, releaseDate: string): { actual: number | null; previous: number | null } {
+      const history = historyByIndicatorId.get(indicatorId);
+      if (!history || history.length === 0) return { actual: null, previous: null };
+      const cutoff = new Date(releaseDate + "T23:59:59").getTime();
+      for (let i = history.length - 1; i >= 0; i--) {
+        if (new Date(history[i].date).getTime() <= cutoff) {
+          return { actual: history[i].value, previous: i > 0 ? history[i - 1].value : null };
+        }
+      }
+      return { actual: null, previous: null };
+    }
     const calendarEvents: CalendarEventPayload[] = releaseDateEntries
-      .flatMap(([r, dates]) => dates.map((date) => ({ date, releaseId: r.id, label: r.label, relatedIndicatorId: r.relatedIndicatorId, importance: r.importance })))
+      .flatMap(([r, dates]) =>
+        dates.map((date) => {
+          const { actual, previous } = actualAndPreviousAt(r.relatedIndicatorId, date);
+          return { date, releaseId: r.id, label: r.label, relatedIndicatorId: r.relatedIndicatorId, importance: r.importance, actual, previous };
+        })
+      )
       .sort((a, b) => a.date.localeCompare(b.date));
     rows.push({
       id: "calendar:econ-events",

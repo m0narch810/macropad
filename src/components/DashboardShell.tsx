@@ -20,6 +20,8 @@ import { getSignTone } from "@/lib/bias";
 import SignOutButton from "@/components/marketing/SignOutButton";
 import BrandMark from "@/components/fx/BrandMark";
 import AsciiContour from "@/components/fx/AsciiContour";
+import SettingsPanel from "@/components/SettingsPanel";
+import { loadNavOrder, saveNavOrder, moveItem, type NavOrderState } from "@/lib/navOrder";
 
 const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics", "volatility"]);
 /** Catalogue-only panels - carry data (e.g. per-asset news) but never show up as their own nav entry. */
@@ -116,6 +118,7 @@ function NavItem({
   onClick,
   bull,
   bear,
+  reorder,
 }: {
   index: number;
   id: string;
@@ -124,25 +127,47 @@ function NavItem({
   onClick: () => void;
   bull?: number;
   bear?: number;
+  reorder?: { canMoveUp: boolean; canMoveDown: boolean; onMoveUp: () => void; onMoveDown: () => void };
 }) {
   return (
-    <button
-      onClick={onClick}
+    <div
       className={`group relative flex w-full items-center gap-3 px-4 py-[9px] text-left font-mono text-[0.7rem] tracking-wide transition-colors duration-150 ${
-        isActive ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-dim)]"
-      }`}
+        isActive && !reorder ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--text-faint)]"
+      } ${reorder ? "" : "hover:text-[var(--text-dim)]"}`}
     >
-      {isActive && <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-[var(--text)]" />}
-      <span className="w-4 shrink-0 text-[0.56rem] text-[var(--text-faint)]">{String(index).padStart(2, "0")}</span>
-      <PanelIcon id={id} className="shrink-0" style={{ color: isActive ? "var(--text)" : "var(--text-faint)" }} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      {(bull ?? 0) + (bear ?? 0) > 0 && (
+      {isActive && !reorder && <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-[var(--text)]" />}
+      <button onClick={onClick} disabled={!!reorder} className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default">
+        <span className="w-4 shrink-0 text-[0.56rem] text-[var(--text-faint)]">{String(index).padStart(2, "0")}</span>
+        <PanelIcon id={id} className="shrink-0" style={{ color: isActive && !reorder ? "var(--text)" : "var(--text-faint)" }} />
+        <span className="min-w-0 flex-1 truncate">{label}</span>
+      </button>
+      {!reorder && (bull ?? 0) + (bear ?? 0) > 0 && (
         <span className="shrink-0 text-[0.6rem]">
           {bull ? <span className="text-[var(--up)]">{bull}▲</span> : null}
           {bear ? <span className="text-[var(--down)]">{bear}▼</span> : null}
         </span>
       )}
-    </button>
+      {reorder && (
+        <span className="flex shrink-0 gap-1">
+          <button
+            onClick={reorder.onMoveUp}
+            disabled={!reorder.canMoveUp}
+            aria-label={`Move ${label} up`}
+            className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-faint)] transition-colors hover:text-[var(--text)] disabled:opacity-25 disabled:hover:text-[var(--text-faint)]"
+          >
+            ▲
+          </button>
+          <button
+            onClick={reorder.onMoveDown}
+            disabled={!reorder.canMoveDown}
+            aria-label={`Move ${label} down`}
+            className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-faint)] transition-colors hover:text-[var(--text)] disabled:opacity-25 disabled:hover:text-[var(--text-faint)]"
+          >
+            ▼
+          </button>
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -164,6 +189,29 @@ export default function DashboardShell({
     setActiveId(id);
     setNavOpen(false);
   };
+
+  // Reorderable nav: Board and Docs stay pinned as structural anchors; News +
+  // indicator panels (group A) and the analysis pages (group B) each have
+  // their own persisted order so a reorder never mixes the two families.
+  const defaultGroupA = [NEWS_ID, ...visiblePanels.map((p) => p.id)];
+  const defaultGroupB = [MACRO_BIAS_ID, REPLAY_ID, FINGERPRINT_ID, CALENDAR_ID];
+  const [navOrder, setNavOrder] = useState<NavOrderState>({ a: defaultGroupA, b: defaultGroupB });
+  const [customizingNav, setCustomizingNav] = useState(false);
+
+  useEffect(() => {
+    setNavOrder(loadNavOrder(defaultGroupA, defaultGroupB));
+    // Only reconcile against the default shape once on mount - re-running on
+    // every panels re-render would fight a user's in-progress reorder.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function reorderGroup(group: "a" | "b", id: string, dir: -1 | 1) {
+    setNavOrder((prev) => {
+      const next = { ...prev, [group]: moveItem(prev[group], id, dir) };
+      saveNavOrder(next);
+      return next;
+    });
+  }
   const isBoard = activeId === BOARD_ID;
   const isNews = activeId === NEWS_ID;
   const isMacroBias = activeId === MACRO_BIAS_ID;
@@ -195,6 +243,38 @@ export default function DashboardShell({
   // Sequential nav indexing: board, news, panels, customs, docs.
   let navIndex = -1;
   const nextIndex = () => ++navIndex;
+
+  interface NavEntryMeta {
+    id: string;
+    iconId: string;
+    label: string;
+    onClick: () => void;
+    bull?: number;
+    bear?: number;
+  }
+  function resolveGroupAEntry(id: string): NavEntryMeta | null {
+    if (id === NEWS_ID) return { id: NEWS_ID, iconId: "news", label: "NEWS", onClick: () => pickPage(NEWS_ID) };
+    const panel = visiblePanels.find((p) => p.id === id);
+    if (!panel) return null;
+    const { bull, bear } = panelSignals(panel);
+    return { id: panel.id, iconId: panel.id, label: SHORT_LABEL[panel.id] ?? panel.title.toUpperCase(), onClick: () => pickPage(panel.id), bull, bear };
+  }
+  function resolveGroupBEntry(id: string): NavEntryMeta | null {
+    switch (id) {
+      case MACRO_BIAS_ID:
+        return { id, iconId: "macro-bias", label: "MACRO BIAS", onClick: () => pickPage(MACRO_BIAS_ID) };
+      case REPLAY_ID:
+        return { id, iconId: "replay", label: "REPLAY", onClick: () => pickPage(REPLAY_ID) };
+      case FINGERPRINT_ID:
+        return { id, iconId: "fingerprint", label: "FINGERPRINT", onClick: () => pickPage(FINGERPRINT_ID) };
+      case CALENDAR_ID:
+        return { id, iconId: "calendar", label: "CALENDAR", onClick: () => pickPage(CALENDAR_ID) };
+      default:
+        return null;
+    }
+  }
+  const groupAEntries = navOrder.a.map(resolveGroupAEntry).filter((e): e is NavEntryMeta => e !== null);
+  const groupBEntries = navOrder.b.map(resolveGroupBEntry).filter((e): e is NavEntryMeta => e !== null);
 
   const pageTitle = isBoard
     ? "Board"
@@ -260,54 +340,83 @@ export default function DashboardShell({
           </div>
 
           <nav className="flex flex-1 flex-col py-3">
+            {customizingNav && (
+              <div className="mx-4 mb-2 rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2.5 py-1.5 font-sans text-[0.66rem] text-[var(--text-dim)]">
+                Drag order with the arrows - Board and Docs stay pinned.
+              </div>
+            )}
             <NavItem index={nextIndex()} id="board" label="BOARD" isActive={isBoard} onClick={() => pickPage(BOARD_ID)} />
 
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
-            <NavItem index={nextIndex()} id="news" label="NEWS" isActive={isNews} onClick={() => pickPage(NEWS_ID)} />
-            {visiblePanels.map((panel) => {
-              const { bull, bear } = panelSignals(panel);
-              return (
-                <NavItem
-                  key={panel.id}
-                  index={nextIndex()}
-                  id={panel.id}
-                  label={SHORT_LABEL[panel.id] ?? panel.title.toUpperCase()}
-                  isActive={panel.id === activeId}
-                  onClick={() => pickPage(panel.id)}
-                  bull={bull}
-                  bear={bear}
-                />
-              );
-            })}
+            {groupAEntries.map((entry, i) => (
+              <NavItem
+                key={entry.id}
+                index={nextIndex()}
+                id={entry.iconId}
+                label={entry.label}
+                isActive={entry.id === activeId}
+                onClick={entry.onClick}
+                bull={entry.bull}
+                bear={entry.bear}
+                reorder={
+                  customizingNav
+                    ? {
+                        canMoveUp: i > 0,
+                        canMoveDown: i < groupAEntries.length - 1,
+                        onMoveUp: () => reorderGroup("a", entry.id, -1),
+                        onMoveDown: () => reorderGroup("a", entry.id, 1),
+                      }
+                    : undefined
+                }
+              />
+            ))}
 
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
-            <NavItem
-              index={nextIndex()}
-              id="macro-bias"
-              label="MACRO BIAS"
-              isActive={isMacroBias}
-              onClick={() => pickPage(MACRO_BIAS_ID)}
-            />
-            <NavItem index={nextIndex()} id="replay" label="REPLAY" isActive={isReplay} onClick={() => pickPage(REPLAY_ID)} />
-            <NavItem
-              index={nextIndex()}
-              id="fingerprint"
-              label="FINGERPRINT"
-              isActive={isFingerprint}
-              onClick={() => pickPage(FINGERPRINT_ID)}
-            />
-            <NavItem index={nextIndex()} id="calendar" label="CALENDAR" isActive={isCalendar} onClick={() => pickPage(CALENDAR_ID)} />
+            {groupBEntries.map((entry, i) => (
+              <NavItem
+                key={entry.id}
+                index={nextIndex()}
+                id={entry.iconId}
+                label={entry.label}
+                isActive={entry.id === activeId}
+                onClick={entry.onClick}
+                reorder={
+                  customizingNav
+                    ? {
+                        canMoveUp: i > 0,
+                        canMoveDown: i < groupBEntries.length - 1,
+                        onMoveUp: () => reorderGroup("b", entry.id, -1),
+                        onMoveDown: () => reorderGroup("b", entry.id, 1),
+                      }
+                    : undefined
+                }
+              />
+            ))}
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
             <NavItem index={nextIndex()} id="docs" label="DOCS" isActive={isDocs} onClick={() => pickPage(DOCS_ID)} />
+
+            {customizingNav && (
+              <div className="mx-4 mt-2">
+                <button
+                  onClick={() => setCustomizingNav(false)}
+                  className="w-full rounded-md border border-[var(--border-strong)] px-2.5 py-1.5 font-mono text-[0.66rem] font-semibold text-[var(--text)] transition-colors hover:bg-[var(--panel-2)]"
+                >
+                  Done reordering
+                </button>
+              </div>
+            )}
           </nav>
 
           <div className="shrink-0 border-t border-[var(--border)] px-4 py-3">
             <div className="flex items-center justify-between font-mono text-[0.62rem] text-[var(--text-faint)]">
               <Clock />
-              <SignOutButton className="font-mono text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-[var(--text-faint)] transition-colors duration-150 hover:text-[var(--text)] disabled:opacity-50" />
+              <div className="flex items-center gap-3">
+                <SettingsPanel onCustomizeTabs={() => setCustomizingNav(true)} />
+                <SignOutButton className="font-mono text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-[var(--text-faint)] transition-colors duration-150 hover:text-[var(--text)] disabled:opacity-50" />
+              </div>
             </div>
           </div>
         </aside>

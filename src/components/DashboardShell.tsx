@@ -21,7 +21,7 @@ import SignOutButton from "@/components/marketing/SignOutButton";
 import BrandMark from "@/components/fx/BrandMark";
 import AsciiContour from "@/components/fx/AsciiContour";
 import SettingsPanel from "@/components/SettingsPanel";
-import { loadNavOrder, saveNavOrder, moveItem, type NavOrderState } from "@/lib/navOrder";
+import { loadNavOrder, saveNavOrder, moveToPosition, type NavOrderState } from "@/lib/navOrder";
 
 const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics", "volatility"]);
 /** Catalogue-only panels - carry data (e.g. per-asset news) but never show up as their own nav entry. */
@@ -110,6 +110,14 @@ function Clock() {
   return <span className="font-mono tabular-nums">{t}</span>;
 }
 
+interface NavDrag {
+  isDragging: boolean;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+}
+
 function NavItem({
   index,
   id,
@@ -118,7 +126,7 @@ function NavItem({
   onClick,
   bull,
   bear,
-  reorder,
+  drag,
 }: {
   index: number;
   id: string;
@@ -127,44 +135,31 @@ function NavItem({
   onClick: () => void;
   bull?: number;
   bear?: number;
-  reorder?: { canMoveUp: boolean; canMoveDown: boolean; onMoveUp: () => void; onMoveDown: () => void };
+  /** Present on reorderable tabs - drag any time, no mode toggle. */
+  drag?: NavDrag;
 }) {
   return (
     <div
+      draggable={!!drag}
+      onDragStart={drag?.onDragStart}
+      onDragOver={drag?.onDragOver}
+      onDrop={drag?.onDrop}
+      onDragEnd={drag?.onDragEnd}
+      title={drag ? "Drag to reorder" : undefined}
       className={`group relative flex w-full items-center gap-3 px-4 py-[9px] text-left font-mono text-[0.7rem] tracking-wide transition-colors duration-150 ${
-        isActive && !reorder ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--text-faint)]"
-      } ${reorder ? "" : "hover:text-[var(--text-dim)]"}`}
+        isActive ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-dim)]"
+      } ${drag ? "cursor-grab active:cursor-grabbing" : ""} ${drag?.isDragging ? "opacity-35" : ""}`}
     >
-      {isActive && !reorder && <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-[var(--text)]" />}
-      <button onClick={onClick} disabled={!!reorder} className="flex min-w-0 flex-1 items-center gap-3 text-left disabled:cursor-default">
+      {isActive && <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-[var(--text)]" />}
+      <button onClick={onClick} className="flex min-w-0 flex-1 items-center gap-3 text-left">
         <span className="w-4 shrink-0 text-[0.56rem] text-[var(--text-faint)]">{String(index).padStart(2, "0")}</span>
-        <PanelIcon id={id} className="shrink-0" style={{ color: isActive && !reorder ? "var(--text)" : "var(--text-faint)" }} />
+        <PanelIcon id={id} className="shrink-0" style={{ color: isActive ? "var(--text)" : "var(--text-faint)" }} />
         <span className="min-w-0 flex-1 truncate">{label}</span>
       </button>
-      {!reorder && (bull ?? 0) + (bear ?? 0) > 0 && (
+      {(bull ?? 0) + (bear ?? 0) > 0 && (
         <span className="shrink-0 text-[0.6rem]">
           {bull ? <span className="text-[var(--up)]">{bull}▲</span> : null}
           {bear ? <span className="text-[var(--down)]">{bear}▼</span> : null}
-        </span>
-      )}
-      {reorder && (
-        <span className="flex shrink-0 gap-1">
-          <button
-            onClick={reorder.onMoveUp}
-            disabled={!reorder.canMoveUp}
-            aria-label={`Move ${label} up`}
-            className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-faint)] transition-colors hover:text-[var(--text)] disabled:opacity-25 disabled:hover:text-[var(--text-faint)]"
-          >
-            ▲
-          </button>
-          <button
-            onClick={reorder.onMoveDown}
-            disabled={!reorder.canMoveDown}
-            aria-label={`Move ${label} down`}
-            className="flex h-5 w-5 items-center justify-center rounded text-[var(--text-faint)] transition-colors hover:text-[var(--text)] disabled:opacity-25 disabled:hover:text-[var(--text-faint)]"
-          >
-            ▼
-          </button>
         </span>
       )}
     </div>
@@ -193,10 +188,12 @@ export default function DashboardShell({
   // Reorderable nav: Board and Docs stay pinned as structural anchors; News +
   // indicator panels (group A) and the analysis pages (group B) each have
   // their own persisted order so a reorder never mixes the two families.
+  // Tabs are draggable at all times - drag one over a sibling and the list
+  // reorders live; the result persists on drop.
   const defaultGroupA = [NEWS_ID, ...visiblePanels.map((p) => p.id)];
   const defaultGroupB = [MACRO_BIAS_ID, REPLAY_ID, FINGERPRINT_ID, CALENDAR_ID];
   const [navOrder, setNavOrder] = useState<NavOrderState>({ a: defaultGroupA, b: defaultGroupB });
-  const [customizingNav, setCustomizingNav] = useState(false);
+  const [draggingTab, setDraggingTab] = useState<{ group: "a" | "b"; id: string } | null>(null);
 
   useEffect(() => {
     setNavOrder(loadNavOrder(defaultGroupA, defaultGroupB));
@@ -205,12 +202,28 @@ export default function DashboardShell({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  function reorderGroup(group: "a" | "b", id: string, dir: -1 | 1) {
-    setNavOrder((prev) => {
-      const next = { ...prev, [group]: moveItem(prev[group], id, dir) };
-      saveNavOrder(next);
-      return next;
-    });
+  function tabDrag(group: "a" | "b", id: string): NavDrag {
+    return {
+      isDragging: draggingTab?.group === group && draggingTab.id === id,
+      onDragStart: (e) => {
+        e.dataTransfer.effectAllowed = "move";
+        setDraggingTab({ group, id });
+      },
+      onDragOver: (e) => {
+        e.preventDefault(); // required for the drop cursor
+        if (draggingTab && draggingTab.group === group && draggingTab.id !== id) {
+          setNavOrder((prev) => ({ ...prev, [group]: moveToPosition(prev[group], draggingTab.id, id) }));
+        }
+      },
+      onDrop: (e) => e.preventDefault(),
+      onDragEnd: () => {
+        setDraggingTab(null);
+        setNavOrder((prev) => {
+          saveNavOrder(prev);
+          return prev;
+        });
+      },
+    };
   }
   const isBoard = activeId === BOARD_ID;
   const isNews = activeId === NEWS_ID;
@@ -340,16 +353,11 @@ export default function DashboardShell({
           </div>
 
           <nav className="flex flex-1 flex-col py-3">
-            {customizingNav && (
-              <div className="mx-4 mb-2 rounded-md border border-[var(--border-strong)] bg-[var(--panel-2)] px-2.5 py-1.5 font-sans text-[0.66rem] text-[var(--text-dim)]">
-                Drag order with the arrows - Board and Docs stay pinned.
-              </div>
-            )}
             <NavItem index={nextIndex()} id="board" label="BOARD" isActive={isBoard} onClick={() => pickPage(BOARD_ID)} />
 
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
-            {groupAEntries.map((entry, i) => (
+            {groupAEntries.map((entry) => (
               <NavItem
                 key={entry.id}
                 index={nextIndex()}
@@ -359,22 +367,13 @@ export default function DashboardShell({
                 onClick={entry.onClick}
                 bull={entry.bull}
                 bear={entry.bear}
-                reorder={
-                  customizingNav
-                    ? {
-                        canMoveUp: i > 0,
-                        canMoveDown: i < groupAEntries.length - 1,
-                        onMoveUp: () => reorderGroup("a", entry.id, -1),
-                        onMoveDown: () => reorderGroup("a", entry.id, 1),
-                      }
-                    : undefined
-                }
+                drag={tabDrag("a", entry.id)}
               />
             ))}
 
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
-            {groupBEntries.map((entry, i) => (
+            {groupBEntries.map((entry) => (
               <NavItem
                 key={entry.id}
                 index={nextIndex()}
@@ -382,39 +381,19 @@ export default function DashboardShell({
                 label={entry.label}
                 isActive={entry.id === activeId}
                 onClick={entry.onClick}
-                reorder={
-                  customizingNav
-                    ? {
-                        canMoveUp: i > 0,
-                        canMoveDown: i < groupBEntries.length - 1,
-                        onMoveUp: () => reorderGroup("b", entry.id, -1),
-                        onMoveDown: () => reorderGroup("b", entry.id, 1),
-                      }
-                    : undefined
-                }
+                drag={tabDrag("b", entry.id)}
               />
             ))}
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
             <NavItem index={nextIndex()} id="docs" label="DOCS" isActive={isDocs} onClick={() => pickPage(DOCS_ID)} />
-
-            {customizingNav && (
-              <div className="mx-4 mt-2">
-                <button
-                  onClick={() => setCustomizingNav(false)}
-                  className="w-full rounded-md border border-[var(--border-strong)] px-2.5 py-1.5 font-mono text-[0.66rem] font-semibold text-[var(--text)] transition-colors hover:bg-[var(--panel-2)]"
-                >
-                  Done reordering
-                </button>
-              </div>
-            )}
           </nav>
 
           <div className="shrink-0 border-t border-[var(--border)] px-4 py-3">
             <div className="flex items-center justify-between font-mono text-[0.62rem] text-[var(--text-faint)]">
               <Clock />
               <div className="flex items-center gap-3">
-                <SettingsPanel onCustomizeTabs={() => setCustomizingNav(true)} />
+                <SettingsPanel />
                 <SignOutButton className="font-mono text-[0.62rem] font-semibold uppercase tracking-[0.1em] text-[var(--text-faint)] transition-colors duration-150 hover:text-[var(--text)] disabled:opacity-50" />
               </div>
             </div>

@@ -13,11 +13,15 @@ function GearIcon({ className }: { className?: string }) {
   );
 }
 
-export default function SettingsPanel({ onCustomizeTabs }: { onCustomizeTabs: () => void }) {
+export default function SettingsPanel() {
   const [open, setOpen] = useState(false);
+  // Fixed-position coordinates so the popover escapes the sidebar's
+  // overflow-y-auto (absolute positioning gets clipped/scrolled inside it).
+  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [accent, setAccent] = useState<AccentPreset>("mono");
   const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     const prefs = loadThemePrefs();
@@ -34,6 +38,14 @@ export default function SettingsPanel({ onCustomizeTabs }: { onCustomizeTabs: ()
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
+  function toggleOpen() {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ left: Math.max(8, r.left - 8), bottom: window.innerHeight - r.top + 8 });
+    }
+    setOpen((v) => !v);
+  }
+
   function updateTheme(next: ThemeMode) {
     setTheme(next);
     applyThemePrefs(next, accent);
@@ -47,17 +59,21 @@ export default function SettingsPanel({ onCustomizeTabs }: { onCustomizeTabs: ()
   }
 
   return (
-    <div className="relative" ref={ref}>
+    <div ref={ref}>
       <button
-        onClick={() => setOpen((v) => !v)}
+        ref={btnRef}
+        onClick={toggleOpen}
         aria-label="Display settings"
         className={`flex h-6 w-6 items-center justify-center transition-colors ${open ? "text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-dim)]"}`}
       >
         <GearIcon />
       </button>
 
-      {open && (
-        <div className="absolute bottom-full left-0 z-50 mb-2 w-60 rounded-lg border border-[var(--border-strong)] bg-[var(--panel-2)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.4)]">
+      {open && pos && (
+        <div
+          className="z-50 w-60 rounded-lg border border-[var(--border-strong)] bg-[var(--panel-2)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+          style={{ position: "fixed", left: pos.left, bottom: pos.bottom }}
+        >
           <div className="mb-3">
             <div className="mb-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-[var(--text-faint)]">Theme</div>
             <SegmentedControl
@@ -91,15 +107,9 @@ export default function SettingsPanel({ onCustomizeTabs }: { onCustomizeTabs: ()
             </div>
           </div>
 
-          <button
-            onClick={() => {
-              setOpen(false);
-              onCustomizeTabs();
-            }}
-            className="w-full rounded-md border border-[var(--border)] px-2.5 py-1.5 text-left font-mono text-[0.66rem] font-semibold text-[var(--text-dim)] transition-colors hover:border-[var(--border-strong)] hover:text-[var(--text)]"
-          >
-            Reorder tabs…
-          </button>
+          <p className="font-sans text-[0.62rem] leading-snug text-[var(--text-faint)]">
+            Tip: drag tabs in the sidebar to reorder them. Board and Docs stay pinned.
+          </p>
         </div>
       )}
     </div>

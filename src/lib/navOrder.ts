@@ -33,11 +33,13 @@ export function saveNavOrder(order: NavOrderState) {
   }
 }
 
-export function moveItem(order: string[], id: string, dir: -1 | 1): string[] {
-  const idx = order.indexOf(id);
-  const target = idx + dir;
-  if (idx < 0 || target < 0 || target >= order.length) return order;
+/** Move `id` to the position `overId` currently occupies (drag-and-drop live reorder). */
+export function moveToPosition(order: string[], id: string, overId: string): string[] {
+  const from = order.indexOf(id);
+  const to = order.indexOf(overId);
+  if (from < 0 || to < 0 || from === to) return order;
   const copy = order.slice();
-  [copy[idx], copy[target]] = [copy[target], copy[idx]];
+  copy.splice(from, 1);
+  copy.splice(to, 0, id);
   return copy;
 }

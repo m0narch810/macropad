@@ -101,6 +101,22 @@ const SIGNAL_CONFIG: Record<string, SignalConfig> = {
     momentumWindow: 20,
     rationale: "RRP size has swung structurally (near-zero to $2.5T and back) - the direction of change is the liquidity signal.",
   },
+  "us-macro:net-liquidity": {
+    method: "momentum",
+    momentumWindow: 13,
+    rationale: "Balance sheet minus TGA minus RRP - the liquidity actually available to markets. The level is arbitrary; whether it's expanding or draining right now is the signal, same logic as WALCL alone.",
+  },
+  "us-macro:tga": {
+    method: "momentum",
+    momentumWindow: 8,
+    rationale: "The Treasury's checking account at the Fed. A drawdown injects cash into the system (bullish); a rebuild pulls it out (bearish) - the direction of change each week is what matters, not the level.",
+  },
+  "us-macro:reserve-balances": {
+    method: "anchor",
+    reference: 3.2,
+    band: 0.7,
+    rationale: "Judged against the Fed's own 'lowest comfortable level' estimate (~$2.5-3T) - approaching it from above is what has historically ended QT (2019, and again in the 2023-24 cycle).",
+  },
   "us-macro:retail-sales": { method: "anchor", reference: 3, band: 3, rationale: "YoY nominal growth judged against a rough ~3% trend (real growth + inflation)." },
   "us-macro:housing-starts": { method: "anchor", reference: 0, band: 10, rationale: "YoY growth judged against flat - housing swings ±15-20% YoY are normal, so the band is wide." },
 
@@ -166,6 +182,12 @@ const SIGNAL_CONFIG: Record<string, SignalConfig> = {
   "geo:gepu": { method: "positioning", rationale: "Same as US EPU - a GDP-weighted news-count index with no fixed fair value." },
   "geo:equity-uncertainty": { method: "positioning", rationale: "News- and options-derived uncertainty index with no fixed fair value - judged against its own range." },
   "geo:defense-spy": { method: "positioning", rationale: "Relative-performance ratio with no fair value - its own range is the reference." },
+  "geo:news-feed": {
+    method: "anchor",
+    reference: 0,
+    band: 0.4,
+    rationale: "The stored series is already a recency-weighted, re-polarized sentiment score in -1..1 - judged directly against neutral (0), not against its own history, same as any other bounded score.",
+  },
 };
 
 export interface IndicatorSignal {

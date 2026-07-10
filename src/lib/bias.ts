@@ -178,6 +178,27 @@ const CONFIG: Record<string, BiasConfig> = {
     low: { label: "Growth below trend - stall risk", tone: "down" },
     neutral: "Growth tracking near trend.",
   },
+  "us-macro:net-liquidity": {
+    context:
+      "Balance sheet minus the Treasury General Account minus reverse repo - the liquidity actually available to markets rather than parked at the Fed or Treasury. Tracks risk-asset performance tighter than the raw balance sheet alone.",
+    high: { label: "Net liquidity expanding - risk-on tailwind", tone: "up" },
+    low: { label: "Net liquidity draining - risk-off headwind", tone: "down" },
+    neutral: "Net liquidity roughly flat on the week.",
+  },
+  "us-macro:tga": {
+    context:
+      "The Treasury's checking account at the Fed. A drawdown (often post debt-ceiling, or ahead of large outlays) pulls cash out of the TGA and injects it into the banking system; a rebuild does the opposite - moves here offset or amplify QT week to week.",
+    high: { label: "TGA rebuilding - liquidity pulled from the system", tone: "down" },
+    low: { label: "TGA drawing down - liquidity injected into the system", tone: "up" },
+    neutral: "TGA balance roughly stable on the week.",
+  },
+  "us-macro:reserve-balances": {
+    context:
+      "Bank reserves held at the Fed - the H.4.1 deposit line QT actually drains. The Fed's own 'lowest comfortable level' estimates sit near $2.5-3T; approaching it from above is what ended QT in 2019 and shaped the 2023-24 taper.",
+    high: { label: "Reserve balances ample - comfortably above the Fed's floor", tone: "up" },
+    low: { label: "Reserve balances approaching the Fed's floor - QT stress risk", tone: "down" },
+    neutral: "Reserve balances near the Fed's comfortable range.",
+  },
   "us-macro:reverse-repo": {
     context:
       "The Fed's reverse repo facility is where excess liquidity parks. Rising RRP drains liquidity from markets; falling RRP releases it back - RRP drawdown funded much of the 2023-24 rally while QT ran.",
@@ -354,6 +375,13 @@ const CONFIG: Record<string, BiasConfig> = {
     high: { label: "Bond market vol elevated - rate uncertainty high", tone: "down" },
     low: { label: "Bond market vol calm", tone: "up" },
     neutral: "MOVE near its usual range.",
+  },
+  "geo:news-feed": {
+    context:
+      "Pooled macro headlines across CNBC, Fed, ECB, WSJ, FXStreet, and MarketWatch, recency-weighted and re-polarized so a burst of fresh negative headlines actually moves the score. The fastest-moving read on the board - reacts within minutes, before it shows up in any hard data.",
+    high: { label: "Headline sentiment bullish", tone: "up" },
+    low: { label: "Headline sentiment bearish", tone: "down" },
+    neutral: "Headlines roughly balanced.",
   },
   // --- Transmission ---
   "transmission:nfci": {

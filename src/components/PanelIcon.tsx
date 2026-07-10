@@ -54,15 +54,7 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M6 13.5H10.5" />
     </>
   ),
-  "custom-dashboard": (
-    <>
-      <rect x="3" y="3" width="6.5" height="6.5" rx="1" />
-      <rect x="10.5" y="3" width="6.5" height="6.5" rx="1" />
-      <rect x="3" y="10.5" width="6.5" height="6.5" rx="1" />
-      <rect x="10.5" y="10.5" width="6.5" height="6.5" rx="1" />
-    </>
-  ),
-  "custom-bias": (
+  "macro-bias": (
     <>
       <path d="M3 15A7 7 0 0 1 17 15" />
       <path d="M10 15L13.5 9" />

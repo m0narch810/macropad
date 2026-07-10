@@ -9,8 +9,7 @@ import NewsFeedCard from "@/components/NewsFeedCard";
 import MarketTicker from "@/components/MarketTicker";
 import IndicatorTicker from "@/components/IndicatorTicker";
 import PanelIcon from "@/components/PanelIcon";
-import CustomDashboardPage from "@/components/CustomDashboardPage";
-import CustomBiasPage from "@/components/CustomBiasPage";
+import MacroBiasPage from "@/components/MacroBiasPage";
 import BoardPage from "@/components/BoardPage";
 import DocumentationPage from "@/components/DocumentationPage";
 import { MARKET_SYMBOLS } from "@/lib/markets";
@@ -24,8 +23,7 @@ const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "tran
 const HIDDEN_PANELS = new Set(["asset-news"]);
 const BOARD_ID = "board";
 const NEWS_ID = "news";
-const CUSTOM_DASHBOARD_ID = "custom-dashboard";
-const CUSTOM_BIAS_ID = "custom-bias";
+const MACRO_BIAS_ID = "macro-bias";
 const DOCS_ID = "docs";
 
 const SHORT_LABEL: Record<string, string> = {
@@ -162,8 +160,7 @@ export default function DashboardShell({
   };
   const isBoard = activeId === BOARD_ID;
   const isNews = activeId === NEWS_ID;
-  const isCustomDashboard = activeId === CUSTOM_DASHBOARD_ID;
-  const isCustomBias = activeId === CUSTOM_BIAS_ID;
+  const isMacroBias = activeId === MACRO_BIAS_ID;
   const isDocs = activeId === DOCS_ID;
   const allSeries = panels.flatMap((p) => p.series);
   const newsSeries = allSeries.find((s) => s.id === "geo:news-feed") ?? null;
@@ -194,11 +191,9 @@ export default function DashboardShell({
     ? "Board"
     : isNews
       ? "News"
-      : isCustomDashboard
-        ? "Custom Dashboard"
-        : isCustomBias
-          ? "Custom Bias"
-          : isDocs
+      : isMacroBias
+        ? "Macro Bias"
+        : isDocs
             ? "Documentation"
             : active?.title ?? "";
 
@@ -275,19 +270,11 @@ export default function DashboardShell({
 
             <NavItem
               index={nextIndex()}
-              id="custom-dashboard"
-              label="CUSTOM DASH"
-              isActive={isCustomDashboard}
-              onClick={() => pickPage(CUSTOM_DASHBOARD_ID)}
+              id="macro-bias"
+              label="MACRO BIAS"
+              isActive={isMacroBias}
+              onClick={() => pickPage(MACRO_BIAS_ID)}
             />
-            <NavItem
-              index={nextIndex()}
-              id="custom-bias"
-              label="CUSTOM BIAS"
-              isActive={isCustomBias}
-              onClick={() => pickPage(CUSTOM_BIAS_ID)}
-            />
-
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
             <NavItem index={nextIndex()} id="docs" label="DOCS" isActive={isDocs} onClick={() => pickPage(DOCS_ID)} />
@@ -364,25 +351,15 @@ export default function DashboardShell({
                 <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No news data yet.</p>
               )}
             </>
-          ) : isCustomDashboard ? (
+          ) : isMacroBias ? (
             <>
               <header className="mb-8">
-                <div className="eyebrow mb-2">Watchlist</div>
+                <div className="eyebrow mb-2">Composite regime read</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
-                  <Scramble text="Custom Dashboard" />
+                  <Scramble text="Macro Bias" />
                 </h1>
               </header>
-              <CustomDashboardPage panels={panels} markets={markets} />
-            </>
-          ) : isCustomBias ? (
-            <>
-              <header className="mb-8">
-                <div className="eyebrow mb-2">Weights + thresholds</div>
-                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
-                  <Scramble text="Custom Bias" />
-                </h1>
-              </header>
-              <CustomBiasPage panels={panels} />
+              <MacroBiasPage panels={panels} />
             </>
           ) : isDocs ? (
             <>

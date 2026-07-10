@@ -50,6 +50,23 @@ const STALE_ROW_IDS = [
   "transmission:copper-crude",
   "transmission:walcl",
   "geo:news",
+  "fedbs:t1-notes-nominal",
+  "fedbs:t1-notes-tips",
+  "fedbs:t1-mbs",
+  "fedbs:t1-total-supplying",
+  "fedbs:t1-tga",
+  "fedbs:t1-rrp",
+  "fedbs:t1-total-absorbing",
+  "fedbs:t1-reserve-balances",
+  "fedbs:t5-notes-nominal",
+  "fedbs:t5-notes-tips",
+  "fedbs:t5-mbs",
+  "fedbs:t5-total-assets",
+  "fedbs:t5-other-deposits-depository",
+  "fedbs:t5-tga",
+  "fedbs:t5-other-deposits",
+  "fedbs:t5-total-liabilities",
+  "fedbs:t5-total-capital",
 ];
 
 function toHistory(dates: string[], values: (number | null)[]): HistPoint[] {
@@ -212,6 +229,55 @@ export async function GET(req: NextRequest) {
           windowLabel: "10y weekly",
         },
       ],
+    });
+
+    // ---- Net liquidity, TGA, and reserve balances as first-class scored indicators ----
+    // Previously only surfaced as extra_stats on the h41-balance-sheet card;
+    // promoting them to their own rows lets Macro Bias score them directly
+    // (net liquidity is the sharper liquidity read than raw WALCL alone).
+    const netLiqSig = signalStats("us-macro:net-liquidity", netLiqHistory);
+    rows.push({
+      id: "us-macro:net-liquidity",
+      panel_id: "us-macro",
+      name: "Net Liquidity (BS − TGA − RRP)",
+      note: "Liquidity actually available to markets",
+      value: netLiqLatest === null ? "-" : `$${netLiqLatest.toFixed(3)}T`,
+      status: statusFromDelta(netLiqLatest, netLiqHistory.length > 1 ? netLiqHistory[netLiqHistory.length - 2].value : null),
+      source: "Derived: WALCL−WTREGEN−RRPONTSYD",
+      zscore: netLiqSig.signal,
+      sparkline: netLiqSig.sparkline,
+      window_label: "10y weekly · momentum 13w",
+      history: netLiqHistory,
+    });
+
+    const tgaSig = signalStats("us-macro:tga", tgaHistoryB);
+    rows.push({
+      id: "us-macro:tga",
+      panel_id: "us-macro",
+      name: "Treasury General Account",
+      note: "Treasury's checking account at the Fed, $B",
+      value: tgaLatestB === null ? "-" : `$${tgaLatestB.toFixed(0)}B`,
+      status: statusFromDelta(tgaLatestB, tgaHistoryB.length > 1 ? tgaHistoryB[tgaHistoryB.length - 2].value : null),
+      source: "FRED WTREGEN",
+      zscore: tgaSig.signal,
+      sparkline: tgaSig.sparkline,
+      window_label: "10y weekly · momentum 8w",
+      history: tgaHistoryB,
+    });
+
+    const reserveBalSig = signalStats("us-macro:reserve-balances", wresbalHistory);
+    rows.push({
+      id: "us-macro:reserve-balances",
+      panel_id: "us-macro",
+      name: "Reserve Balances",
+      note: "Bank reserves held at the Fed, $T",
+      value: wresbalLatest === null ? "-" : `$${wresbalLatest.toFixed(3)}T`,
+      status: statusFromDelta(wresbalLatest, wresbalHistory.length > 1 ? wresbalHistory[wresbalHistory.length - 2].value : null),
+      source: "FRED WRESBAL",
+      zscore: reserveBalSig.signal,
+      sparkline: reserveBalSig.sparkline,
+      window_label: "10y weekly · anchor 3.2T",
+      history: wresbalHistory,
     });
 
     // ---- Funding rate stack (SOFR / EFFR / IORB) ----

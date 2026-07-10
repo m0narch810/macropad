@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { resolveInkRgb, onThemeChange } from "@/lib/canvasInk";
 
 /*
  * ASCII topographic contour field — the signature decor. A slowly drifting
@@ -58,6 +59,7 @@ export default function AsciiContour({
     window.addEventListener("resize", resize);
 
     const draw = (t: number) => {
+      const ink = resolveInkRgb(canvas);
       const w = canvas.offsetWidth;
       const h = canvas.offsetHeight;
       ctx.clearRect(0, 0, w, h);
@@ -83,7 +85,7 @@ export default function AsciiContour({
           const edge = 1 - cells / (lineWidth * 10); // 1 at line center, 0 at edge
           const a = (0.3 + 0.7 * e) * edge * maxAlpha;
           if (a < 0.015) continue;
-          ctx.fillStyle = `rgba(244, 244, 245, ${a.toFixed(3)})`;
+          ctx.fillStyle = `rgba(${ink}, ${a.toFixed(3)})`;
           ctx.fillText(LEVEL_GLYPHS[level], gx * cell, gy * cell);
         }
       }
@@ -91,7 +93,11 @@ export default function AsciiContour({
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       draw(2.4);
-      return () => window.removeEventListener("resize", resize);
+      const offTheme = onThemeChange(() => draw(2.4));
+      return () => {
+        offTheme();
+        window.removeEventListener("resize", resize);
+      };
     }
 
     let raf = 0;

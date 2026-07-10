@@ -152,16 +152,16 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Subtle white halo for the single element per view that earns it. */
+/* Subtle ink halo for the single element per view that earns it. */
 .glow {
-  text-shadow: 0 0 14px rgba(255, 255, 255, 0.22);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--text) 22%, transparent);
 }
 .glow-accent {
-  text-shadow: 0 0 14px rgba(255, 255, 255, 0.18);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 24%, transparent);
 }
 
 ::selection {
-  background: rgba(255, 255, 255, 0.2);
+  background: color-mix(in srgb, var(--text) 20%, transparent);
 }
 
 :focus-visible {
@@ -193,7 +193,7 @@ body {
 .btn-primary {
   background: var(--text);
   border-color: var(--text);
-  color: #050505;
+  color: var(--bg);
 }
 .btn-primary:hover {
   background: var(--text-dim);

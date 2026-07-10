@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { resolveInkRgb, onThemeChange } from "@/lib/canvasInk";
 
 /*
  * The Macropad mark: contour rings of a single peak, drifting like weather
@@ -37,6 +38,7 @@ export default function BrandMark({ size = 20, className }: { size?: number; cla
 
     const c = size / 2;
     const draw = (t: number) => {
+      const ink = resolveInkRgb(canvas);
       ctx.clearRect(0, 0, size, size);
       // Clip to the badge circle so drifting rings stay contained.
       ctx.save();
@@ -58,7 +60,7 @@ export default function BrandMark({ size = 20, className }: { size?: number; cla
           else ctx.lineTo(x, y);
         }
         ctx.closePath();
-        ctx.strokeStyle = `rgba(244, 244, 245, ${(0.85 - ring * 0.17).toFixed(2)})`;
+        ctx.strokeStyle = `rgba(${ink}, ${(0.85 - ring * 0.17).toFixed(2)})`;
         ctx.lineWidth = 1;
         ctx.stroke();
       }
@@ -66,14 +68,14 @@ export default function BrandMark({ size = 20, className }: { size?: number; cla
       // Summit.
       ctx.beginPath();
       ctx.arc(c + size * 0.06, c - size * 0.04, Math.max(1, size * 0.05), 0, Math.PI * 2);
-      ctx.fillStyle = "rgba(244, 244, 245, 0.95)";
+      ctx.fillStyle = `rgba(${ink}, 0.95)`;
       ctx.fill();
       ctx.restore();
     };
 
     if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       draw(1.3);
-      return;
+      return onThemeChange(() => draw(1.3));
     }
 
     let raf = 0;

@@ -151,7 +151,7 @@ export default function QuantCard({
               </span>
             )}
           </div>
-          <p className="m-0 mt-1.5 truncate font-sans text-[0.86rem] text-[var(--text-dim)]">{series.note}</p>
+          <p className="m-0 mt-1.5 font-sans text-[0.86rem] leading-snug text-[var(--text-dim)]">{series.note}</p>
         </div>
 
         {series.sparkline && series.sparkline.length >= 5 && (

@@ -50,7 +50,7 @@ export default function NewsFeedCard({ series }: { series: MacroSeries }) {
               {series.zscore !== null && ` ${series.zscore > 0 ? "+" : ""}${series.zscore.toFixed(2)}`}
             </span>
           </div>
-          <p className="m-0 mt-1.5 truncate font-sans text-[0.86rem] text-[var(--text-dim)]">{series.note}</p>
+          <p className="m-0 mt-1.5 font-sans text-[0.86rem] leading-snug text-[var(--text-dim)]">{series.note}</p>
         </div>
         <div className="shrink-0 text-right">
           <div className="font-mono text-[1.5rem] font-semibold leading-none">{series.value}</div>

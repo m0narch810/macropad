@@ -42,7 +42,7 @@ export default function SeriesCard({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <h3 className="m-0 truncate text-[0.92rem] font-semibold text-[var(--text)]">{series.name}</h3>
-          <p className="m-0 mt-0.5 truncate text-[0.78rem] text-[var(--text-dim)]">{series.note}</p>
+          <p className="m-0 mt-0.5 text-[0.78rem] leading-snug text-[var(--text-dim)]">{series.note}</p>
         </div>
         <span className="shrink-0 font-mono text-[0.78rem]" style={{ color: chipColor }} title={toneLabel[signalTone]}>
           {dirGlyph[signalTone]}

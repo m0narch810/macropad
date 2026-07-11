@@ -9,6 +9,9 @@ import NewsFeedCard from "@/components/NewsFeedCard";
 import MarketTicker from "@/components/MarketTicker";
 import IndicatorTicker from "@/components/IndicatorTicker";
 import PanelIcon from "@/components/PanelIcon";
+import MacroBiasPage from "@/components/MacroBiasPage";
+import ReplayPage from "@/components/ReplayPage";
+import RegimeFingerprintPage from "@/components/RegimeFingerprintPage";
 import CalendarPage from "@/components/CalendarPage";
 import BoardPage from "@/components/BoardPage";
 import DocumentationPage from "@/components/DocumentationPage";
@@ -30,6 +33,17 @@ const REPLAY_ID = "replay";
 const FINGERPRINT_ID = "fingerprint";
 const CALENDAR_ID = "calendar";
 const DOCS_ID = "docs";
+
+// Options Flow is its own upcoming section: several pages, all clickable but
+// landing on a "coming soon" screen until the feature ships.
+const OPTIONS_FLOW_PREFIX = "options-flow";
+const OPTIONS_FLOW_PAGES = [
+  { id: "options-flow:scanner", label: "FLOW SCANNER", blurb: "Live options order flow across the tape, ranked by size and aggression." },
+  { id: "options-flow:sweeps", label: "SWEEPS & BLOCKS", blurb: "Multi-exchange sweeps and block trades as they print." },
+  { id: "options-flow:unusual", label: "UNUSUAL ACTIVITY", blurb: "Contracts trading well above their normal volume." },
+  { id: "options-flow:gamma", label: "GAMMA EXPOSURE", blurb: "Dealer positioning and the levels it pins price toward." },
+  { id: "options-flow:darkpool", label: "DARK POOL", blurb: "Off-exchange prints and where the size is quietly changing hands." },
+];
 
 const SHORT_LABEL: Record<string, string> = {
   "us-macro": "US MACRO",
@@ -163,26 +177,45 @@ function NavItem({
   );
 }
 
-function LockGlyph() {
+/** An upcoming Options Flow page: clickable, but leads to a coming-soon screen. */
+function OptionsFlowNavItem({ index, label, isActive, onClick }: { index: number; label: string; isActive: boolean; onClick: () => void }) {
   return (
-    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1" />
-      <path d="M5.5 7V5A2.5 2.5 0 0 1 10.5 5V7" />
-    </svg>
+    <button
+      onClick={onClick}
+      className={`group relative flex w-full items-center gap-3 px-4 py-[9px] text-left font-mono text-[0.7rem] tracking-wide transition-colors duration-150 ${
+        isActive ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-dim)]"
+      }`}
+    >
+      {isActive && <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-[var(--text)]" />}
+      <span className="w-4 shrink-0 text-[0.56rem]">{String(index).padStart(2, "0")}</span>
+      <PanelIcon id="options-flow" className="shrink-0" style={{ color: isActive ? "var(--text)" : "var(--text-faint)" }} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+    </button>
   );
 }
 
-/** A visible-but-unusable tab: dimmed, unclickable, not draggable. */
-function LockedNavItem({ index, id, label }: { index: number; id: string; label: string }) {
+/** Coming-soon screen for the Options Flow section. */
+function ComingSoon({ label, blurb }: { label: string; blurb: string }) {
   return (
-    <div
-      aria-disabled="true"
-      className="relative flex w-full cursor-default select-none items-center gap-3 px-4 py-[9px] text-left font-mono text-[0.7rem] tracking-wide text-[var(--text-faint)] opacity-40"
-    >
-      <span className="w-4 shrink-0 text-[0.56rem]">{String(index).padStart(2, "0")}</span>
-      <PanelIcon id={id} className="shrink-0" style={{ color: "var(--text-faint)" }} />
-      <span className="min-w-0 flex-1 truncate">{label}</span>
-      <LockGlyph />
+    <div className="mx-auto max-w-2xl py-8">
+      <div className="hud border border-[var(--border)] bg-[var(--panel)] p-8 text-center sm:p-12">
+        <div className="partno mb-4" style={{ color: "var(--text-dim)" }}>
+          STATUS: COMING SOON
+        </div>
+        <PanelIcon id="options-flow" className="mx-auto mb-5" style={{ color: "var(--text-faint)", width: 34, height: 34 }} />
+        <h2 className="font-display m-0 text-[1.6rem] leading-tight sm:text-[2rem]">{label}</h2>
+        <p className="mx-auto mt-4 max-w-md font-sans text-[0.92rem] leading-relaxed text-[var(--text-dim)]">{blurb}</p>
+        <p className="mx-auto mt-3 max-w-md font-sans text-[0.86rem] leading-relaxed text-[var(--text-faint)]">
+          Options Flow is being built out now. It is not live yet, but it is on the way. Check back soon.
+        </p>
+        <div className="mt-6 inline-flex items-center gap-2 border border-[var(--border-strong)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-[var(--text-dim)]">
+          <span className="relative flex h-1.5 w-1.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--amber)] opacity-60" />
+            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--amber)]" />
+          </span>
+          In development
+        </div>
+      </div>
     </div>
   );
 }
@@ -211,19 +244,8 @@ export default function DashboardShell({
   // their own persisted order so a reorder never mixes the two families.
   // Tabs are draggable at all times - drag one over a sibling and the list
   // reorders live; the result persists on drop.
-  // Macro Bias, Replay, and Regime Fingerprint are locked for the beta - they
-  // run their scoring in the browser, which would ship the whole bias
-  // methodology in the JS bundle. They render as disabled nav items until the
-  // computation is moved server-side. Calendar is the only always-on analysis
-  // tab, so group B is just Calendar now.
   const defaultGroupA = [NEWS_ID, ...visiblePanels.map((p) => p.id)];
-  const defaultGroupB = [CALENDAR_ID];
-  const LOCKED_TABS = [
-    { id: MACRO_BIAS_ID, label: "MACRO BIAS" },
-    { id: REPLAY_ID, label: "REPLAY" },
-    { id: FINGERPRINT_ID, label: "FINGERPRINT" },
-    { id: "options-flow", label: "OPTIONS FLOW" },
-  ];
+  const defaultGroupB = [MACRO_BIAS_ID, REPLAY_ID, FINGERPRINT_ID, CALENDAR_ID];
   const [navOrder, setNavOrder] = useState<NavOrderState>({ a: defaultGroupA, b: defaultGroupB });
   const [draggingTab, setDraggingTab] = useState<{ group: "a" | "b"; id: string } | null>(null);
 
@@ -259,8 +281,14 @@ export default function DashboardShell({
   }
   const isBoard = activeId === BOARD_ID;
   const isNews = activeId === NEWS_ID;
+  const isMacroBias = activeId === MACRO_BIAS_ID;
+  const isReplay = activeId === REPLAY_ID;
+  const isFingerprint = activeId === FINGERPRINT_ID;
   const isCalendar = activeId === CALENDAR_ID;
   const isDocs = activeId === DOCS_ID;
+  const activeOptionsFlow = activeId.startsWith(`${OPTIONS_FLOW_PREFIX}:`)
+    ? OPTIONS_FLOW_PAGES.find((p) => p.id === activeId) ?? null
+    : null;
   const allSeries = panels.flatMap((p) => p.series);
   const newsSeries = allSeries.find((s) => s.id === "geo:news-feed") ?? null;
   const activeNewsSeries = newsAssetTab
@@ -303,6 +331,12 @@ export default function DashboardShell({
   }
   function resolveGroupBEntry(id: string): NavEntryMeta | null {
     switch (id) {
+      case MACRO_BIAS_ID:
+        return { id, iconId: "macro-bias", label: "MACRO BIAS", onClick: () => pickPage(MACRO_BIAS_ID) };
+      case REPLAY_ID:
+        return { id, iconId: "replay", label: "REPLAY", onClick: () => pickPage(REPLAY_ID) };
+      case FINGERPRINT_ID:
+        return { id, iconId: "fingerprint", label: "FINGERPRINT", onClick: () => pickPage(FINGERPRINT_ID) };
       case CALENDAR_ID:
         return { id, iconId: "calendar", label: "CALENDAR", onClick: () => pickPage(CALENDAR_ID) };
       default:
@@ -316,11 +350,19 @@ export default function DashboardShell({
     ? "Board"
     : isNews
       ? "News"
-      : isCalendar
-        ? "Calendar"
-        : isDocs
-          ? "Documentation"
-          : active?.title ?? "";
+      : isMacroBias
+        ? "Macro Bias"
+        : isReplay
+          ? "Replay"
+          : isFingerprint
+            ? "Regime Fingerprint"
+            : isCalendar
+              ? "Calendar"
+              : isDocs
+                ? "Documentation"
+                : activeOptionsFlow
+                  ? activeOptionsFlow.label
+                  : active?.title ?? "";
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -402,8 +444,22 @@ export default function DashboardShell({
               />
             ))}
 
-            {LOCKED_TABS.map((t) => (
-              <LockedNavItem key={t.id} index={nextIndex()} id={t.id} label={t.label} />
+            <div className="mx-4 my-2 border-t border-[var(--border)]" />
+
+            <div className="flex items-center justify-between px-4 pb-1 pt-1">
+              <span className="partno">OPTIONS FLOW</span>
+              <span className="border border-[var(--border-strong)] px-1.5 py-0.5 font-mono text-[0.52rem] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
+                Soon
+              </span>
+            </div>
+            {OPTIONS_FLOW_PAGES.map((p) => (
+              <OptionsFlowNavItem
+                key={p.id}
+                index={nextIndex()}
+                label={p.label}
+                isActive={p.id === activeId}
+                onClick={() => pickPage(p.id)}
+              />
             ))}
 
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
@@ -484,6 +540,46 @@ export default function DashboardShell({
               ) : (
                 <p className="font-sans text-[0.85rem] text-[var(--text-faint)]">No news data yet.</p>
               )}
+            </>
+          ) : isMacroBias ? (
+            <>
+              <header className="mb-8">
+                <div className="eyebrow mb-2">Composite regime read</div>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text="Macro Bias" />
+                </h1>
+              </header>
+              <MacroBiasPage panels={panels} />
+            </>
+          ) : isReplay ? (
+            <>
+              <header className="mb-8">
+                <div className="eyebrow mb-2">Point-in-time scrub</div>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text="Replay" />
+                </h1>
+              </header>
+              <ReplayPage panels={panels} />
+            </>
+          ) : isFingerprint ? (
+            <>
+              <header className="mb-8">
+                <div className="eyebrow mb-2">Seven-pillar shape, then vs now</div>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text="Regime Fingerprint" />
+                </h1>
+              </header>
+              <RegimeFingerprintPage panels={panels} markets={markets} />
+            </>
+          ) : activeOptionsFlow ? (
+            <>
+              <header className="mb-8">
+                <div className="eyebrow mb-2">Options Flow</div>
+                <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
+                  <Scramble text={activeOptionsFlow.label} />
+                </h1>
+              </header>
+              <ComingSoon label={activeOptionsFlow.label} blurb={activeOptionsFlow.blurb} />
             </>
           ) : isCalendar ? (
             <>

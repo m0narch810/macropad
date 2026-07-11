@@ -46,6 +46,9 @@ export default function MarketingFooter() {
           </p>
           <p className="m-0 font-mono text-[0.66rem] text-[var(--text-faint)]">Made for the regime, not the noise.</p>
         </div>
+        <p className="mx-auto mt-3 max-w-[1120px] font-mono text-[0.6rem] tracking-wide text-[var(--text-faint)] opacity-60">
+          Developed by Aarav and Meer, with assistance from YYY Research.
+        </p>
       </div>
     </footer>
   );

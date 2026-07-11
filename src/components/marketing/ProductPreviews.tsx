@@ -3,6 +3,7 @@ import { getSignTone } from "@/lib/bias";
 import { computeMacroBias } from "@/lib/macroBias";
 import { getLandingPanels } from "@/lib/landingData";
 import ZScoreBar from "@/components/ZScoreBar";
+import TerminalHero, { type HeroIndicator } from "@/components/marketing/TerminalHero";
 
 /*
  * Live vignettes for the landing page. Each one renders a real slice of the
@@ -88,112 +89,42 @@ export function BoardPreview({ panels }: { panels: MacroPanel[] }) {
 }
 
 /*
- * Hero visual: a live miniature of the terminal itself. Sidebar mirrors the
- * app's real nav (including the locked Options Flow tab), the work area is
- * real board tiles. Same feed, same conventions, nothing invented.
+ * Hero: the interactive regime terminal. We flatten the live feed into a
+ * scored, source-free indicator list server-side (tone computed here so the
+ * bias config never ships to the public bundle) and hand it to the client
+ * TerminalHero, where visitors actually type/click commands against it.
  */
-const NAV_PREVIEW: ({ label: string; state?: "active" | "locked" } | "divider")[] = [
-  { label: "BOARD", state: "active" },
-  "divider",
-  { label: "NEWS" },
-  { label: "US MACRO" },
-  { label: "RATES" },
-  { label: "COT" },
-  { label: "TRANSMISSION" },
-  { label: "GEOPOLITICS" },
-  { label: "VOLATILITY" },
-  "divider",
-  { label: "MACRO BIAS" },
-  { label: "REPLAY" },
-  { label: "FINGERPRINT" },
-  { label: "CALENDAR" },
-  { label: "OPTIONS FLOW", state: "locked" },
-  "divider",
-  { label: "DOCS" },
-];
+const HERO_CATEGORY: Record<string, string> = {
+  "us-macro": "MACRO",
+  "yield-rates": "RATES",
+  "cot-positioning": "COT",
+  transmission: "FLOW",
+  geopolitics: "GEO",
+  volatility: "VOL",
+};
 
-function MiniLock() {
-  return (
-    <svg width="9" height="9" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1" />
-      <path d="M5.5 7V5A2.5 2.5 0 0 1 10.5 5V7" />
-    </svg>
-  );
-}
-
-export async function TerminalPreview() {
+export async function TerminalHeroLoader() {
   const { panels, lastUpdated } = await getLandingPanels();
-  const sections = [
-    { code: "TF-01", title: "US MACRO", series: (panels.find((p) => p.id === "us-macro")?.series ?? []).slice(0, 8) },
-    { code: "TF-02", title: "RATES", series: (panels.find((p) => p.id === "yield-rates")?.series ?? []).slice(0, 6) },
-  ].filter((s) => s.series.length > 0);
 
-  let navIndex = -1;
+  const indicators: HeroIndicator[] = [];
+  for (const panel of panels) {
+    const category = HERO_CATEGORY[panel.id];
+    if (!category) continue; // skip asset-news / calendar catalogue panels
+    for (const s of panel.series) {
+      if (s.id === "geo:news-feed") continue;
+      indicators.push({
+        id: s.id,
+        name: s.name,
+        value: s.value,
+        score: s.zscore,
+        tone: getSignTone(s.id, s.zscore),
+        category,
+        note: s.note,
+      });
+    }
+  }
 
-  return (
-    <div className="hud border border-[var(--border)] bg-[var(--panel)]">
-      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-b border-[var(--border)] px-4 py-2.5">
-        <span className="eyebrow flex items-center gap-2" style={{ color: "var(--text-dim)" }}>
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--up)] opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--up)]" />
-          </span>
-          Trifekta / Terminal
-        </span>
-        <span className="partno">
-          {lastUpdated
-            ? `SYNCED ${new Date(lastUpdated).toISOString().slice(0, 16).replace("T", " ")}Z`
-            : "AWAITING FIRST SYNC"}
-        </span>
-      </div>
-
-      <div className="flex">
-        <aside className="hidden w-[10.5rem] shrink-0 flex-col border-r border-[var(--border)] py-2 sm:flex">
-          {NAV_PREVIEW.map((item, i) =>
-            item === "divider" ? (
-              <div key={`div-${i}`} className="mx-3 my-1.5 border-t border-[var(--border)]" />
-            ) : (
-              <div
-                key={item.label}
-                className={`flex items-center gap-2 px-3 py-[5px] font-mono text-[0.6rem] tracking-wide ${
-                  item.state === "active"
-                    ? "bg-[var(--panel-2)] text-[var(--text)]"
-                    : item.state === "locked"
-                      ? "text-[var(--text-faint)] opacity-40"
-                      : "text-[var(--text-faint)]"
-                }`}
-              >
-                <span className="w-3.5 shrink-0 text-[0.5rem]">{String(++navIndex).padStart(2, "0")}</span>
-                <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                {item.state === "locked" && <MiniLock />}
-              </div>
-            )
-          )}
-        </aside>
-
-        <div className="min-w-0 flex-1 p-3">
-          {sections.length === 0 ? (
-            <Pending />
-          ) : (
-            <div className="flex flex-col gap-3">
-              {sections.map((sec) => (
-                <section key={sec.code}>
-                  <div className="partno mb-1.5">
-                    {sec.code} {sec.title}
-                  </div>
-                  <div className="grid grid-cols-1 gap-px border border-[var(--border)] bg-[var(--border)] md:grid-cols-2">
-                    {sec.series.map((s) => (
-                      <Tile key={s.id} s={s} />
-                    ))}
-                  </div>
-                </section>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+  return <TerminalHero indicators={indicators} lastUpdated={lastUpdated} />;
 }
 
 /** Real signal scores across the four scoring methods. */

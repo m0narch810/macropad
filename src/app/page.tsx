@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
-import { TerminalPreview, BoardPreview, SignalPreview, BiasPreview, NewsPreview } from "@/components/marketing/ProductPreviews";
+import { TerminalHeroLoader, BoardPreview, SignalPreview, BiasPreview, NewsPreview } from "@/components/marketing/ProductPreviews";
 import Reveal from "@/components/fx/Reveal";
 import { getLandingPanels } from "@/lib/landingData";
 import { macroPanels } from "@/lib/macroData";
@@ -129,7 +129,7 @@ export default function LandingPage() {
 
             <div className="relative mt-14 pb-20 sm:pb-24">
               <Suspense fallback={<StripSkeleton />}>
-                <TerminalPreview />
+                <TerminalHeroLoader />
               </Suspense>
             </div>
           </div>

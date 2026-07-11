@@ -13,8 +13,8 @@ import { applyThemePrefs, loadThemePrefs } from "@/lib/theme";
  */
 export default function ThemeSync() {
   useEffect(() => {
-    const { theme, accent } = loadThemePrefs();
-    applyThemePrefs(theme, accent);
+    const { theme, accent, motion } = loadThemePrefs();
+    applyThemePrefs(theme, accent, motion);
   }, []);
   return null;
 }

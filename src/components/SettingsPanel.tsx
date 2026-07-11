@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { ACCENT_PRESETS, applyThemePrefs, loadThemePrefs, saveThemePrefs, type AccentPreset, type ThemeMode } from "@/lib/theme";
+import { ACCENT_PRESETS, applyThemePrefs, loadThemePrefs, saveThemePrefs, type AccentPreset, type ThemeMode, type MotionPref } from "@/lib/theme";
 import { SegmentedControl } from "@/components/BiasView";
 
 function GearIcon({ className }: { className?: string }) {
@@ -17,9 +17,13 @@ export default function SettingsPanel() {
   const [open, setOpen] = useState(false);
   // Fixed-position coordinates so the popover escapes the sidebar's
   // overflow-y-auto (absolute positioning gets clipped/scrolled inside it).
-  const [pos, setPos] = useState<{ left: number; bottom: number } | null>(null);
+  // maxHeight caps it to the space actually available above the gear button
+  // - previously unbounded, so on shorter screens the popover grew past the
+  // top of the viewport and the Theme row silently rendered off-screen.
+  const [pos, setPos] = useState<{ left: number; bottom: number; maxHeight: number } | null>(null);
   const [theme, setTheme] = useState<ThemeMode>("dark");
   const [accent, setAccent] = useState<AccentPreset>("mono");
+  const [motion, setMotion] = useState<MotionPref>("on");
   const ref = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -27,10 +31,11 @@ export default function SettingsPanel() {
     const prefs = loadThemePrefs();
     setTheme(prefs.theme);
     setAccent(prefs.accent);
+    setMotion(prefs.motion);
     // Re-assert on mount: hydration recovery can wipe the <html> attributes
     // the pre-paint init script set, which left the UI saying "light" while
     // the page rendered dark.
-    applyThemePrefs(prefs.theme, prefs.accent);
+    applyThemePrefs(prefs.theme, prefs.accent, prefs.motion);
   }, []);
 
   useEffect(() => {
@@ -50,21 +55,31 @@ export default function SettingsPanel() {
       // unclamped position ran off the right side and got cut off.
       const width = 240;
       const left = Math.max(8, Math.min(r.left - 8, window.innerWidth - width - 8));
-      setPos({ left, bottom: window.innerHeight - r.top + 8 });
+      // Popover opens upward from the gear - cap its height to the space
+      // actually above it (minus a margin) and let it scroll internally
+      // instead of extending past the top of the viewport unseen.
+      const maxHeight = Math.max(160, r.top - 16);
+      setPos({ left, bottom: window.innerHeight - r.top + 8, maxHeight });
     }
     setOpen((v) => !v);
   }
 
   function updateTheme(next: ThemeMode) {
     setTheme(next);
-    applyThemePrefs(next, accent);
-    saveThemePrefs(next, accent);
+    applyThemePrefs(next, accent, motion);
+    saveThemePrefs(next, accent, motion);
   }
 
   function updateAccent(next: AccentPreset) {
     setAccent(next);
-    applyThemePrefs(theme, next);
-    saveThemePrefs(theme, next);
+    applyThemePrefs(theme, next, motion);
+    saveThemePrefs(theme, next, motion);
+  }
+
+  function updateMotion(next: MotionPref) {
+    setMotion(next);
+    applyThemePrefs(theme, accent, next);
+    saveThemePrefs(theme, accent, next);
   }
 
   return (
@@ -80,8 +95,8 @@ export default function SettingsPanel() {
 
       {open && pos && (
         <div
-          className="z-50 w-60 rounded-lg border border-[var(--border-strong)] bg-[var(--panel-2)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
-          style={{ position: "fixed", left: pos.left, bottom: pos.bottom }}
+          className="z-50 w-60 overflow-y-auto rounded-lg border border-[var(--border-strong)] bg-[var(--panel-2)] p-3 shadow-[0_8px_24px_rgba(0,0,0,0.4)]"
+          style={{ position: "fixed", left: pos.left, bottom: pos.bottom, maxHeight: pos.maxHeight }}
         >
           <div className="mb-3">
             <div className="mb-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-[var(--text-faint)]">Theme</div>
@@ -92,6 +107,19 @@ export default function SettingsPanel() {
               ]}
               value={theme}
               onChange={updateTheme}
+              grow
+            />
+          </div>
+
+          <div className="mb-3">
+            <div className="mb-1.5 font-mono text-[0.6rem] uppercase tracking-wide text-[var(--text-faint)]">Background</div>
+            <SegmentedControl
+              options={[
+                { id: "on" as const, label: "Moving" },
+                { id: "off" as const, label: "Still" },
+              ]}
+              value={motion}
+              onChange={updateMotion}
               grow
             />
           </div>

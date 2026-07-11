@@ -26,3 +26,16 @@ export function onThemeChange(cb: () => void): () => void {
   mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-accent"] });
   return () => mo.disconnect();
 }
+
+/** True if the OS asked for reduced motion, or the user turned off the moving background in Settings. */
+export function motionIsOff(): boolean {
+  if (document.documentElement.getAttribute("data-motion") === "off") return true;
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
+/** Fires when the user flips the moving-background setting - lets a mounted canvas react without a remount. */
+export function onMotionChange(cb: () => void): () => void {
+  const mo = new MutationObserver(cb);
+  mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-motion"] });
+  return () => mo.disconnect();
+}

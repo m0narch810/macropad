@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { resolveInkRgb, onThemeChange } from "@/lib/canvasInk";
+import { resolveInkRgb, onThemeChange, motionIsOff, onMotionChange } from "@/lib/canvasInk";
 
 /*
  * ASCII topographic contour field — the signature decor. A slowly drifting
@@ -91,19 +91,14 @@ export default function AsciiContour({
       }
     };
 
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      draw(2.4);
-      const offTheme = onThemeChange(() => draw(2.4));
-      return () => {
-        offTheme();
-        window.removeEventListener("resize", resize);
-      };
-    }
-
+    // Two modes, switchable live (OS reduced-motion or the Settings "still
+    // background" toggle can flip at any time without remounting): a static
+    // single frame, or an IntersectionObserver-gated ~12fps RAF loop.
     let raf = 0;
     let last = 0;
     let running = false;
-    const FRAME_MS = 83; // ~12fps
+    let visible = true;
+    const FRAME_MS = 83;
 
     const step = (ms: number) => {
       raf = requestAnimationFrame(step);
@@ -111,22 +106,46 @@ export default function AsciiContour({
       last = ms;
       draw(ms / 1000);
     };
-    const start = () => {
+    const startLoop = () => {
       if (running) return;
       running = true;
       raf = requestAnimationFrame(step);
     };
-    const stop = () => {
+    const stopLoop = () => {
       running = false;
       cancelAnimationFrame(raf);
     };
 
-    const io = new IntersectionObserver(([entry]) => (entry.isIntersecting ? start() : stop()), { threshold: 0 });
+    const sync = () => {
+      if (motionIsOff()) {
+        stopLoop();
+        draw(2.4);
+      } else if (visible) {
+        startLoop();
+      }
+    };
+
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        visible = entry.isIntersecting;
+        if (!visible) stopLoop();
+        else sync();
+      },
+      { threshold: 0 }
+    );
     io.observe(canvas);
 
+    const offTheme = onThemeChange(() => {
+      if (!running) draw(2.4);
+    });
+    const offMotion = onMotionChange(sync);
+    sync();
+
     return () => {
-      stop();
+      stopLoop();
       io.disconnect();
+      offTheme();
+      offMotion();
       window.removeEventListener("resize", resize);
     };
   }, [cell, levels, lineWidth, maxAlpha]);

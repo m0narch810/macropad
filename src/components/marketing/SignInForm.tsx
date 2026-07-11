@@ -47,7 +47,12 @@ export default function SignInForm() {
         </label>
 
         <label className="flex flex-col gap-1.5">
-          <span className="partno">&gt; PASSWORD</span>
+          <div className="flex items-center justify-between">
+            <span className="partno">&gt; PASSWORD</span>
+            <Link href="/forgot-password" className="font-mono text-[0.68rem] text-[var(--text-faint)] underline decoration-[var(--border-strong)] underline-offset-2 hover:text-[var(--text-dim)]">
+              Forgot password?
+            </Link>
+          </div>
           <input type="password" required autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} className={inputClass} />
         </label>
 

@@ -16,9 +16,14 @@ create index if not exists macro_series_panel_id_idx on macro_series (panel_id);
 
 alter table macro_series enable row level security;
 
+-- No public/authenticated read policy: the app reads exclusively server-side
+-- with the service_role key (which bypasses RLS). With RLS on and no
+-- permissive SELECT policy, anon and authenticated roles are denied, so the
+-- public anon key in the browser cannot dump this table via the REST API.
+-- (This is what closes the "grab the key from DevTools and hit /rest/v1"
+-- extraction path.)
 drop policy if exists "public read" on macro_series;
-create policy "public read" on macro_series
-  for select using (true);
+revoke all on macro_series from anon, authenticated;
 
 alter table macro_series add column if not exists zscore double precision;
 alter table macro_series add column if not exists sparkline jsonb;

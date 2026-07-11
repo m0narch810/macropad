@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabase";
+import { supabaseAdmin } from "@/lib/supabaseServer";
 import type { HistoryPoint, SeriesStatus } from "@/lib/macroData";
 
 export interface MarketRow {
@@ -15,6 +15,9 @@ export interface MarketRow {
 }
 
 export async function getMarkets(): Promise<MarketRow[]> {
+  // Service-role read (server-only). macro_series has no public-read policy,
+  // so the browser cannot reach this table with the public anon key.
+  const supabase = supabaseAdmin;
   if (!supabase) return [];
   // payload is a later migration - retry without it so a pre-migration DB
   // still returns markets (just without daily bars for the backtest).

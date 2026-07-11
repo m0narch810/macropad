@@ -1,5 +1,14 @@
-import { supabase } from "@/lib/supabase";
-import { macroPanels, type MacroPanel, type SeriesStatus, type HistoryPoint, type ExtraStat, type SeriesPayload } from "@/lib/macroData";
+import { supabaseAdmin } from "@/lib/supabaseServer";
+import { macroPanels, type MacroPanel, type MacroSeries, type SeriesStatus, type HistoryPoint, type ExtraStat, type SeriesPayload } from "@/lib/macroData";
+
+/*
+ * `source` is never sent to the client. It lives only in the static catalogue
+ * for internal reference; the browser must not learn where any series comes
+ * from, so we blank it on every series before it can reach a client component.
+ */
+function stripSource(s: MacroSeries): MacroSeries {
+  return s.source === "" ? s : { ...s, source: "" };
+}
 
 interface DbRow {
   id: string;
@@ -16,8 +25,13 @@ interface DbRow {
 }
 
 export async function getPanels(): Promise<{ panels: MacroPanel[]; lastUpdated: string | null }> {
+  // Read with the service-role client (server-only, bypasses RLS). The table
+  // has NO public-read policy, so this is the only path in; the public anon
+  // key in the browser can no longer dump macro_series directly.
+  const supabase = supabaseAdmin;
   if (!supabase) {
-    return { panels: macroPanels, lastUpdated: null };
+    const panels = macroPanels.map((p) => ({ ...p, series: p.series.map(stripSource) }));
+    return { panels, lastUpdated: null };
   }
 
   // payload is a later migration - retry without it so a pre-migration DB
@@ -40,7 +54,8 @@ export async function getPanels(): Promise<{ panels: MacroPanel[]; lastUpdated: 
   }
 
   if (error || !data) {
-    return { panels: macroPanels, lastUpdated: null };
+    const panels = macroPanels.map((p) => ({ ...p, series: p.series.map(stripSource) }));
+    return { panels, lastUpdated: null };
   }
 
   const byId = new Map<string, DbRow>(data.map((row) => [row.id, row]));
@@ -50,7 +65,7 @@ export async function getPanels(): Promise<{ panels: MacroPanel[]; lastUpdated: 
     ...panel,
     series: panel.series.map((s) => {
       const row = byId.get(s.id);
-      if (!row) return s;
+      if (!row) return stripSource(s);
       if (!lastUpdated || row.updated_at > lastUpdated) lastUpdated = row.updated_at;
       return {
         ...s,
@@ -63,6 +78,7 @@ export async function getPanels(): Promise<{ panels: MacroPanel[]; lastUpdated: 
         history: row.history,
         extraStats: row.extra_stats,
         payload: row.payload ?? null,
+        source: "",
       };
     }),
   }));

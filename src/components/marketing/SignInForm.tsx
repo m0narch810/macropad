@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const inputClass =
-  "w-full border border-[var(--border-strong)] bg-[var(--panel)] px-3.5 py-2.5 font-mono text-[0.85rem] text-[var(--text)] outline-none transition-colors duration-150 focus:border-[var(--text-dim)]";
+  "w-full border border-[var(--border-strong)] bg-[var(--panel)] px-3.5 py-2.5 font-mono text-[16px] text-[var(--text)] outline-none transition-colors duration-150 focus:border-[var(--text-dim)] sm:text-[0.85rem]";
 
 export default function SignInForm() {
   const router = useRouter();

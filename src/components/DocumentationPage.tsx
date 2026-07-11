@@ -192,7 +192,7 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search an indicator, e.g. VIX, unemployment, breakeven"
-          className="w-full rounded-md border px-3.5 py-2.5 font-sans text-[0.86rem] outline-none"
+          className="w-full rounded-md border px-3.5 py-2.5 font-sans text-[16px] outline-none sm:text-[0.86rem]"
           style={{ borderColor: "var(--border-strong)", background: "var(--panel)", color: "var(--text)" }}
         />
 

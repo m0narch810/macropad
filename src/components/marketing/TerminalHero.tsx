@@ -57,10 +57,12 @@ export default function TerminalHero({
   const emit = (batch: Token[][]) =>
     setLines((prev) => [...prev, ...batch.map((tokens) => ({ id: nextId(), tokens }))]);
 
+  // 20+8 char columns keep a full row (with score tag) under ~40 monospace
+  // chars, which fits a 320px phone without mid-token wrapping.
   function indicatorLine(ind: HeroIndicator): Token[] {
     return [
-      { t: ind.name.padEnd(26).slice(0, 26), c: "var(--text)" },
-      { t: ind.value.padStart(9).slice(0, 9) + "  ", c: "var(--text-dim)" },
+      { t: ind.name.padEnd(20).slice(0, 20), c: "var(--text)" },
+      { t: ind.value.padStart(8).slice(0, 8) + " ", c: "var(--text-dim)" },
       scoreToken(ind),
     ];
   }
@@ -214,8 +216,12 @@ export default function TerminalHero({
             onChange={(e) => setInput(e.target.value)}
             spellCheck={false}
             autoComplete="off"
+            autoCapitalize="none"
+            enterKeyHint="go"
             aria-label="Terminal command"
-            className="w-full bg-transparent font-mono text-[0.76rem] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)]"
+            // 16px on phones: anything smaller makes iOS Safari zoom the whole
+            // page when the input focuses.
+            className="w-full bg-transparent font-mono text-[16px] text-[var(--text)] outline-none placeholder:text-[var(--text-faint)] sm:text-[0.76rem]"
             placeholder="scan"
           />
         </form>

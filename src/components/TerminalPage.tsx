@@ -345,7 +345,6 @@ export default function TerminalPage({ panels, markets }: { panels: MacroPanel[]
       const extra = hit.extraStats ?? [];
       emit([
         [{ t: hit.name, c: "var(--text)" }, { t: `  ${hit.windowLabel ?? ""}`, c: "var(--text-faint)" }],
-        [{ t: `source: ${hit.source}`, c: "var(--text-faint)" }],
         ...(extra.length === 0
           ? [[{ t: "no extra stats stored for this indicator", c: "var(--text-faint)" }] as Token[]]
           : extra.map(

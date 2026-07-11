@@ -9,7 +9,8 @@ import { resolveInkRgb, onThemeChange, motionIsOff, onMotionChange } from "@/lib
  * where a band boundary passes, so the output reads as a topo map drawn in
  * type. Each contour level gets its own glyph. Monochrome ink at subliminal
  * opacity; ~12fps (ASCII reads better slow, and it keeps CPU negligible);
- * paused offscreen; a single static frame under prefers-reduced-motion.
+ * paused offscreen; cleared to a plain solid backdrop under
+ * prefers-reduced-motion or the Settings "Solid color" toggle.
  */
 
 const LEVEL_GLYPHS = ["·", ":", "-", "=", "+", "*", "─", "#", "%"];
@@ -91,9 +92,9 @@ export default function AsciiContour({
       }
     };
 
-    // Two modes, switchable live (OS reduced-motion or the Settings "still
-    // background" toggle can flip at any time without remounting): a static
-    // single frame, or an IntersectionObserver-gated ~12fps RAF loop.
+    // Two modes, switchable live (OS reduced-motion or the Settings backdrop
+    // toggle can flip at any time without remounting): cleared to plain
+    // solid color, or an IntersectionObserver-gated ~12fps RAF loop.
     let raf = 0;
     let last = 0;
     let running = false;
@@ -116,10 +117,14 @@ export default function AsciiContour({
       cancelAnimationFrame(raf);
     };
 
+    const clear = () => ctx.clearRect(0, 0, canvas.offsetWidth, canvas.offsetHeight);
+
     const sync = () => {
       if (motionIsOff()) {
         stopLoop();
-        draw(2.4);
+        // "Solid color" means no characters at all, not a frozen frame -
+        // just the plain gradient/background showing through underneath.
+        clear();
       } else if (visible) {
         startLoop();
       }
@@ -136,7 +141,7 @@ export default function AsciiContour({
     io.observe(canvas);
 
     const offTheme = onThemeChange(() => {
-      if (!running) draw(2.4);
+      if (!running) sync();
     });
     const offMotion = onMotionChange(sync);
     sync();

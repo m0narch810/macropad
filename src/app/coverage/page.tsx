@@ -8,9 +8,9 @@ const HIDDEN_PANELS = new Set(["asset-news", "calendar"]);
 const PANELS = macroPanels.filter((p) => !HIDDEN_PANELS.has(p.id));
 
 export const metadata = {
-  title: "Coverage — Trifekta",
+  title: "Coverage · Trifekta",
   description:
-    "Every panel and series Trifekta tracks: US macro, yield rates, COT positioning, transmission, geopolitics, and volatility.",
+    "Every panel and series Trifekta tracks: US macro, yield rates, positioning, transmission, geopolitics, and volatility.",
 };
 
 export default function CoveragePage() {
@@ -28,8 +28,8 @@ export default function CoveragePage() {
               {PANELS.length} panels. {totalSeries} series.
             </h1>
             <p className="mt-5 max-w-lg font-sans text-[1rem] leading-relaxed text-[var(--text-dim)]">
-              Every input feeding the board, with the exact source behind each one. Nothing on Trifekta is a
-              black box.
+              Every input feeding the board, with what it measures and why it earns a slot. Each one is
+              documented inside the desk, so you always know how to read it.
             </p>
           </div>
         </section>
@@ -60,7 +60,6 @@ export default function CoveragePage() {
                       <div key={s.id} className="bg-[var(--bg)] px-4 py-3.5 transition-colors duration-150 hover:bg-[var(--panel-2)]">
                         <div className="font-sans text-[0.85rem] font-semibold text-[var(--text)]">{s.name}</div>
                         <div className="mt-1 font-sans text-[0.76rem] leading-snug text-[var(--text-faint)]">{s.note}</div>
-                        <div className="partno mt-2.5">{s.source}</div>
                       </div>
                     ))}
                   </div>

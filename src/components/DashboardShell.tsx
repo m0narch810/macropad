@@ -166,6 +166,30 @@ function NavItem({
   );
 }
 
+function LockGlyph() {
+  return (
+    <svg width="11" height="11" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
+      <rect x="3.5" y="7" width="9" height="6.5" rx="1" />
+      <path d="M5.5 7V5A2.5 2.5 0 0 1 10.5 5V7" />
+    </svg>
+  );
+}
+
+/** A visible-but-unusable tab: dimmed, unclickable, not draggable. */
+function LockedNavItem({ index, id, label }: { index: number; id: string; label: string }) {
+  return (
+    <div
+      aria-disabled="true"
+      className="relative flex w-full cursor-default select-none items-center gap-3 px-4 py-[9px] text-left font-mono text-[0.7rem] tracking-wide text-[var(--text-faint)] opacity-40"
+    >
+      <span className="w-4 shrink-0 text-[0.56rem]">{String(index).padStart(2, "0")}</span>
+      <PanelIcon id={id} className="shrink-0" style={{ color: "var(--text-faint)" }} />
+      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <LockGlyph />
+    </div>
+  );
+}
+
 export default function DashboardShell({
   panels,
   lastUpdated,
@@ -384,6 +408,9 @@ export default function DashboardShell({
                 drag={tabDrag("b", entry.id)}
               />
             ))}
+
+            <LockedNavItem index={nextIndex()} id="options-flow" label="OPTIONS FLOW" />
+
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
             <NavItem index={nextIndex()} id="docs" label="DOCS" isActive={isDocs} onClick={() => pickPage(DOCS_ID)} />

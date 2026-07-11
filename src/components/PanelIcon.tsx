@@ -83,6 +83,16 @@ const ICONS: Record<string, React.ReactNode> = {
       <path d="M13.5 2.5V5.5" />
     </>
   ),
+  "options-flow": (
+    <>
+      <path d="M6 3V6" />
+      <rect x="4.5" y="6" width="3" height="6" rx="0.8" />
+      <path d="M6 12V16" />
+      <path d="M14 4.5V8" />
+      <rect x="12.5" y="8" width="3" height="5.5" rx="0.8" />
+      <path d="M14 13.5V17" />
+    </>
+  ),
   docs: (
     <>
       <path d="M5 3H12.5L16 6.5V17H5Z" />

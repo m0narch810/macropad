@@ -4,46 +4,59 @@ import MarketingFooter from "@/components/marketing/MarketingFooter";
 import Reveal from "@/components/fx/Reveal";
 
 export const metadata = {
-  title: "Pricing — Trifekta",
-  description: "Launch pricing: the full desk, free during the trial window.",
+  title: "Pricing · Trifekta",
+  description: "Free during launch, $29 a month after. One plan, the whole desk.",
 };
 
 const FEATURES = [
-  "Every panel — macro, rates, COT, transmission, geopolitics, volatility",
-  "Method-fit signal scores on every series",
-  "Per-asset news with event-based sentiment",
-  "Board view: the whole desk on one screen",
-  "Custom dashboards and custom bias weights",
-  "Full history and specialized stats per indicator",
-  "Daily sync, timestamped on every board",
+  "All six panels: US macro, rates, positioning, transmission, geopolitics, volatility",
+  "A signal score on every series, method-fit to the indicator",
+  "Macro Bias: composite risk-on or risk-off read with pillar breakdown",
+  "Replay and Regime Fingerprint: recompute the bias historically, match today against past regimes",
+  "Pooled and per-asset news with event-based sentiment",
+  "Full history and specialized stats on every indicator",
+  "Economic release calendar for every tracked series",
+  "Daily sync with the exact timestamp on the board",
 ];
 
 const LAUNCH_TERMS = [
-  ["T-01", "Trial users lock in early access", "Everyone who signs up during launch keeps full access through the trial period. No surprise downgrades."],
-  ["T-02", "A paid Pro tier is coming", "Once the desk is proven out, Pro pricing lands. This window won't last."],
-  ["T-03", "You hear about it first", "No silent price change. Trial users get notice before anything switches."],
+  [
+    "T-01",
+    "Launch access is the full product",
+    "Nothing is gated behind the paid tier during launch. What you use free now is exactly what Pro will be.",
+  ],
+  [
+    "T-02",
+    "Pro lands at $29 a month",
+    "When the launch window closes, Pro switches on at $29 a month or $290 a year. There is one plan; there will never be a stripped-down tier that hides the good parts.",
+  ],
+  [
+    "T-03",
+    "You get 14 days notice",
+    "Nothing converts automatically and no card is on file to charge. Before Pro switches on, every launch user gets at least 14 days notice and chooses whether to subscribe.",
+  ],
 ] as const;
 
 const FAQ = [
   {
-    q: "What's included in the free trial?",
-    a: "Everything. Every panel, every asset, full news and sentiment coverage, custom dashboards and bias. Nothing is held back for a later tier during the trial.",
+    q: "What's included during launch?",
+    a: "Everything. Every panel, every asset, the full bias and replay toolkit, news and sentiment, the calendar. There is no feature held back for later.",
   },
   {
-    q: "Where does the data come from?",
-    a: "Macro and yield series from FRED and the US Treasury, positioning from CFTC COT reports, volatility from CBOE, headlines from policy and markets desks — each board shows the exact source behind every number.",
+    q: "What will it cost after launch?",
+    a: "$29 a month, or $290 a year which works out to two months free. One plan with everything in it.",
+  },
+  {
+    q: "Do I need to connect accounts or import data?",
+    a: "No. Trifekta aggregates and scores everything server-side. You sign in and the board is already live.",
   },
   {
     q: "How often does it refresh?",
-    a: "Daily, synced at 13:00 UTC on trading days. Every board shows the exact last-synced timestamp — no guessing.",
+    a: "Daily on trading days. The board shows the exact last-synced timestamp, so you always know how current the read is.",
   },
   {
-    q: "Do I need to connect my own accounts?",
-    a: "No. Trifekta pulls and scores everything server-side. You just open the board.",
-  },
-  {
-    q: "What happens after the trial?",
-    a: "Pro pricing comes later. You'll get notice before anything changes — nothing switches off automatically.",
+    q: "What happens to my account when pricing starts?",
+    a: "You get at least 14 days notice, then you decide. Nothing is charged automatically because no card is required during launch.",
   },
 ];
 
@@ -57,33 +70,37 @@ export default function PricingPage() {
           <div className="relative mx-auto max-w-[1120px] px-5 pb-16 pt-20 sm:px-8 sm:pt-24">
             <div className="eyebrow mb-4">Pricing</div>
             <h1 className="display-hero m-0 max-w-2xl text-[2.4rem] sm:text-[3.4rem]">
-              Free trial. Every feature.
+              Free during launch. $29 a month after.
             </h1>
             <p className="mt-5 max-w-lg font-sans text-[1rem] leading-relaxed text-[var(--text-dim)]">
-              Pro pricing lands later. Right now the trial is the whole desk, nothing gated.
+              One plan, the whole desk. No card required during launch, and at least 14 days notice before
+              Pro pricing switches on.
             </p>
           </div>
         </section>
 
         <section className="border-b border-[var(--border)]">
           <div className="mx-auto grid max-w-[1120px] grid-cols-1 gap-12 px-5 py-16 sm:px-8 lg:grid-cols-[1fr_1.1fr] lg:items-start">
-            {/* Featured plan: one surface step up, no colored border. */}
+            {/* The one plan: one surface step up, no colored border. */}
             <Reveal>
               <div className="hud flex flex-col border border-[var(--border-strong)] bg-[var(--panel-2)] p-8">
                 <div className="flex items-baseline justify-between">
-                  <span className="partno">PLAN-00 / FULL ACCESS</span>
+                  <span className="partno">PLAN-01 / PRO</span>
                   <span className="border border-[var(--border-strong)] px-2 py-0.5 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.12em] text-[var(--text-dim)]">
-                    Launch window
+                    Free during launch
                   </span>
                 </div>
 
                 <div className="mt-6 flex items-baseline gap-2">
-                  <span className="font-display text-[3rem] leading-none tracking-[-0.03em]">$0</span>
-                  <span className="font-mono text-[0.72rem] text-[var(--text-faint)]">during trial</span>
+                  <span className="font-display text-[3rem] leading-none tracking-[-0.03em]">$29</span>
+                  <span className="font-mono text-[0.72rem] text-[var(--text-faint)]">/ month after launch</span>
+                </div>
+                <div className="mt-1.5 font-mono text-[0.7rem] text-[var(--text-faint)]">
+                  $0 now · $290 / year when pricing starts
                 </div>
                 <p className="m-0 mt-3 font-sans text-[0.88rem] leading-relaxed text-[var(--text-dim)]">
-                  Every panel, every asset, every feature. Pro pricing arrives later — trial users get advance
-                  notice first.
+                  This is the only plan. Signing up during launch gets you all of it free, with 14 days
+                  notice before the price switches on.
                 </p>
 
                 <ul className="m-0 mt-8 flex flex-1 list-none flex-col gap-3 p-0">
@@ -96,7 +113,7 @@ export default function PricingPage() {
                 </ul>
 
                 <Link href="/signup" className="btn btn-primary mt-9 w-full">
-                  Launch free trial
+                  Start free
                 </Link>
               </div>
             </Reveal>
@@ -109,8 +126,9 @@ export default function PricingPage() {
                     This is launch pricing, not the price.
                   </h2>
                   <p className="m-0 mt-4 font-sans text-[0.92rem] leading-relaxed text-[var(--text-dim)]">
-                    Trifekta just launched. Free access is how the board gets in front of real desks while we find
-                    out what's worth charging for — it is not a permanent tier.
+                    Trifekta just launched. Free access is how the board gets in front of real desks before
+                    the paid tier switches on. It is not a permanent free tier and it will not quietly turn
+                    into one.
                   </p>
                 </div>
 

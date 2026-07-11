@@ -180,7 +180,7 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
   return (
     <div ref={containerRef}>
       <div className="mb-1.5 flex flex-wrap items-baseline justify-between gap-2">
-        <div className="eyebrow">{headlines.length} headlines, pinned where the story points — drag to navigate</div>
+        <div className="eyebrow">{headlines.length} headlines, pinned where the story points. Drag to navigate</div>
         <div className="flex gap-3 font-mono text-[0.68rem] text-[var(--text-faint)]">
           <span style={{ color: "var(--up)" }}>● {bullishCount} bullish</span>
           <span style={{ color: "var(--text-faint)" }}>● {neutralCount} neutral</span>

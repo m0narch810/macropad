@@ -364,7 +364,7 @@ const CONFIG: Record<string, BiasConfig> = {
   },
   "geo:skew": {
     context:
-      "CBOE SKEW prices the cost of far out-of-the-money S&P put protection - a direct read on how much tail/crash risk the options market is pricing, independent of the VIX level.",
+      "The SKEW index prices the cost of far out-of-the-money S&P put protection - a direct read on how much tail/crash risk the options market is pricing, independent of the VIX level.",
     high: { label: "Tail risk richly priced", tone: "down" },
     low: { label: "Tail risk cheaply priced", tone: "up" },
     neutral: "SKEW near its usual range.",

@@ -570,10 +570,9 @@ export default function QuantCard({
             <PositioningBody series={series} history={history} values={values} />
           )}
 
-          <div className="mt-5 flex items-center justify-between font-mono text-[0.7rem] text-[var(--text-faint)]">
-            <span>{series.source}</span>
-            {series.windowLabel && <span>{series.windowLabel}</span>}
-          </div>
+          {series.windowLabel && (
+            <div className="mt-5 text-right font-mono text-[0.7rem] text-[var(--text-faint)]">{series.windowLabel}</div>
+          )}
         </div>
       )}
     </div>

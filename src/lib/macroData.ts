@@ -182,7 +182,7 @@ export const macroPanels: MacroPanel[] = [
       blank("geo:gepu", "Global Policy Uncertainty", "GDP-weighted across major economies", "FRED GEPUCURRENT"),
       blank("geo:equity-uncertainty", "Equity Market Uncertainty", "News + options-based, daily", "FRED WLEMUINDXD"),
       blank("geo:defense-spy", "Defense / Market Ratio", "ITA vs SPY - risk-on tilt toward defense names", "Yahoo Finance ITA / SPY"),
-      blank("geo:news-feed", "News Sentiment", "Pooled macro headlines, keyword-lexicon scored", "CNBC · Fed · WSJ · Yahoo · FXStreet"),
+      blank("geo:news-feed", "News Sentiment", "Pooled macro headlines, scored for tone", "Macro and policy news desks"),
     ],
   },
   {
@@ -193,7 +193,7 @@ export const macroPanels: MacroPanel[] = [
     title: "Asset News",
     description: "Per-asset headline sentiment.",
     series: MARKET_SYMBOLS.map((m) =>
-      blank(`asset-news:${m.symbol}`, `${m.label} News`, "Real indicator events (FRED/CFTC) plus matching headlines, not headline-only sentiment", "FRED · CFTC · CNBC · Fed · ECB · WSJ · FXStreet · MarketWatch")
+      blank(`asset-news:${m.symbol}`, `${m.label} News`, "Real indicator events plus matching headlines, not headline-only sentiment", "Indicator events and news desks")
     ),
   },
   {
@@ -203,8 +203,8 @@ export const macroPanels: MacroPanel[] = [
     // API rather than guessed cadences.
     id: "calendar",
     title: "Economic Release Calendar",
-    description: "Real release dates for the indicators this board tracks, pulled from FRED's release-dates API.",
-    series: [blank("calendar:econ-events", "Economic Release Calendar", "Upcoming and recent release dates", "FRED release/dates API")],
+    description: "Real release dates for the indicators this board tracks.",
+    series: [blank("calendar:econ-events", "Economic Release Calendar", "Upcoming and recent release dates", "Official release schedule")],
   },
   {
     id: "volatility",
@@ -214,7 +214,7 @@ export const macroPanels: MacroPanel[] = [
       blank("geo:vix", "VIX", "S&P 500 implied vol, 30d", "FRED VIXCLS"),
       blank("geo:vix-term", "VIX Term Structure", "VIX3M / VIX - below 1 = backwardation = stress", "Yahoo ^VIX3M / ^VIX"),
       blank("geo:vvix", "VVIX", "Vol-of-vol - implied vol of the VIX itself", "Yahoo ^VVIX"),
-      blank("geo:skew", "CBOE SKEW", "Tail-risk gauge - priced crash probability", "Yahoo ^SKEW"),
+      blank("geo:skew", "SKEW Index", "Tail-risk gauge - priced crash probability", "Yahoo ^SKEW"),
       blank("geo:ovx", "OVX", "Crude oil implied vol - supply-shock gauge", "FRED OVXCLS"),
       blank("geo:gvz", "GVZ", "Gold implied vol - safe-haven flow gauge", "FRED GVZCLS"),
       blank("geo:move", "MOVE Index", "Bond market implied vol", "Yahoo ^MOVE"),

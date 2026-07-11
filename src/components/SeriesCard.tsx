@@ -84,10 +84,9 @@ export default function SeriesCard({
         </div>
       )}
 
-      <div className="mt-2.5 flex items-center justify-between font-mono text-[0.62rem] text-[var(--text-faint)]">
-        <span>{series.source}</span>
-        {series.windowLabel && <span>{series.windowLabel}</span>}
-      </div>
+      {series.windowLabel && (
+        <div className="mt-2.5 text-right font-mono text-[0.62rem] text-[var(--text-faint)]">{series.windowLabel}</div>
+      )}
     </div>
   );
 }

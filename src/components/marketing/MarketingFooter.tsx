@@ -8,9 +8,9 @@ export default function MarketingFooter() {
         <div className="max-w-xs">
           <Wordmark size="sm" />
           <p className="mt-3 font-sans text-[0.82rem] leading-relaxed text-[var(--text-faint)]">
-            Live macro desk: regime signals, positioning, and per-asset bias on one screen.
+            Live macro desk: regime signals, positioning, and a composite bias on one screen.
           </p>
-          <div className="partno mt-5">SRC: FRED · CFTC · US TREASURY · CBOE</div>
+          <div className="partno mt-5">SYNCED DAILY · ONE BOARD</div>
         </div>
 
         <div className="grid grid-cols-2 gap-x-14 gap-y-8 sm:grid-cols-3">
@@ -42,7 +42,7 @@ export default function MarketingFooter() {
       <div className="border-t border-[var(--border)] px-5 py-5 sm:px-8">
         <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-3">
           <p className="m-0 font-mono text-[0.66rem] text-[var(--text-faint)]">
-            &copy; {new Date().getFullYear()} Trifekta. Informational only — not investment advice.
+            &copy; {new Date().getFullYear()} Trifekta. Informational only, not investment advice.
           </p>
           <p className="m-0 font-mono text-[0.66rem] text-[var(--text-faint)]">Made for the regime, not the noise.</p>
         </div>

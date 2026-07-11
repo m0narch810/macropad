@@ -27,6 +27,10 @@ export default function SettingsPanel() {
     const prefs = loadThemePrefs();
     setTheme(prefs.theme);
     setAccent(prefs.accent);
+    // Re-assert on mount: hydration recovery can wipe the <html> attributes
+    // the pre-paint init script set, which left the UI saying "light" while
+    // the page rendered dark.
+    applyThemePrefs(prefs.theme, prefs.accent);
   }, []);
 
   useEffect(() => {

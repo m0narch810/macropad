@@ -48,7 +48,7 @@ export default function SignUpForm() {
       <div className="partno mb-4">AUTH / FREE TRIAL</div>
       <h1 className="font-display m-0 text-[1.7rem] leading-[1.05]">Launch the desk.</h1>
       <p className="mt-3 font-sans text-[0.88rem] leading-relaxed text-[var(--text-dim)]">
-        Every feature, no card required. Pro pricing comes later — you&apos;ll get notice first.
+        Every feature, no card required. Pro pricing comes later, and you get 14 days notice first.
       </p>
 
       {checkEmail ? (

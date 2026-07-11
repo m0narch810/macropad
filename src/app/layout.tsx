@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import TerrainBackdrop from "@/components/fx/TerrainBackdrop";
+import ThemeSync from "@/components/fx/ThemeSync";
 import { THEME_INIT_SCRIPT } from "@/lib/theme";
 import "./globals.css";
 
@@ -16,9 +17,9 @@ const jetMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Trifekta — the regime desk",
+  title: "Trifekta · The Regime Desk",
   description:
-    "Live macro desk: US macro, yield rates, COT positioning, transmission, volatility - regime signals and per-asset net bias.",
+    "Live macro desk: US macro, yield rates, positioning, transmission, geopolitics, and volatility. Every read scored, one composite bias, one screen.",
 };
 
 export const viewport: Viewport = {
@@ -36,6 +37,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
       </head>
       <body className="min-h-full flex flex-col bg-[var(--bg)] text-[var(--text)]">
+        <ThemeSync />
         <TerrainBackdrop />
         <div className="relative flex min-h-full flex-1 flex-col">{children}</div>
         <Analytics />

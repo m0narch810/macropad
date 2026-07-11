@@ -5,13 +5,25 @@ export interface RssItem {
   description: string | null; // article summary/dek, used to enrich sentiment scoring beyond the headline
 }
 
+const NAMED_ENTITIES: Record<string, string> = {
+  amp: "&", lt: "<", gt: ">", quot: '"', apos: "'",
+  nbsp: " ", ndash: "–", mdash: "—", hellip: "…",
+  lsquo: "‘", rsquo: "’", ldquo: "“", rdquo: "”",
+};
+
 function decodeXmlEntities(s: string): string {
-  return s
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'");
+  // Two passes so double-encoded feeds ("&amp;#x2018;") fully unwrap.
+  let out = s;
+  for (let pass = 0; pass < 2 && out.includes("&"); pass++) {
+    out = out.replace(/&(?:#x([0-9a-fA-F]+)|#(\d+)|([a-zA-Z]+));/g, (match, hex, dec, name) => {
+      if (hex || dec) {
+        const code = hex ? parseInt(hex, 16) : parseInt(dec, 10);
+        return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : match;
+      }
+      return NAMED_ENTITIES[name] ?? match;
+    });
+  }
+  return out;
 }
 
 function extractTag(block: string, tag: string): string | null {

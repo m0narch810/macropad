@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { Canvas, useLoader } from "@react-three/fiber";
+import { Canvas, useLoader, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import type { NewsHeadlinePayload } from "@/lib/macroData";
@@ -17,8 +17,31 @@ import { locateHeadline, type GeoPoint } from "@/lib/geoNews";
 
 const R = 2.6;
 
-function toneColor(label: NewsHeadlinePayload["sentimentLabel"]): string {
-  return label === "bullish" ? "#3ecf8e" : label === "bearish" ? "#f0555d" : "#9c9ca3";
+type SignalColors = { up: string; down: string; flat: string };
+
+/**
+ * Live --up/--down/--flat values. three.js materials need concrete colors,
+ * not var() references, so read the computed values and re-read whenever the
+ * theme or signal-color preset changes on <html>.
+ */
+function useSignalColors(): SignalColors {
+  const [colors, setColors] = useState<SignalColors>({ up: "#3ecf8e", down: "#f0555d", flat: "#9c9ca3" });
+  useEffect(() => {
+    const read = () => {
+      const cs = getComputedStyle(document.documentElement);
+      const get = (name: string, fallback: string) => cs.getPropertyValue(name).trim() || fallback;
+      setColors({ up: get("--up", "#3ecf8e"), down: get("--down", "#f0555d"), flat: get("--flat", "#9c9ca3") });
+    };
+    read();
+    const mo = new MutationObserver(read);
+    mo.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme", "data-signal"] });
+    return () => mo.disconnect();
+  }, []);
+  return colors;
+}
+
+function toneColor(label: NewsHeadlinePayload["sentimentLabel"], colors: SignalColors): string {
+  return label === "bullish" ? colors.up : label === "bearish" ? colors.down : colors.flat;
 }
 
 /**
@@ -47,6 +70,24 @@ function makeGlowTexture(): THREE.Texture {
   const tex = new THREE.CanvasTexture(c);
   tex.needsUpdate = true;
   return tex;
+}
+
+/**
+ * R3F and OrbitControls both force touch-action: none on the canvas, which
+ * traps page scrolling on mobile - a finger landing on the globe can never
+ * scroll past it. pan-y hands vertical swipes back to the browser while
+ * horizontal drags still rotate the globe. Runs after OrbitControls
+ * connects (it overwrites the style on mount), hence the rAF.
+ */
+function TouchScrollFix() {
+  const gl = useThree((s) => s.gl);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      gl.domElement.style.touchAction = "pan-y";
+    });
+    return () => cancelAnimationFrame(id);
+  }, [gl]);
+  return null;
 }
 
 function Earth() {
@@ -105,6 +146,7 @@ function NewsDot({
   glows,
   glowTexture,
   onHover,
+  onSelect,
 }: {
   position: [number, number, number];
   color: string;
@@ -113,19 +155,30 @@ function NewsDot({
   glows: boolean;
   glowTexture: THREE.Texture;
   onHover: (hovered: boolean) => void;
+  onSelect: () => void;
 }) {
   const glow = active ? 0.42 : 0.26;
   return (
     <group position={position}>
+      <mesh>
+        <sphereGeometry args={[active ? 0.07 : 0.045, 12, 12]} />
+        <meshBasicMaterial color={color} />
+      </mesh>
+      {/* Oversized invisible hit target - the visible dot is a ~4px sphere,
+          far too small to hover precisely or tap on a phone. */}
       <mesh
         onPointerOver={(e) => {
           e.stopPropagation();
           onHover(true);
         }}
         onPointerOut={() => onHover(false)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSelect();
+        }}
       >
-        <sphereGeometry args={[active ? 0.07 : 0.045, 12, 12]} />
-        <meshBasicMaterial color={color} />
+        <sphereGeometry args={[0.14, 8, 8]} />
+        <meshBasicMaterial colorWrite={false} depthWrite={false} />
       </mesh>
       {(glows || active) && (
         <sprite scale={[glow, glow, 1]} renderOrder={2}>
@@ -148,6 +201,10 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
   const [pinnedIdx, setPinnedIdx] = useState<number | null>(null);
   const [inView, setInView] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Set when a dot's own click handler pinned a story, so the container's
+  // click-to-clear (which fires right after on the same tap) doesn't undo it.
+  const dotClickedRef = useRef(false);
+  const signalColors = useSignalColors();
   const glowTexture = useMemo(() => (typeof document !== "undefined" ? makeGlowTexture() : null), []);
 
   useEffect(() => {
@@ -190,8 +247,14 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_280px]">
         <div
-          className="hud h-[360px] w-full overflow-hidden border border-[var(--border)] bg-black"
-          onClick={() => setPinnedIdx(hoverIdx)}
+          className="hud h-[360px] w-full overflow-hidden border border-[var(--border)] bg-[var(--globe-bg)]"
+          onClick={() => {
+            if (dotClickedRef.current) {
+              dotClickedRef.current = false;
+              return;
+            }
+            setPinnedIdx(hoverIdx);
+          }}
         >
           {inView ? (
             <Canvas camera={{ position: [2.85, 3.1, 3.4], fov: 42 }} dpr={[1, 1.6]}>
@@ -206,11 +269,15 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
                   <NewsDot
                     key={i}
                     position={p.pos}
-                    color={toneColor(p.headline.sentimentLabel)}
+                    color={toneColor(p.headline.sentimentLabel, signalColors)}
                     active={activeIdx === i}
                     glows={p.headline.sentimentLabel !== "neutral"}
                     glowTexture={glowTexture}
                     onHover={(hovered) => setHoverIdx(hovered ? i : null)}
+                    onSelect={() => {
+                      dotClickedRef.current = true;
+                      setPinnedIdx(i);
+                    }}
                   />
                 ))}
               <OrbitControls
@@ -221,6 +288,7 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
                 autoRotateSpeed={0.45}
                 rotateSpeed={0.55}
               />
+              <TouchScrollFix />
             </Canvas>
           ) : (
             <div className="flex h-full items-center justify-center font-sans text-[0.7rem] text-[var(--text-faint)]">
@@ -234,7 +302,7 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
             <>
               <span
                 className="mb-1.5 w-fit font-mono text-[0.64rem] font-bold uppercase tracking-[0.08em]"
-                style={{ color: toneColor(active.headline.sentimentLabel) }}
+                style={{ color: toneColor(active.headline.sentimentLabel, signalColors) }}
               >
                 [{active.headline.sentimentLabel} {active.headline.sentimentScore > 0 ? "+" : ""}
                 {active.headline.sentimentScore.toFixed(2)}]
@@ -262,7 +330,7 @@ export default function NewsGlobe({ headlines }: { headlines: NewsHeadlinePayloa
             </>
           ) : (
             <p className="m-0 font-sans text-[0.78rem] leading-snug text-[var(--text-faint)]">
-              Hover a particle to read that story. Position is the story&apos;s inferred market center; color is
+              Hover or tap a particle to read that story. Position is the story&apos;s inferred market center; color is
               sentiment.
             </p>
           )}

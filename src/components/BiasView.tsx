@@ -32,10 +32,13 @@ export function SegmentedControl<T extends string>({
   options,
   value,
   onChange,
+  grow = false,
 }: {
   options: { id: T; label: string }[];
   value: T;
   onChange: (id: T) => void;
+  /** Stretch the options to fill the row - for short lists in tight popovers. */
+  grow?: boolean;
 }) {
   return (
     <div className="flex flex-wrap rounded-md border border-[var(--border)] bg-[var(--panel-2)] p-0.5">
@@ -43,7 +46,7 @@ export function SegmentedControl<T extends string>({
         <button
           key={opt.id}
           onClick={() => onChange(opt.id)}
-          className="rounded px-2.5 py-1 font-sans text-[0.7rem] font-semibold transition-colors"
+          className={`rounded px-2.5 py-1 font-sans text-[0.7rem] font-semibold transition-colors ${grow ? "flex-1" : ""}`}
           style={
             value === opt.id
               ? { background: "color-mix(in srgb, var(--accent) 18%, transparent)", color: "var(--accent)" }

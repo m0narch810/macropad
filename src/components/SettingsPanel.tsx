@@ -45,7 +45,12 @@ export default function SettingsPanel() {
   function toggleOpen() {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
-      setPos({ left: Math.max(8, r.left - 8), bottom: window.innerHeight - r.top + 8 });
+      // Clamp inside the viewport: the popover is 240px wide (w-60) and the
+      // gear sits near the sidebar's right edge, so on narrow screens the
+      // unclamped position ran off the right side and got cut off.
+      const width = 240;
+      const left = Math.max(8, Math.min(r.left - 8, window.innerWidth - width - 8));
+      setPos({ left, bottom: window.innerHeight - r.top + 8 });
     }
     setOpen((v) => !v);
   }
@@ -87,6 +92,7 @@ export default function SettingsPanel() {
               ]}
               value={theme}
               onChange={updateTheme}
+              grow
             />
           </div>
 
@@ -111,8 +117,8 @@ export default function SettingsPanel() {
             </div>
           </div>
 
-          <p className="font-sans text-[0.62rem] leading-snug text-[var(--text-faint)]">
-            Tip: drag tabs in the sidebar to reorder them. Board and Docs stay pinned.
+          <p className="m-0 font-sans text-[0.62rem] leading-snug text-[var(--text-faint)]">
+            Tip: drag a tab by the grip on its right edge to reorder. Board and Docs stay pinned.
           </p>
         </div>
       )}

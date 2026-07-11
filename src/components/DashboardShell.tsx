@@ -131,8 +131,19 @@ interface NavDrag {
   onDragEnd: () => void;
 }
 
+/** Six-dot grip: the only part of a tab that initiates a drag. */
+function GripIcon() {
+  return (
+    <svg width="10" height="14" viewBox="0 0 10 14" fill="currentColor" aria-hidden>
+      {[2, 7, 12].flatMap((y) => [
+        <circle key={`l${y}`} cx="3" cy={y} r="1.1" />,
+        <circle key={`r${y}`} cx="7" cy={y} r="1.1" />,
+      ])}
+    </svg>
+  );
+}
+
 function NavItem({
-  index,
   id,
   label,
   isActive,
@@ -141,31 +152,25 @@ function NavItem({
   bear,
   drag,
 }: {
-  index: number;
   id: string;
   label: string;
   isActive: boolean;
   onClick: () => void;
   bull?: number;
   bear?: number;
-  /** Present on reorderable tabs - drag any time, no mode toggle. */
+  /** Present on reorderable tabs. Only the grip handle starts a drag; the row stays a drop target. */
   drag?: NavDrag;
 }) {
   return (
     <div
-      draggable={!!drag}
-      onDragStart={drag?.onDragStart}
       onDragOver={drag?.onDragOver}
       onDrop={drag?.onDrop}
-      onDragEnd={drag?.onDragEnd}
-      title={drag ? "Drag to reorder" : undefined}
       className={`group relative flex w-full items-center gap-3 px-4 py-[9px] text-left font-mono text-[0.7rem] tracking-wide transition-colors duration-150 ${
         isActive ? "bg-[var(--panel-2)] text-[var(--text)]" : "text-[var(--text-faint)] hover:text-[var(--text-dim)]"
-      } ${drag ? "cursor-grab active:cursor-grabbing" : ""} ${drag?.isDragging ? "opacity-35" : ""}`}
+      } ${drag?.isDragging ? "opacity-35" : ""}`}
     >
       {isActive && <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-[var(--text)]" />}
       <button onClick={onClick} className="flex min-w-0 flex-1 items-center gap-3 text-left">
-        <span className="w-4 shrink-0 text-[0.56rem] text-[var(--text-faint)]">{String(index).padStart(2, "0")}</span>
         <PanelIcon id={id} className="shrink-0" style={{ color: isActive ? "var(--text)" : "var(--text-faint)" }} />
         <span className="min-w-0 flex-1 truncate">{label}</span>
       </button>
@@ -175,12 +180,23 @@ function NavItem({
           {bear ? <span className="text-[var(--down)]">{bear}▼</span> : null}
         </span>
       )}
+      {drag && (
+        <span
+          draggable
+          onDragStart={drag.onDragStart}
+          onDragEnd={drag.onDragEnd}
+          title="Drag to reorder"
+          className="-mr-1.5 shrink-0 cursor-grab px-1 py-0.5 text-[var(--text-faint)] opacity-0 transition-opacity duration-150 hover:text-[var(--text-dim)] active:cursor-grabbing group-hover:opacity-100"
+        >
+          <GripIcon />
+        </span>
+      )}
     </div>
   );
 }
 
 /** An upcoming Options Flow page: clickable, but leads to a coming-soon screen. */
-function OptionsFlowNavItem({ index, label, isActive, onClick }: { index: number; label: string; isActive: boolean; onClick: () => void }) {
+function OptionsFlowNavItem({ label, isActive, onClick }: { label: string; isActive: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -189,7 +205,6 @@ function OptionsFlowNavItem({ index, label, isActive, onClick }: { index: number
       }`}
     >
       {isActive && <span className="absolute left-0 top-1/2 h-4 w-px -translate-y-1/2 bg-[var(--text)]" />}
-      <span className="w-4 shrink-0 text-[0.56rem]">{String(index).padStart(2, "0")}</span>
       <PanelIcon id="options-flow" className="shrink-0" style={{ color: isActive ? "var(--text)" : "var(--text-faint)" }} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
@@ -263,6 +278,8 @@ export default function DashboardShell({
       isDragging: draggingTab?.group === group && draggingTab.id === id,
       onDragStart: (e) => {
         e.dataTransfer.effectAllowed = "move";
+        // Firefox refuses to start a drag without data attached.
+        e.dataTransfer.setData("text/plain", id);
         setDraggingTab({ group, id });
       },
       onDragOver: (e) => {
@@ -312,10 +329,6 @@ export default function DashboardShell({
     },
     { bull: 0, bear: 0 }
   );
-
-  // Sequential nav indexing: board, news, panels, customs, docs.
-  let navIndex = -1;
-  const nextIndex = () => ++navIndex;
 
   interface NavEntryMeta {
     id: string;
@@ -417,15 +430,14 @@ export default function DashboardShell({
           </div>
 
           <nav className="flex flex-1 flex-col py-3">
-            <NavItem index={nextIndex()} id="board" label="BOARD" isActive={isBoard} onClick={() => pickPage(BOARD_ID)} />
-            <NavItem index={nextIndex()} id="terminal" label="TERMINAL" isActive={isTerminal} onClick={() => pickPage(TERMINAL_ID)} />
+            <NavItem id="board" label="BOARD" isActive={isBoard} onClick={() => pickPage(BOARD_ID)} />
+            <NavItem id="terminal" label="TERMINAL" isActive={isTerminal} onClick={() => pickPage(TERMINAL_ID)} />
 
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
             {groupAEntries.map((entry) => (
               <NavItem
                 key={entry.id}
-                index={nextIndex()}
                 id={entry.iconId}
                 label={entry.label}
                 isActive={entry.id === activeId}
@@ -441,7 +453,6 @@ export default function DashboardShell({
             {groupBEntries.map((entry) => (
               <NavItem
                 key={entry.id}
-                index={nextIndex()}
                 id={entry.iconId}
                 label={entry.label}
                 isActive={entry.id === activeId}
@@ -461,7 +472,6 @@ export default function DashboardShell({
             {OPTIONS_FLOW_PAGES.map((p) => (
               <OptionsFlowNavItem
                 key={p.id}
-                index={nextIndex()}
                 label={p.label}
                 isActive={p.id === activeId}
                 onClick={() => pickPage(p.id)}
@@ -470,7 +480,7 @@ export default function DashboardShell({
 
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
-            <NavItem index={nextIndex()} id="docs" label="DOCS" isActive={isDocs} onClick={() => pickPage(DOCS_ID)} />
+            <NavItem id="docs" label="DOCS" isActive={isDocs} onClick={() => pickPage(DOCS_ID)} />
           </nav>
 
           <div className="shrink-0 border-t border-[var(--border)] px-4 py-3">

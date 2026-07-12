@@ -115,7 +115,7 @@ export default function LandingPage() {
             </p>
 
             <div className="mt-9 flex flex-wrap items-center gap-3">
-              <Link href="/signup" className="btn btn-primary">
+              <Link href="/signin" className="btn btn-primary">
                 Launch the desk
               </Link>
               <Link href="/coverage" className="btn btn-ghost">
@@ -202,7 +202,7 @@ export default function LandingPage() {
                 One board, synced daily, zero setup. Free during launch.
               </p>
               <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-                <Link href="/signup" className="btn btn-primary">
+                <Link href="/signin" className="btn btn-primary">
                   Launch the desk
                 </Link>
                 <Link href="/pricing" className="btn btn-ghost">

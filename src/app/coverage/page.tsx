@@ -73,7 +73,7 @@ export default function CoveragePage() {
           <Reveal>
             <h2 className="font-display m-0 text-[2rem] leading-[1.05] sm:text-[2.8rem]">All of it, one screen.</h2>
             <div className="mt-9 flex flex-wrap items-center justify-center gap-3">
-              <Link href="/signup" className="btn btn-primary">
+              <Link href="/signin" className="btn btn-primary">
                 Launch the desk
               </Link>
               <Link href="/pricing" className="btn btn-ghost">

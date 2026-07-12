@@ -112,7 +112,7 @@ export default function PricingPage() {
                   ))}
                 </ul>
 
-                <Link href="/signup" className="btn btn-primary mt-9 w-full">
+                <Link href="/signin" className="btn btn-primary mt-9 w-full">
                   Start free
                 </Link>
               </div>

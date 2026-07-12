@@ -2,7 +2,7 @@ import MarketingNav from "@/components/marketing/MarketingNav";
 import MarketingFooter from "@/components/marketing/MarketingFooter";
 
 /*
- * Shared chrome for /signin and /signup: the site-wide terrain does the
+ * Shared chrome for /signin: the site-wide terrain does the
  * branding so the form itself stays plain — one centered card, no art
  * panel, no testimonial column.
  */

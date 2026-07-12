@@ -52,7 +52,7 @@ export default async function MarketingNav() {
             >
               Sign in
             </Link>
-            <Link href="/signup" className="btn btn-primary !px-4 !py-2 !text-[0.66rem]">
+            <Link href="/signin" className="btn btn-primary !px-4 !py-2 !text-[0.66rem]">
               Launch the desk
             </Link>
             <MobileMenu signedIn={false} />

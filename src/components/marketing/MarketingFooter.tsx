@@ -32,7 +32,6 @@ export default function MarketingFooter() {
           <div>
             <div className="eyebrow mb-3">Desk</div>
             <div className="flex flex-col gap-2.5">
-              <Link href="/signup" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors duration-150 hover:text-[var(--text)]">Launch the desk</Link>
               <Link href="/signin" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors duration-150 hover:text-[var(--text)]">Sign in</Link>
             </div>
           </div>

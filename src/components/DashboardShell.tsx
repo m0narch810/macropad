@@ -41,11 +41,11 @@ const DOCS_ID = "docs";
 // landing on a "coming soon" screen until the feature ships.
 const OPTIONS_FLOW_PREFIX = "options-flow";
 const OPTIONS_FLOW_PAGES = [
-  { id: "options-flow:scanner", label: "FLOW SCANNER", blurb: "Live options order flow across the tape, ranked by size and aggression." },
-  { id: "options-flow:sweeps", label: "SWEEPS & BLOCKS", blurb: "Multi-exchange sweeps and block trades as they print." },
-  { id: "options-flow:unusual", label: "UNUSUAL ACTIVITY", blurb: "Contracts trading well above their normal volume." },
-  { id: "options-flow:gamma", label: "GAMMA EXPOSURE", blurb: "Dealer positioning and the levels it pins price toward." },
-  { id: "options-flow:darkpool", label: "DARK POOL", blurb: "Off-exchange prints and where the size is quietly changing hands." },
+  { id: "options-flow:greeks", label: "GREEKS EXPOSURE", blurb: "Dealer gamma, delta, vanna and charm, and the levels they pull price toward." },
+  { id: "options-flow:volsurface", label: "VOL SURFACE", blurb: "Implied volatility skew and term structure across strikes and expiries." },
+  { id: "options-flow:walls", label: "STRIKE WALLS", blurb: "Open interest concentrations that act as magnets and barriers into expiry." },
+  { id: "options-flow:expectedmove", label: "EXPECTED MOVE", blurb: "What the options market is pricing for the session, the week, and the next event." },
+  { id: "options-flow:pressure", label: "PUT/CALL PRESSURE", blurb: "Positioning imbalance across strikes and expiries, and which way it is leaning." },
 ];
 
 const SHORT_LABEL: Record<string, string> = {
@@ -224,7 +224,7 @@ function ComingSoon({ label, blurb }: { label: string; blurb: string }) {
         <h2 className="font-display m-0 text-[1.6rem] leading-tight sm:text-[2rem]">{label}</h2>
         <p className="mx-auto mt-4 max-w-md font-sans text-[0.92rem] leading-relaxed text-[var(--text-dim)]">{blurb}</p>
         <p className="mx-auto mt-3 max-w-md font-sans text-[0.86rem] leading-relaxed text-[var(--text-faint)]">
-          Options Flow is being built out now. It is not live yet, but it is on the way. Check back soon.
+          The options desk is being built out now. It is not live yet, but it is on the way. Check back soon.
         </p>
         <div className="mt-6 inline-flex items-center gap-2 border border-[var(--border-strong)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-[var(--text-dim)]">
           <span className="relative flex h-1.5 w-1.5">
@@ -499,7 +499,7 @@ export default function DashboardShell({
             <div className="mx-4 my-2 border-t border-[var(--border)]" />
 
             <div className="flex items-center justify-between px-4 pb-1 pt-1">
-              <span className="partno">OPTIONS FLOW</span>
+              <span className="partno">OPTIONS</span>
               <span className="border border-[var(--border-strong)] px-1.5 py-0.5 font-mono text-[0.52rem] font-semibold uppercase tracking-[0.12em] text-[var(--amber)]">
                 Soon
               </span>

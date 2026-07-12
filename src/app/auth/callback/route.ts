@@ -27,8 +27,13 @@ export async function GET(request: NextRequest) {
       const providerToken = data.session?.provider_token;
 
       if (requiredGuild) {
-        const inGuild = providerToken ? await isMemberOfGuild(providerToken, requiredGuild) : false;
-        if (!inGuild) {
+        // On a brand-new Discord account/authorization Discord's API can be
+        // briefly inconsistent (token not fully propagated yet) and return a
+        // rate-limit or empty guild list right after consent - retry a
+        // couple times before concluding they're actually not in the server,
+        // instead of bouncing them out on the first flaky read.
+        const membership = providerToken ? await checkGuildMembership(providerToken, requiredGuild) : "not-a-member";
+        if (membership === "not-a-member") {
           await supabase.auth.signOut();
           return NextResponse.redirect(`${origin}/signin?error=not_in_server`);
         }
@@ -41,16 +46,24 @@ export async function GET(request: NextRequest) {
   return NextResponse.redirect(`${origin}/signin?error=auth_callback_failed`);
 }
 
+type GuildCheck = "member" | "not-a-member";
+
 /** Checks the Discord user's guild list (via the `guilds` scope token) for a specific server id. */
-async function isMemberOfGuild(providerToken: string, guildId: string): Promise<boolean> {
-  try {
-    const res = await fetch("https://discord.com/api/users/@me/guilds", {
-      headers: { Authorization: `Bearer ${providerToken}` },
-    });
-    if (!res.ok) return false;
-    const guilds: { id: string }[] = await res.json();
-    return guilds.some((g) => g.id === guildId);
-  } catch {
-    return false;
+async function checkGuildMembership(providerToken: string, guildId: string): Promise<GuildCheck> {
+  const attempts = 3;
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await new Promise((r) => setTimeout(r, 400 * i));
+    try {
+      const res = await fetch("https://discord.com/api/users/@me/guilds", {
+        headers: { Authorization: `Bearer ${providerToken}` },
+      });
+      if (!res.ok) continue; // transient (rate limit, propagation delay) - retry
+      const guilds: { id: string }[] = await res.json();
+      if (guilds.some((g) => g.id === guildId)) return "member";
+      if (i === attempts - 1) return "not-a-member";
+    } catch {
+      // network hiccup - retry
+    }
   }
+  return "not-a-member";
 }

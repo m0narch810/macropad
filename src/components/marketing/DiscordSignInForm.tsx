@@ -6,8 +6,10 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 const ERROR_MESSAGES: Record<string, string> = {
   auth_callback_failed: "Something went wrong finishing sign-in. Try again.",
-  not_in_server: "That Discord account isn't in the required server. Join it, then try again.",
+  not_in_server: "That Discord account isn't in the required server yet.",
 };
+
+const DISCORD_INVITE_URL = process.env.NEXT_PUBLIC_DISCORD_INVITE_URL;
 
 function DiscordIcon() {
   return (
@@ -46,9 +48,22 @@ export default function DiscordSignInForm() {
       </p>
 
       {errorCode && (
-        <p className="mt-6 font-mono text-[0.72rem] leading-relaxed" style={{ color: "var(--down)" }}>
-          ERR: {ERROR_MESSAGES[errorCode] ?? "Sign-in failed. Try again."}
-        </p>
+        <div className="mt-6">
+          <p className="m-0 font-mono text-[0.72rem] leading-relaxed" style={{ color: "var(--down)" }}>
+            ERR: {ERROR_MESSAGES[errorCode] ?? "Sign-in failed. Try again."}
+          </p>
+          {errorCode === "not_in_server" && DISCORD_INVITE_URL && (
+            <a
+              href={DISCORD_INVITE_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="btn btn-primary mt-3 flex w-full items-center justify-center gap-2"
+            >
+              <DiscordIcon />
+              Join the server
+            </a>
+          )}
+        </div>
       )}
 
       <button

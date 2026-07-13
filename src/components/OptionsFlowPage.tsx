@@ -6,8 +6,9 @@ import type { GexResponse, GexSymbol, HedgePressureRow, TesseractZone } from "@/
 import { computeHedgePressure, computeTesseractZones, fmtNum, fmtUsd, nearStrikeWindow } from "@/lib/gex";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
+import Sparkline from "@/components/Sparkline";
 
-export type OptionsFlowView = "gex" | "dex" | "hedgepressure" | "tesseract";
+export type OptionsFlowView = "gex" | "dex" | "hedgepressure" | "tesseract" | "volregime";
 
 const SYMBOLS: GexSymbol[] = ["QQQ", "SPY"];
 const TESSERACT_SYMBOLS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
@@ -437,6 +438,137 @@ function TesseractZonesView() {
   );
 }
 
+interface VolIndex {
+  symbol: string;
+  label: string;
+  note: string;
+  price: number | null;
+  history: number[];
+}
+
+function sparklineTone(history: number[]): "up" | "down" | "flat" {
+  if (history.length < 2) return "flat";
+  const delta = history[history.length - 1] - history[0];
+  if (Math.abs(delta) < history[0] * 0.005) return "flat";
+  return delta > 0 ? "up" : "down";
+}
+
+function VolIndexTile({ index }: { index: VolIndex }) {
+  const tone = sparklineTone(index.history);
+  const color = tone === "up" ? "var(--up)" : tone === "down" ? "var(--down)" : "var(--text)";
+  return (
+    <div className="border border-[var(--border)] bg-[var(--panel)] p-4">
+      <div className="mb-1 flex items-baseline justify-between">
+        <div className="font-mono text-[0.78rem] font-bold tracking-[0.06em]">{index.label}</div>
+        <div className="font-mono text-[1.05rem] font-semibold" style={{ color }}>
+          {index.price !== null ? index.price.toFixed(2) : "—"}
+        </div>
+      </div>
+      <p className="m-0 mb-2 font-sans text-[0.68rem] leading-snug text-[var(--text-faint)]">{index.note}</p>
+      {index.history.length >= 2 && <Sparkline data={index.history} tone={tone} heightClass="h-8" />}
+    </div>
+  );
+}
+
+/** Plain-language read of the standard cross-index relationships - conventional, publicly-cited thresholds, not a proprietary model. */
+function volRegimeNotes(byId: Record<string, VolIndex>): string[] {
+  const notes: string[] = [];
+  const vix1d = byId.VIX1D?.price;
+  const vix = byId.VIX?.price;
+  const vxn = byId.VXN?.price;
+  const vvix = byId.VVIX?.price;
+  const skew = byId.SKEW?.price;
+
+  if (vix1d !== null && vix !== null && vix1d !== undefined && vix !== undefined) {
+    if (vix1d > vix) notes.push(`VIX1D (${vix1d.toFixed(1)}) above VIX (${vix.toFixed(1)}) — short-term stress priced above the 30-day term structure, event risk for today specifically.`);
+    else if (vix1d < vix * 0.75) notes.push(`VIX1D well below VIX — calm session, no near-term event priced in.`);
+  }
+  if (vxn !== null && vix !== null && vxn !== undefined && vix !== undefined) {
+    if (vxn > vix * 1.15) notes.push(`VXN (${vxn.toFixed(1)}) notably above VIX (${vix.toFixed(1)}) — Nasdaq-specific stress exceeds the broad market.`);
+  }
+  if (vvix !== null && vvix !== undefined) {
+    if (vvix > 100) notes.push(`VVIX (${vvix.toFixed(1)}) above 100 — elevated vol-of-vol, larger swings in VIX itself are more likely.`);
+    else if (vvix < 85) notes.push(`VVIX (${vvix.toFixed(1)}) below 85 — vol-of-vol is quiet.`);
+  }
+  if (skew !== null && skew !== undefined) {
+    if (skew > 135) notes.push(`SKEW (${skew.toFixed(1)}) above 135 — tail-risk pricing is elevated (market paying up for downside protection).`);
+    else if (skew < 115) notes.push(`SKEW (${skew.toFixed(1)}) below 115 — tail-risk pricing is contained.`);
+  }
+  if (!notes.length) notes.push("No index is outside its conventional reference range right now.");
+  return notes;
+}
+
+function VolRegimeView() {
+  const [indices, setIndices] = useState<VolIndex[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch("/api/volregime", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json) => {
+        if (cancelled) return;
+        if (!json.ok) throw new Error("upstream returned an error");
+        setIndices(json.indices);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem] text-[var(--text-faint)]">
+        Loading vol regime indices…
+      </div>
+    );
+  }
+  if (error || !indices) {
+    return (
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
+        ERR: {error ?? "missing data"}
+      </div>
+    );
+  }
+
+  const byId = Object.fromEntries(indices.map((i) => [i.symbol, i]));
+  const notes = volRegimeNotes(byId);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <p className="m-0 font-sans text-[0.78rem] leading-relaxed text-[var(--text-faint)]">
+        CBOE&apos;s own published volatility and tail-risk indices, live — not derived from the options feed above.
+      </p>
+
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+        {indices.map((idx) => (
+          <VolIndexTile key={idx.symbol} index={idx} />
+        ))}
+      </div>
+
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+        <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
+          REGIME READ
+        </div>
+        <ul className="m-0 flex flex-col gap-2 pl-4 font-sans text-[0.8rem] leading-relaxed text-[var(--text-dim)]">
+          {notes.map((n, i) => (
+            <li key={i}>{n}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [symbol, setSymbol] = useState<GexSymbol>("QQQ");
   const [data, setData] = useState<GexResponse | null>(null);
@@ -444,7 +576,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (view === "tesseract") return;
+    if (view === "tesseract" || view === "volregime") return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -470,6 +602,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   }, [symbol, view]);
 
   if (view === "tesseract") return <TesseractZonesView />;
+  if (view === "volregime") return <VolRegimeView />;
 
   return (
     <div className="flex flex-col gap-6">

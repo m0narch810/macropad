@@ -46,6 +46,7 @@ const OPTIONS_FLOW_PAGES = [
   { id: "options-flow:dex", label: "DEX", blurb: "Dealer delta exposure by strike, and which way it forces hedging flow." },
   { id: "options-flow:hedgepressure", label: "HEDGE PRESSURE", blurb: "Strikes ranked by how much dealer hedging flow they mechanically force." },
   { id: "options-flow:tesseract", label: "TESSERACT ZONES", blurb: "QQQ/SPY/SPX/NDX option-derived levels converted to one scale and clustered by overlap." },
+  { id: "options-flow:volregime", label: "VOL REGIME", blurb: "Live CBOE volatility and tail-risk indices — VIX1D, VIX, VXN, VVIX, SKEW." },
 ];
 
 const SHORT_LABEL: Record<string, string> = {

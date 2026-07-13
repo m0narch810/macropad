@@ -1,107 +1,43 @@
-export type GexSymbol = "QQQ" | "SPX";
+export type GexSymbol = "QQQ" | "SPY";
 
-export interface GexStrikeRow {
+export interface StrikeRow0DTE {
   strike: number;
+  /** $M, 0DTE-only column of the chain's own gex grid - the one greek here with a confirmed, documented unit. */
   gex: number;
-  callGex: number;
-  putGex: number;
+  /** 0DTE-only, unit not documented by the source API - used directionally, never summed with gex. */
   dex: number;
+  /** Vanna, 0DTE-only, unit not documented. */
   vex: number;
-  chex: number;
-  /** Second-order greeks: dGamma/dSpot, dCharm/dSpot, dGamma/dVol, dVanna/dVol - the terms a first-order gamma+charm model drops. */
-  speedEx: number;
-  colorEx: number;
-  zommaEx: number;
-  vommaEx: number;
-  iv: number;
+  /** Theta, 0DTE-only, unit not documented. */
+  tex: number;
+  /** Charm, 0DTE-only, unit not documented. */
+  cex: number;
+  /** Vega, 0DTE-only, unit not documented. */
+  vegaex: number;
+  /** Aggregate across ALL expiries, not 0DTE-only - the source API doesn't expose OI broken out per expiry. */
   callOi: number;
   putOi: number;
-}
-
-export interface GexLevel {
-  price: number;
-  type: string;
-  distPct: number;
-  gex: number;
 }
 
 export interface GexResponse {
   ok: boolean;
   symbol: GexSymbol;
   asOf: number;
-  exposure: {
-    perStrike: GexStrikeRow[];
-    totalGex: number;
-  };
-  aggregate: {
-    callWall: number;
-    callWallGex: number;
-    putWall: number;
-    putWallGex: number;
-    maxPain: number;
-    totalGex: number;
-    flip: { nearestFlip: number; gammaAtSpot: number; ladder: { s: number; g: number }[] };
-    volTrigger: { price: number; distPct: number; belowTrigger: boolean; method: string };
-  };
-  structure: {
-    regime: string;
-    regimeNote: string;
-    totalGex: number;
-    kingNode: { strike: number; gex: number; type: string };
-    levels: GexLevel[];
-  };
-  rnd: {
-    ok: boolean;
-    forward: number;
-    mean: number;
-    /** Breeden-Litzenberger risk-neutral density extracted from the chain - strikes[i] has probability density density[i], dK apart. */
-    strikes: number[];
-    density: number[];
-    dK: number;
-    quality: { p25: number; p50: number; p75: number; mass: number; usable: boolean };
-  };
-  shadow: {
-    ok: boolean;
-    regime: string;
-    volMap: { hPct: number; sigUpPts: number; sigDnPts: number };
-    skew: { putIvPct: number; callIvPct: number; gapPts: number; read: string };
-  };
-  quality: {
-    atmIv: number;
-    expiries: number;
-    strikes: number;
-  };
-  development: {
-    oi: {
-      pcr: number;
-      pcrPrior: number;
-      pcrTrend: string;
-      /** Strikes where OI has been building/dissolving across recent sessions - shape varies, treated defensively. */
-      wallBuild: unknown[];
-      wallDissolve: unknown[];
-    };
-    volTrig: { current: number; movePct: number; stability: string };
-    iv: { atmNow: number; atmPrior: number; deltaOverDays: number; direction: string };
-  };
-  dealer: {
-    drift: {
-      netPerHourUsd: number;
-      direction: string;
-      bias: string;
-      call: { perHourUsd: number; direction: string };
-      put: { perHourUsd: number; direction: string };
-      note: string;
-    };
-    alignment: {
-      aligned: boolean;
-      callAligned: boolean;
-      putAligned: boolean;
-      front: { callWall: number; putWall: number };
-      allBook: { callWall: number; putWall: number };
-    };
-  };
-  termContext: { exp: string; dte: number; netGex: number; regime: string; flip: number; callWall: number; putWall: number; nStrikes: number; oi: number }[];
-  selection: { book: string; exp: string };
+  spot: number;
+  /** The actual date (YYYY-MM-DD) the 0DTE column was read from. */
+  resolvedExpiry: string;
+  perStrike: StrikeRow0DTE[];
+  totalGex0dte: number;
+  /** Self-derived via peak-prominence on the 0DTE gex curve, not trusted from the source API's own (multi-expiry) wall fields. */
+  callWall: number;
+  putWall: number;
+  kingNode: { strike: number; gex: number; type: "repellor" | "pin" };
+  /** From the source API directly - not confirmed 0DTE-pure, shown as-is. */
+  maxPain: number;
+  /** Self-derived zero-crossing of the 0DTE gex-by-strike curve, nearest to spot. */
+  gammaFlip: number | null;
+  /** OI-weighted dispersion of strikes around spot, as a same-day move proxy - derived from this chain's own (aggregate) OI, not an external vol source. */
+  sigma1dPct: number;
 }
 
 /** Picks the N strikes with the largest |value| under `pick`, then re-sorts them ascending by strike for a coherent x-axis. */
@@ -126,68 +62,190 @@ export function nearStrikeWindow<T extends { strike: number }>(rows: T[], spot: 
     .sort((a, b) => a.strike - b.strike);
 }
 
-export interface HedgeTaylorTerm {
-  key: "gamma" | "charm" | "vanna" | "speed" | "color" | "zomma" | "vomma";
-  label: string;
-  dollars: number; // signed contribution to the Taylor-expansion hedge estimate
+// ---------------------------------------------------------------------------
+// Wall/king-node derivation: ported from a backtested method (peak
+// prominence / 0-dimensional persistent homology on the strike-sorted GEX
+// curve), not reinvented here. A strike's raw |GEX| only asks "is this
+// number big in isolation"; persistence asks "does this strike dominate its
+// local neighborhood" - the actual mechanical question for whether hedging
+// flow there is strong enough to hold price. Backtested on SPY 2020-2026
+// (real Black-Scholes greeks from the EOD chain): next-day |return| was
+// 0.70% near the top-persistence wall vs 1.07% far from it (Mann-Whitney
+// p=9.7e-13). Magnitude alone was not tested to that significance.
+// ---------------------------------------------------------------------------
+
+/** Prominence of every strict local extremum in a strike-sorted series - 0 everywhere else. */
+function strikePersistence(strikes: number[], values: number[]): Map<number, number> {
+  const n = values.length;
+  const persistence = new Map<number, number>(strikes.map((s) => [s, 0]));
+  if (n < 3) return persistence;
+
+  function scoreExtrema(y: number[], isPeak: boolean) {
+    for (let i = 1; i < n - 1; i++) {
+      const isExtremum = isPeak ? y[i] > y[i - 1] && y[i] > y[i + 1] : y[i] < y[i - 1] && y[i] < y[i + 1];
+      if (!isExtremum) continue;
+
+      let leftRef = -Infinity;
+      let leftMin = y[i];
+      for (let j = i - 1; j >= 0; j--) {
+        leftMin = Math.min(leftMin, y[j]);
+        if (y[j] > y[i]) {
+          leftRef = leftMin;
+          break;
+        }
+        if (j === 0) leftRef = leftMin;
+      }
+
+      let rightRef = -Infinity;
+      let rightMin = y[i];
+      for (let j = i + 1; j < n; j++) {
+        rightMin = Math.min(rightMin, y[j]);
+        if (y[j] > y[i]) {
+          rightRef = rightMin;
+          break;
+        }
+        if (j === n - 1) rightRef = rightMin;
+      }
+
+      const reference = Math.max(leftRef, rightRef);
+      const prominence = y[i] - reference;
+      const existing = persistence.get(strikes[i]) ?? 0;
+      if (prominence > existing) persistence.set(strikes[i], prominence);
+    }
+  }
+
+  scoreExtrema(values, true);
+  scoreExtrema(
+    values.map((v) => -v),
+    true
+  );
+
+  return persistence;
 }
+
+/** side="call" -> highest-persistence local max above spot (resistance); side="put" -> highest-persistence local min below spot (support). */
+function topPersistentStrike(strikes: number[], values: number[], side: "call" | "put", spot: number): number | null {
+  const persistence = strikePersistence(strikes, values);
+  let best: number | null = null;
+  let bestScore = 0;
+  for (let i = 0; i < strikes.length; i++) {
+    const s = strikes[i];
+    const v = values[i];
+    const onSide = side === "call" ? s > spot && v > 0 : s < spot && v < 0;
+    if (!onSide) continue;
+    const p = persistence.get(s) ?? 0;
+    if (p > bestScore) {
+      bestScore = p;
+      best = s;
+    }
+  }
+  return best;
+}
+
+/** Falls back to a magnitude argmax on the correct side when no strike is a genuine local extremum (too few strikes, or a flat/degenerate curve). */
+function deriveWalls(perStrike: StrikeRow0DTE[], spot: number): { callWall: number; putWall: number } {
+  const sorted = [...perStrike].sort((a, b) => a.strike - b.strike);
+  const strikes = sorted.map((r) => r.strike);
+  const values = sorted.map((r) => r.gex);
+
+  let callWall = topPersistentStrike(strikes, values, "call", spot);
+  let putWall = topPersistentStrike(strikes, values, "put", spot);
+
+  if (callWall === null) {
+    const above = sorted.filter((r) => r.strike > spot && r.gex > 0);
+    callWall = (above.length ? above : sorted.filter((r) => r.strike > spot)).sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex))[0]?.strike ?? spot;
+  }
+  if (putWall === null) {
+    const below = sorted.filter((r) => r.strike < spot && r.gex < 0);
+    putWall = (below.length ? below : sorted.filter((r) => r.strike < spot)).sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex))[0]?.strike ?? spot;
+  }
+
+  return { callWall, putWall };
+}
+
+/** Zero-crossing of the 0DTE gex-by-strike curve nearest spot, via linear interpolation between the two adjacent strikes that flank a sign change. */
+function deriveGammaFlip(perStrike: StrikeRow0DTE[], spot: number): number | null {
+  const sorted = [...perStrike].sort((a, b) => a.strike - b.strike);
+  const crossings: number[] = [];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    const a = sorted[i];
+    const b = sorted[i + 1];
+    if ((a.gex < 0 && b.gex > 0) || (a.gex > 0 && b.gex < 0)) {
+      const t = a.gex / (a.gex - b.gex);
+      crossings.push(a.strike + t * (b.strike - a.strike));
+    }
+  }
+  if (!crossings.length) return null;
+  return crossings.sort((x, y) => Math.abs(x - spot) - Math.abs(y - spot))[0];
+}
+
+/** OI-weighted dispersion of strikes around spot, as a same-day move proxy derived from this chain's own OI rather than an external vol source. OI here is aggregate-across-expiries (an API limitation, not this function's choice). */
+function deriveSigma1dPct(perStrike: StrikeRow0DTE[], spot: number): number {
+  const withOi = perStrike.filter((r) => r.callOi + r.putOi > 0);
+  const totalOi = withOi.reduce((sum, r) => sum + r.callOi + r.putOi, 0);
+  if (!totalOi || !spot) return 1.5;
+  const variance = withOi.reduce((sum, r) => {
+    const w = r.callOi + r.putOi;
+    const pct = ((r.strike - spot) / spot) * 100;
+    return sum + w * pct * pct;
+  }, 0);
+  return Math.max(0.3, Math.sqrt(variance / totalOi));
+}
+
+export function deriveGexResponse(raw: {
+  symbol: GexSymbol;
+  spot: number;
+  resolvedExpiry: string;
+  perStrike: StrikeRow0DTE[];
+  maxPain: number;
+}): GexResponse {
+  const { callWall, putWall } = deriveWalls(raw.perStrike, raw.spot);
+  const kingNodeRow = [...raw.perStrike].sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex))[0];
+  const totalGex0dte = raw.perStrike.reduce((sum, r) => sum + r.gex, 0);
+
+  return {
+    ok: true,
+    symbol: raw.symbol,
+    asOf: Date.now(),
+    spot: raw.spot,
+    resolvedExpiry: raw.resolvedExpiry,
+    perStrike: raw.perStrike,
+    totalGex0dte,
+    callWall,
+    putWall,
+    kingNode: kingNodeRow ? { strike: kingNodeRow.strike, gex: kingNodeRow.gex, type: kingNodeRow.gex < 0 ? "repellor" : "pin" } : { strike: raw.spot, gex: 0, type: "pin" },
+    maxPain: raw.maxPain,
+    gammaFlip: deriveGammaFlip(raw.perStrike, raw.spot),
+    sigma1dPct: deriveSigma1dPct(raw.perStrike, raw.spot),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Hedge Pressure
+// ---------------------------------------------------------------------------
 
 export interface HedgePressureRow {
   strike: number;
-  /** |taylorFlow| x same-day reachability weight - the ranking metric. */
+  /** |gex 0DTE, $M| x same-day reachability weight - the ranking metric. Dollars, confirmed unit. */
   expectedFlow: number;
-  /** Signed second-order Taylor-expansion estimate, before reachability weighting. */
-  taylorFlow: number;
+  gex: number;
   /** exp(-z^2/2) reachability weight, z = distance in 1-trading-day standard deviations. No floor - genuinely far strikes decay toward 0. */
   reachWeight: number;
   /** Signed distance from spot in 1-trading-day standard deviations. */
   sigmaZ: number;
+  /** Charm/vanna shown as a normalized 0-1 share of their own grid's range, NOT dollars - their units aren't documented by the source API, so they're corroboration, never summed with gex. */
+  charmShare: number;
+  vannaShare: number;
   confidence: "HIGH" | "MEDIUM" | "LOW";
-  terms: HedgeTaylorTerm[];
-  gex: number;
-  chex: number;
-  vex: number;
   totalOi: number;
   distPct: number;
   flags: string[];
 }
 
 export interface HedgePressureContext {
-  dSPct: number;
-  dtDays: number;
-  dSigmaPts: number;
   sigma1dPct: number;
 }
 
-/** Extracts strike numbers from a dev-diagnostic array of unknown shape (bare numbers, or objects carrying a `strike` field). */
-function extractStrikes(arr: unknown[]): Set<number> {
-  const out = new Set<number>();
-  for (const item of arr) {
-    if (typeof item === "number") out.add(item);
-    else if (item && typeof item === "object" && "strike" in item && typeof (item as { strike: unknown }).strike === "number") {
-      out.add((item as { strike: number }).strike);
-    }
-  }
-  return out;
-}
-
-/**
- * Same-day (1-trading-day) reachability weight, Gaussian in log-return
- * space: z = ln(K/spot) / sigma1d, weight = exp(-z^2/2).
- *
- * This deliberately does NOT use the option's own risk-neutral density
- * (rnd.strikes/rnd.density). That density is built from the option's actual
- * time-to-expiry - which, on this feed, is frequently several calendar days
- * out even for the book it labels "0dte" (there is often no contract
- * expiring literally today) - so it answers "can spot reach K by expiry,"
- * not "can spot reach K by today's close." Using it here was the bug: a
- * strike 4% away can look plausibly reachable over 5 days while being a
- * 2-3 sigma tail event for a single session, and the multi-day density
- * doesn't know the difference. Scoring reachability against sigma1d instead
- * - the feed's own explicit 1-day move estimate - keeps every ranking
- * strictly same-day, regardless of how many days the underlying contract
- * has left.
- */
 function reachabilityWeight(strike: number, spot: number, sigma1dPct: number): { weight: number; z: number } {
   if (!spot || sigma1dPct <= 0) return { weight: 0, z: 0 };
   const z = Math.log(strike / spot) / (sigma1dPct / 100);
@@ -195,135 +253,52 @@ function reachabilityWeight(strike: number, spot: number, sigma1dPct: number): {
 }
 
 /**
- * Ranks strikes by *expected* forced dealer-hedge dollars, using a real
- * second-order Taylor expansion of the change in dealer delta - the same
- * math professional risk desks use for P&L-attribution - instead of a
- * weighted composite of arbitrarily-normalized signals:
- *
- *   ΔHedge(K) = Gamma(K)·dS + Charm(K)·dt + Vanna(K)·dσ
- *             + ½Speed(K)·dS² + Color(K)·dt·dS + Zomma(K)·dS·dσ + ½Vomma(K)·dσ²
- *
- * Every term is a dollar quantity the feed already computes per strike -
- * nothing here is a picked percentage. The scenario inputs aren't guessed
- * either: dS is the feed's own last-observed move size, dt is one trading
- * day, and dσ is the feed's own realized ATM-IV drift. This is the discrete,
- * exact-at-a-point analogue of what a full stochastic-vol model (Heston)
- * would need Monte Carlo to approximate - skipped here because it would
- * require calibrating a fresh vol surface the feed doesn't expose, on top of
- * greeks that already price in the smile.
- *
- * The result is then weighted by same-day (1-trading-day) reachability - a
- * Gaussian in log-return space using the feed's own explicit 1-day move
- * estimate (shadow.volMap.hPct) - turning "hedge dollars if triggered" into
- * "expected hedge dollars, today." This replaces the option's own multi-day
- * risk-neutral density, which measures reachability by expiry, not by
- * close - see reachabilityWeight() for why that distinction is the whole
- * fix. OI concentration, OI flow/dDOI (is the exposure live or going
- * stale), and cross-expiry wall alignment are kept OUT of the dollar
- * estimate entirely and used only for a separate confidence tag - they
- * speak to durability of a number, not its size, and are NOT a measure of
- * how likely the strike is to be reached (that's the rank itself).
- *
- * This is a composite estimate built from public options-chain exposure,
- * not a literal dealer book - the sign convention (dealers long calls, short
- * puts) is the standard assumption, not observed fact.
+ * Ranks strikes by *expected* same-day hedge dollars: |0DTE GEX(K)| - the
+ * one greek here with a confirmed, documented unit ($M) - weighted by a
+ * strict same-day reachability Gaussian (see reachabilityWeight). Charm and
+ * vanna are surfaced per strike as a normalized 0-1 share of their own
+ * grid's range, never summed into the dollar figure, because the source API
+ * doesn't document their units and a wrong unit assumption is worse than no
+ * number - see the methodology note in the UI for the full reasoning.
+ * Cross-wall/king-node flags and OI concentration corroborate confidence but
+ * stay out of the ranked dollar metric.
  */
 export function computeHedgePressure(data: GexResponse, count = 15): { rows: HedgePressureRow[]; context: HedgePressureContext } {
-  const rows = data.exposure.perStrike;
-  const spot = data.rnd.forward || data.aggregate.flip.nearestFlip;
+  const spot = data.spot;
+  const rows = data.perStrike;
+  const maxAbsCex = Math.max(1e-9, ...rows.map((r) => Math.abs(r.cex)));
+  const maxAbsVex = Math.max(1e-9, ...rows.map((r) => Math.abs(r.vex)));
 
-  const dSPct = Math.max(0.05, data.development?.volTrig?.movePct ?? 0.5);
-  const dtDays = 1;
-  const dSigmaPts = (data.development?.iv?.deltaOverDays ?? 0) * 100;
-  const sigma1dPct = data.shadow?.volMap?.hPct ?? dSPct;
-
-  const building = extractStrikes(data.development?.oi?.wallBuild ?? []);
-  const dissolving = extractStrikes(data.development?.oi?.wallDissolve ?? []);
-
-  const otherExpiryWalls = new Set<number>();
-  for (const term of data.termContext ?? []) {
-    if (term.exp === data.selection.exp) continue;
-    otherExpiryWalls.add(term.callWall);
-    otherExpiryWalls.add(term.putWall);
-  }
-
-  const putSkewRich = data.shadow?.skew?.gapPts > 3;
-  const callSkewRich = data.shadow?.skew?.gapPts < -3;
-
-  const withFlow = rows.map((r) => {
-    const gammaTerm = r.gex * dSPct;
-    const charmTerm = r.chex * dtDays;
-    const vannaTerm = r.vex * dSigmaPts;
-    const speedTerm = 0.5 * r.speedEx * dSPct * dSPct;
-    const colorTerm = r.colorEx * dtDays * dSPct;
-    const zommaTerm = r.zommaEx * dSPct * dSigmaPts;
-    const vommaTerm = 0.5 * r.vommaEx * dSigmaPts * dSigmaPts;
-
-    const terms: HedgeTaylorTerm[] = [
-      { key: "gamma", label: "Gamma·dS", dollars: gammaTerm },
-      { key: "charm", label: "Charm·dt", dollars: charmTerm },
-      { key: "vanna", label: "Vanna·dσ", dollars: vannaTerm },
-      { key: "speed", label: "½Speed·dS²", dollars: speedTerm },
-      { key: "color", label: "Color·dt·dS", dollars: colorTerm },
-      { key: "zomma", label: "Zomma·dS·dσ", dollars: zommaTerm },
-      { key: "vomma", label: "½Vomma·dσ²", dollars: vommaTerm },
-    ];
-
-    const taylorFlow = terms.reduce((sum, t) => sum + t.dollars, 0);
-    return { r, terms, taylorFlow };
-  });
-
-  const scored: HedgePressureRow[] = withFlow.map(({ r, terms, taylorFlow }) => {
+  const scored: HedgePressureRow[] = rows.map((r) => {
     const totalOi = r.callOi + r.putOi;
     const distPct = spot ? ((r.strike - spot) / spot) * 100 : 0;
+    const { weight: reachWeight, z: sigmaZ } = reachabilityWeight(r.strike, spot, data.sigma1dPct);
+    const expectedFlow = Math.abs(r.gex) * reachWeight;
 
-    const { weight: reachWeight, z: sigmaZ } = reachabilityWeight(r.strike, spot, sigma1dPct);
-    const expectedFlow = Math.abs(taylorFlow) * reachWeight;
-
-    const isBuilding = building.has(r.strike);
-    const isDissolving = dissolving.has(r.strike);
-    const isCrossExpiryWall = otherExpiryWalls.has(r.strike);
-    const isFrontWall = r.strike === data.aggregate.callWall || r.strike === data.aggregate.putWall;
+    const charmShare = Math.abs(r.cex) / maxAbsCex;
+    const vannaShare = Math.abs(r.vex) / maxAbsVex;
     const isReachableToday = Math.abs(sigmaZ) <= 2;
+    const isFrontWall = r.strike === data.callWall || r.strike === data.putWall;
+    const isKingNode = r.strike === data.kingNode.strike;
 
-    const gammaDominant = Math.abs(terms[0].dollars) > 0.4 * Math.abs(taylorFlow || 1);
-    const charmDominant = Math.abs(terms[1].dollars) > 0.4 * Math.abs(taylorFlow || 1);
-    const vannaDominant = Math.abs(terms[2].dollars) > 0.2 * Math.abs(taylorFlow || 1);
-
-    const agreements = [isReachableToday, gammaDominant || charmDominant, vannaDominant, isBuilding, isCrossExpiryWall, isFrontWall].filter(
-      Boolean
-    ).length;
-    const confidence: HedgePressureRow["confidence"] = agreements >= 4 ? "HIGH" : agreements >= 2 ? "MEDIUM" : "LOW";
+    const agreements = [isReachableToday, charmShare > 0.3, vannaShare > 0.3, isFrontWall, isKingNode].filter(Boolean).length;
+    const confidence: HedgePressureRow["confidence"] = agreements >= 3 ? "HIGH" : agreements >= 2 ? "MEDIUM" : "LOW";
 
     const flags: string[] = [];
-    if (r.strike === data.aggregate.callWall) flags.push("CALL WALL");
-    if (r.strike === data.aggregate.putWall) flags.push("PUT WALL");
-    if (r.strike === data.structure.kingNode.strike) flags.push(data.structure.kingNode.type.toUpperCase());
-    if (isCrossExpiryWall) flags.push("CROSS-EXP WALL");
-    if (isBuilding) flags.push("OI BUILDING");
-    if (isDissolving) flags.push("OI DISSOLVING");
-    if (putSkewRich && r.putOi > r.callOi) flags.push("SKEW-RICH");
-    if (callSkewRich && r.callOi > r.putOi) flags.push("SKEW-RICH");
+    if (r.strike === data.callWall) flags.push("CALL WALL");
+    if (r.strike === data.putWall) flags.push("PUT WALL");
+    if (isKingNode) flags.push(data.kingNode.type.toUpperCase());
+    if (data.gammaFlip !== null && Math.abs(r.strike - data.gammaFlip) < 1) flags.push("GAMMA FLIP");
 
-    return {
-      strike: r.strike,
-      expectedFlow,
-      taylorFlow,
-      reachWeight,
-      sigmaZ,
-      confidence,
-      terms,
-      gex: r.gex,
-      chex: r.chex,
-      vex: r.vex,
-      totalOi,
-      distPct,
-      flags,
-    };
+    return { strike: r.strike, expectedFlow, gex: r.gex, reachWeight, sigmaZ, charmShare, vannaShare, confidence, totalOi, distPct, flags };
   });
 
-  return { rows: scored.sort((a, b) => b.expectedFlow - a.expectedFlow).slice(0, count), context: { dSPct, dtDays, dSigmaPts, sigma1dPct } };
+  return { rows: scored.sort((a, b) => b.expectedFlow - a.expectedFlow).slice(0, count), context: { sigma1dPct: data.sigma1dPct } };
 }
+
+// ---------------------------------------------------------------------------
+// Blind Spots
+// ---------------------------------------------------------------------------
 
 export interface BlindSpotSourceLevel {
   asset: GexSymbol;
@@ -342,15 +317,16 @@ export interface BlindSpotCluster {
 
 /** Pulls a small set of named, weighted option-derived levels out of one symbol's book - the inputs a confluence model clusters. */
 function extractLevels(data: GexResponse): { asset: GexSymbol; label: string; price: number; weight: number }[] {
-  const maxGex = Math.max(1, ...data.exposure.perStrike.map((r) => Math.abs(r.gex)));
-  const secondary = topStrikesByMagnitude(data.exposure.perStrike, (r) => r.gex, 3);
+  const maxGex = Math.max(1e-9, ...data.perStrike.map((r) => Math.abs(r.gex)));
+  const secondary = topStrikesByMagnitude(data.perStrike, (r) => r.gex, 3);
+  const wallRow = (strike: number) => data.perStrike.find((r) => r.strike === strike);
 
   const levels = [
-    { asset: data.symbol, label: "Call Resistance", price: data.aggregate.callWall, weight: Math.abs(data.aggregate.callWallGex) / maxGex },
-    { asset: data.symbol, label: "Put Support", price: data.aggregate.putWall, weight: Math.abs(data.aggregate.putWallGex) / maxGex },
-    { asset: data.symbol, label: "King Node", price: data.structure.kingNode.strike, weight: Math.abs(data.structure.kingNode.gex) / maxGex },
-    { asset: data.symbol, label: "HVL (gamma flip)", price: data.aggregate.flip.nearestFlip, weight: 0.5 },
-    { asset: data.symbol, label: "Max Pain", price: data.aggregate.maxPain, weight: 0.35 },
+    { asset: data.symbol, label: "Call Resistance", price: data.callWall, weight: Math.abs(wallRow(data.callWall)?.gex ?? 0) / maxGex },
+    { asset: data.symbol, label: "Put Support", price: data.putWall, weight: Math.abs(wallRow(data.putWall)?.gex ?? 0) / maxGex },
+    { asset: data.symbol, label: "King Node", price: data.kingNode.strike, weight: Math.abs(data.kingNode.gex) / maxGex },
+    ...(data.gammaFlip !== null ? [{ asset: data.symbol, label: "Gamma Flip", price: data.gammaFlip, weight: 0.5 }] : []),
+    { asset: data.symbol, label: "Max Pain", price: data.maxPain, weight: 0.35 },
     ...secondary.map((r, i) => ({ asset: data.symbol, label: `GEX ${i + 1}`, price: r.strike, weight: Math.abs(r.gex) / maxGex })),
   ];
 
@@ -358,31 +334,29 @@ function extractLevels(data: GexResponse): { asset: GexSymbol; label: string; pr
 }
 
 /**
- * A reduced, two-asset reconstruction of the published MenthorQ Blind Spots
- * idea: option-derived levels from more than one instrument, converted onto
- * a shared price scale, cluster where several land near each other. The real
- * product uses NQ futures options + NDX + QQQ + individual MAG7 chains; this
- * feed only carries QQQ and SPX, so this is a 2-asset version of the same
- * mechanic, not a reproduction of their model - MenthorQ doesn't publish
- * their weighting formula, clustering tolerance, or dealer-side classifier,
- * so those are stated assumptions here, not recovered constants.
+ * A reduced reconstruction of the published MenthorQ Blind Spots idea:
+ * option-derived levels from more than one instrument, converted onto a
+ * shared price scale, cluster where several land near each other. The real
+ * product uses NQ futures options + NDX + QQQ + individual MAG7 chains;
+ * this data source carries QQQ and SPY, so this is a 2-asset version of the
+ * same mechanic, not a reproduction of their model - MenthorQ doesn't
+ * publish their weighting formula, clustering tolerance, or dealer-side
+ * classifier, so those are stated assumptions here, not recovered constants.
  *
- * Method: convert every SPX level to a QQQ-equivalent price using the ratio
- * method (level x QQQspot/SPXspot - appropriate here since the two trade at
- * very different numeric levels, unlike e.g. ES/SPX where a spread method
- * fits better). Score every candidate QQQ price with a Gaussian-kernel
- * overlap density C(x) = sum(weight_i * exp(-(x-L_i)^2 / 2h^2)), h a
- * clustering tolerance in QQQ points. Local maxima, ranked by cluster
- * strength, are the Blind Spots.
+ * Method: convert every SPY level to a QQQ-equivalent price using the ratio
+ * method (level x QQQspot/SPYspot). Score every candidate QQQ price with a
+ * Gaussian-kernel overlap density C(x) = sum(weight_i * exp(-(x-L_i)^2 /
+ * 2h^2)), h a clustering tolerance in QQQ points. Local maxima, ranked by
+ * cluster strength, are the Blind Spots.
  */
-export function computeBlindSpots(qqq: GexResponse, spx: GexResponse, count = 8): { clusters: BlindSpotCluster[]; ratio: number; bandwidth: number } {
-  const qqqSpot = qqq.rnd.forward || qqq.aggregate.flip.nearestFlip;
-  const spxSpot = spx.rnd.forward || spx.aggregate.flip.nearestFlip;
-  const ratio = qqqSpot / spxSpot;
+export function computeBlindSpots(qqq: GexResponse, spy: GexResponse, count = 8): { clusters: BlindSpotCluster[]; ratio: number; bandwidth: number } {
+  const qqqSpot = qqq.spot;
+  const spySpot = spy.spot;
+  const ratio = qqqSpot / spySpot;
 
   const qqqLevels = extractLevels(qqq).map((l) => ({ ...l, convertedPrice: l.price }));
-  const spxLevels = extractLevels(spx).map((l) => ({ ...l, convertedPrice: l.price * ratio, weight: l.weight * 0.85 }));
-  const allLevels: BlindSpotSourceLevel[] = [...qqqLevels, ...spxLevels].map((l) => ({
+  const spyLevels = extractLevels(spy).map((l) => ({ ...l, convertedPrice: l.price * ratio, weight: l.weight * 0.85 }));
+  const allLevels: BlindSpotSourceLevel[] = [...qqqLevels, ...spyLevels].map((l) => ({
     asset: l.asset,
     label: l.label,
     nativePrice: l.price,
@@ -396,7 +370,6 @@ export function computeBlindSpots(qqq: GexResponse, spx: GexResponse, count = 8)
     return allLevels.reduce((sum, l) => sum + l.weight * Math.exp(-((x - l.convertedPrice) ** 2) / (2 * bandwidth * bandwidth)), 0);
   }
 
-  // Evaluate the overlap curve at every candidate level plus a fine grid between the extremes, then find local maxima.
   const candidateXs = new Set<number>(allLevels.map((l) => l.convertedPrice));
   const sortedPrices = allLevels.map((l) => l.convertedPrice).sort((a, b) => a - b);
   const lo = sortedPrices[0];
@@ -413,7 +386,6 @@ export function computeBlindSpots(qqq: GexResponse, spx: GexResponse, count = 8)
     if (grid[i].c >= prev && grid[i].c >= next) peaks.push(grid[i]);
   }
 
-  // Collapse peaks within one bandwidth of each other (a flat top produces several adjacent "local maxima").
   peaks.sort((a, b) => b.c - a.c);
   const merged: { x: number; c: number }[] = [];
   for (const p of peaks) {
@@ -440,9 +412,8 @@ export function fmtUsd(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`;
-  return `${sign}$${abs.toFixed(0)}`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(2)}B`;
+  return `${sign}$${abs.toFixed(2)}M`;
 }
 
 export function fmtPct(n: number | null | undefined, digits = 2): string {

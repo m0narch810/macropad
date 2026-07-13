@@ -1,14 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { BlindSpotCluster, GexResponse, GexSymbol, HedgePressureRow, HedgeTaylorTerm } from "@/lib/gex";
+import type { BlindSpotCluster, GexResponse, GexSymbol, HedgePressureRow } from "@/lib/gex";
 import { computeBlindSpots, computeHedgePressure, fmtNum, fmtUsd, nearStrikeWindow } from "@/lib/gex";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
 
 export type OptionsFlowView = "gex" | "dex" | "hedgepressure" | "blindspots";
 
-const SYMBOLS: GexSymbol[] = ["QQQ", "SPX"];
+const SYMBOLS: GexSymbol[] = ["QQQ", "SPY"];
 
 function SymbolToggle({ symbol, onChange }: { symbol: GexSymbol; onChange: (s: GexSymbol) => void }) {
   return (
@@ -64,48 +64,49 @@ function VisualCard({ title, subtitle, children }: { title: string; subtitle?: s
 }
 
 function GexExposureView({ data }: { data: GexResponse }) {
-  const spot = data.rnd.forward || data.aggregate.flip.nearestFlip;
-  const top = useMemo(() => nearStrikeWindow(data.exposure.perStrike, spot, 22), [data, spot]);
-  const netData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, net: r.gex }));
-  const splitData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, call: r.callGex, put: r.putGex }));
+  const top = useMemo(() => nearStrikeWindow(data.perStrike, data.spot, 22), [data]);
+  const chartData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, net: r.gex }));
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="TOTAL GEX" value={fmtUsd(data.exposure.totalGex)} tone={tone(data.exposure.totalGex)} />
-        <StatTile label="REGIME" value={data.structure.regime.toUpperCase()} />
-        <StatTile label="KING NODE" value={`${fmtNum(data.structure.kingNode.strike, 0)} (${data.structure.kingNode.type})`} />
-        <StatTile label="GAMMA FLIP" value={fmtNum(data.aggregate.flip.nearestFlip, 2)} />
+        <StatTile label="TOTAL GEX (0DTE)" value={fmtUsd(data.totalGex0dte)} tone={tone(data.totalGex0dte)} />
+        <StatTile label="CALL WALL" value={fmtNum(data.callWall, 0)} tone="up" />
+        <StatTile label="PUT WALL" value={fmtNum(data.putWall, 0)} tone="down" />
+        <StatTile label="GAMMA FLIP" value={data.gammaFlip !== null ? fmtNum(data.gammaFlip, 2) : "—"} />
       </div>
-      <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">{data.structure.regimeNote}</p>
+      <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">
+        {data.symbol} 0DTE book ({data.resolvedExpiry}) — gamma exposure per strike for contracts expiring today only.
+        Walls are self-derived by peak prominence on this curve (a backtested method, not raw magnitude), not trusted
+        from any aggregate wall field.
+      </p>
 
       <VisualCard title="GEX BY STRIKE" subtitle="Net GEX — positive (green) above zero, negative (red) below, 22 strikes nearest spot">
-        <ExposureBarChart data={netData} mode="net" unitLabel="GEX" />
+        <ExposureBarChart data={chartData} mode="net" unitLabel="GEX ($M)" />
       </VisualCard>
 
-      <VisualCard title="GEX HEATMAP" subtitle="Intensity-scaled, call/put rows">
-        <ExposureHeatmap data={splitData} mode="split" />
+      <VisualCard title="GEX HEATMAP" subtitle="Intensity-scaled, net row">
+        <ExposureHeatmap data={chartData} mode="net" />
       </VisualCard>
     </div>
   );
 }
 
 function DexExposureView({ data }: { data: GexResponse }) {
-  const spot = data.rnd.forward || data.aggregate.flip.nearestFlip;
-  const top = useMemo(() => nearStrikeWindow(data.exposure.perStrike, spot, 22), [data, spot]);
+  const top = useMemo(() => nearStrikeWindow(data.perStrike, data.spot, 22), [data]);
   const chartData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, net: r.dex }));
-  const totalDex = data.exposure.perStrike.reduce((sum, r) => sum + r.dex, 0);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="TOTAL DEX" value={fmtUsd(totalDex)} tone={tone(totalDex)} />
-        <StatTile label="REGIME" value={data.structure.regime.toUpperCase()} />
-        <StatTile label="KING NODE" value={`${fmtNum(data.structure.kingNode.strike, 0)} (${data.structure.kingNode.type})`} />
-        <StatTile label="ATM IV" value={fmtNum(data.quality.atmIv * 100, 1) + "%"} />
+        <StatTile label="CALL WALL" value={fmtNum(data.callWall, 0)} tone="up" />
+        <StatTile label="PUT WALL" value={fmtNum(data.putWall, 0)} tone="down" />
+        <StatTile label="KING NODE" value={`${fmtNum(data.kingNode.strike, 0)} (${data.kingNode.type})`} />
+        <StatTile label="MAX PAIN" value={fmtNum(data.maxPain, 0)} />
       </div>
       <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">
-        Net delta exposure per strike — positive means dealers are net long delta and must sell into rallies to stay hedged; negative means the opposite.
+        Net delta exposure per strike, 0DTE only — positive means dealers are net long delta and must sell into rallies
+        to stay hedged; negative means the opposite. Unit not documented by the source API; read directionally.
       </p>
 
       <VisualCard title="DEX BY STRIKE" subtitle="Net dealer delta exposure, 22 strikes nearest spot">
@@ -125,31 +126,6 @@ const CONFIDENCE_COLOR: Record<string, string> = {
   LOW: "var(--text-faint)",
 };
 
-const TERM_COLOR: Record<HedgeTaylorTerm["key"], string> = {
-  gamma: "var(--up)",
-  charm: "var(--down)",
-  vanna: "#8b7fd6",
-  speed: "var(--accent)",
-  color: "#4aa8d8",
-  zomma: "#d9a441",
-  vomma: "var(--text-dim)",
-};
-
-/** Stacked contribution bar - each Taylor term's $ share of the total, signed terms shown by |dollars|. */
-function TaylorBreakdownBar({ terms }: { terms: HedgeTaylorTerm[] }) {
-  const totalAbs = terms.reduce((sum, t) => sum + Math.abs(t.dollars), 0);
-  return (
-    <div className="flex h-4 w-full overflow-hidden bg-[var(--panel-2)]">
-      {terms.map((t) => {
-        const widthPct = totalAbs > 0 ? (Math.abs(t.dollars) / totalAbs) * 100 : 0;
-        return widthPct > 0.5 ? (
-          <div key={t.key} title={`${t.label}: ${fmtUsd(t.dollars)}`} style={{ width: `${widthPct}%`, background: TERM_COLOR[t.key] }} />
-        ) : null;
-      })}
-    </div>
-  );
-}
-
 function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: HedgePressureRow; maxFlow: number }) {
   const [expanded, setExpanded] = useState(false);
   const widthPct = maxFlow > 0 ? (row.expectedFlow / maxFlow) * 100 : 0;
@@ -162,7 +138,7 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
         <div className="relative h-6 flex-1 overflow-hidden bg-[var(--panel-2)]">
           <div
             className="h-full transition-[width] duration-300"
-            style={{ width: `${widthPct}%`, background: row.taylorFlow >= 0 ? "var(--up)" : "var(--down)" }}
+            style={{ width: `${widthPct}%`, background: row.gex >= 0 ? "var(--up)" : "var(--down)" }}
           />
           <div className="absolute inset-0 flex items-center justify-end px-2 font-mono text-[0.66rem] text-[var(--text)]">
             {fmtUsd(row.expectedFlow)}
@@ -193,18 +169,13 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
 
       {expanded && (
         <div className="mb-3 ml-9 flex flex-col gap-2 border-l border-[var(--border)] py-2 pl-4">
-          <TaylorBreakdownBar terms={row.terms} />
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[0.64rem] text-[var(--text-dim)] sm:grid-cols-4">
-            {row.terms.map((t) => (
-              <div key={t.key} className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 shrink-0" style={{ background: TERM_COLOR[t.key] }} />
-                {t.label}: {fmtUsd(t.dollars)}
-              </div>
-            ))}
-          </div>
-          <div className="font-mono text-[0.64rem] text-[var(--text-faint)]">
-            Raw Taylor flow: {fmtUsd(row.taylorFlow)} × same-day reach weight {row.reachWeight.toFixed(3)} ({row.sigmaZ >= 0 ? "+" : ""}
+          <div className="font-mono text-[0.66rem] text-[var(--text-dim)]">
+            0DTE GEX: {fmtUsd(row.gex)} × same-day reach weight {row.reachWeight.toFixed(3)} ({row.sigmaZ >= 0 ? "+" : ""}
             {row.sigmaZ.toFixed(2)}σ from spot) = expected {fmtUsd(row.expectedFlow)}
+          </div>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[0.64rem] text-[var(--text-dim)]">
+            <div>Charm share of its own range: {(row.charmShare * 100).toFixed(0)}%</div>
+            <div>Vanna share of its own range: {(row.vannaShare * 100).toFixed(0)}%</div>
           </div>
           {row.flags.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-1">
@@ -231,70 +202,42 @@ function HedgePressureView({ data }: { data: GexResponse }) {
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="REGIME" value={data.structure.regime.toUpperCase()} />
+        <StatTile label="0DTE EXPIRY" value={data.resolvedExpiry} />
         <StatTile label="TOP STRIKE" value={fmtNum(ranked[0]?.strike, 0)} />
         <StatTile label="1-DAY MOVE (1σ)" value={`±${fmtNum(context.sigma1dPct, 2)}%`} />
-        <StatTile label="MAX PAIN" value={fmtNum(data.aggregate.maxPain, 0)} />
+        <StatTile label="MAX PAIN" value={fmtNum(data.maxPain, 0)} />
       </div>
 
       <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
         <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          METHODOLOGY — SECOND-ORDER TAYLOR EXPANSION, NOT A WEIGHTED GUESS
+          METHODOLOGY — CONFIRMED-UNIT DOLLARS ONLY, EVERYTHING ELSE IS CORROBORATION
         </div>
         <p className="m-0 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
-          A dealer&apos;s forced rehedge <i>is</i> the change in their delta, and the change in delta is exactly a Taylor
-          expansion in the greeks — the same math risk desks use for P&amp;L-attribution, not a percentage someone
-          picked:
+          Ranked by <b>expected same-day hedge flow</b>: |0DTE GEX(K)| — the one greek this source documents a unit
+          for ($M) — weighted by a strict same-day reachability Gaussian in log-return space, scored against this
+          chain&apos;s own OI-weighted strike dispersion (±{fmtNum(context.sigma1dPct, 2)}% today), not an external vol
+          number or the option&apos;s own multi-day risk-neutral density.
         </p>
-        <div className="my-3 overflow-x-auto rounded-[2px] border border-[var(--border)] bg-[var(--panel-2)] p-3 font-mono text-[0.72rem]">
-          ΔHedge(K) = Gamma·dS + Charm·dt + Vanna·dσ + ½Speed·dS² + Color·dt·dS + Zomma·dS·dσ + ½Vomma·dσ²
-        </div>
-        <div className="grid grid-cols-1 gap-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)] sm:grid-cols-2">
-          <p className="m-0">
-            <b style={{ color: TERM_COLOR.gamma }}>Gamma·dS</b> — forced trade per $1 move, scaled by <b>dS</b>, this
-            book&apos;s own last-observed move size ({fmtNum(context.dSPct, 2)}%), not a guess.
-          </p>
-          <p className="m-0">
-            <b style={{ color: TERM_COLOR.charm }}>Charm·dt</b> — forced rebalancing from time decay alone, over{" "}
-            <b>dt</b> = {context.dtDays} trading day, even at a frozen price.
-          </p>
-          <p className="m-0">
-            <b style={{ color: TERM_COLOR.vanna }}>Vanna·dσ</b> — forced rebalancing from IV drift alone, scaled by{" "}
-            <b>dσ</b>, this book&apos;s own realized ATM-IV change ({fmtNum(context.dSigmaPts, 2)} vol pts) — the third
-            real trigger, usually ignored by simple GEX boards.
-          </p>
-          <p className="m-0">
-            <b style={{ color: TERM_COLOR.speed }}>½Speed·dS², Color·dt·dS, Zomma·dS·dσ, ½Vomma·dσ²</b> — the second-order
-            terms a first-order gamma+charm model drops entirely: how gamma itself shifts with price, time, and vol.
-          </p>
-        </div>
-        <p className="m-0 mt-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)]">
-          The ranking metric is <b>expected</b> flow: |ΔHedge(K)| weighted by same-day reachability — a Gaussian in
-          log-return space, scored against this book&apos;s own explicit 1-trading-day move estimate (±
-          {fmtNum(context.sigma1dPct, 2)}% today), not the option&apos;s own risk-neutral density. That density answers
-          &ldquo;can spot reach K by expiry&rdquo; — often several days out even on the book this feed labels
-          &ldquo;0dte&rdquo; — which let far-out strikes look reachable over a multi-day window while being a tail
-          event for a single session. Scoring same-day reachability directly fixes that: strikes decay toward zero with
-          no floor once they&apos;re more than a couple of standard deviations from spot, so &ldquo;most likely to see a
-          reaction today&rdquo; is exactly what the rank means. Each row shows its distance in σ (standard deviations)
-          from spot.
+        <p className="m-0 mt-3 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
+          This data source also exposes charm, vanna, theta, and vega per strike — but doesn&apos;t document their
+          units, and nothing here confirms they&apos;re on the same dollar scale as GEX. Rather than guess and risk
+          another wrong number, they&apos;re shown per strike as a 0-100% share of their own grid&apos;s range —
+          corroboration, never summed into the ranked dollar figure.
         </p>
         <p className="m-0 mt-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)]">
-          <b>Confidence</b> is a separate tag, not a second likelihood score — reachability is already priced into the
-          rank, so it doesn&apos;t need repeating. Confidence instead asks whether <i>other, independent</i> evidence
-          corroborates this being a real, durable level: is it within 2σ today, does gamma or charm actually dominate
-          the breakdown (rather than the smaller higher-order terms), is vanna meaningful, is OI at this strike actively
-          building, is it also a wall in another expiry, and is it this book&apos;s own call/put wall. A strike can rank
-          #1 by dollars and still show MEDIUM if fewer of those corroborate — that&apos;s the tag doing its job, not a
-          contradiction of the rank above it.
+          <b>Confidence</b> is a separate tag from the rank: it counts how many independent signals agree — reachable
+          within 2σ today, charm or vanna meaningfully elevated, and whether the strike is this book&apos;s own
+          self-derived call/put wall or king node. A strike can rank #1 by dollars and still show MEDIUM if fewer of
+          those corroborate — that&apos;s the tag doing its job, not a contradiction of the rank above it.
         </p>
         <p className="m-0 mt-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
-          Why not a full stochastic-vol (Heston) model: that needs numerical calibration against a raw IV surface to
-          fit mean-reversion and vol-of-vol, and the smile it would capture is already priced into these greeks. The
-          Taylor expansion is exact at this point and uses only what the feed gives — no re-derivation of the pricing
-          model. This is a composite estimate from public options-chain exposure, not a literal dealer book — the sign
-          convention (dealers long calls, short puts) is the standard assumption, not observed fact. Same-day (1
-          trading day) reachability throughout, regardless of the underlying contract&apos;s actual days to expiry.
+          Walls and king node are self-derived by peak-prominence on the 0DTE gex-by-strike curve (backtested on SPY
+          2020-2026: next-day |return| was 0.70% near the top-persistence wall vs 1.07% far from it, Mann-Whitney
+          p=9.7e-13) — not trusted from any aggregate, multi-expiry wall field. Open interest is aggregate across all
+          expiries (this source doesn&apos;t expose OI per expiry), so OI-based signals are an approximation, not
+          0DTE-pure. This is a composite estimate from public options-chain exposure, not a literal dealer book — the
+          sign convention (dealers long calls, short puts) is the standard assumption, not observed fact. 0DTE (today,{" "}
+          {data.resolvedExpiry}) throughout.
         </p>
       </div>
 
@@ -303,7 +246,7 @@ function HedgePressureView({ data }: { data: GexResponse }) {
           <div className="partno" style={{ color: "var(--text-faint)" }}>
             RANKED BY EXPECTED HEDGE FLOW — MOST LIKELY STRIKES TO REACT TODAY
           </div>
-          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS TAYLOR-TERM BREAKDOWN</div>
+          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS BREAKDOWN</div>
         </div>
         {ranked.map((row, i) => (
           <HedgePressureRankRow key={row.strike} rank={i + 1} row={row} maxFlow={maxFlow} />
@@ -357,7 +300,7 @@ function BlindSpotClusterRow({ cluster, maxScore }: { cluster: BlindSpotCluster;
 
 function BlindSpotsView() {
   const [qqq, setQqq] = useState<GexResponse | null>(null);
-  const [spx, setSpx] = useState<GexResponse | null>(null);
+  const [spy, setSpy] = useState<GexResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -371,11 +314,11 @@ function BlindSpotsView() {
       if (!res.ok || !json.ok) throw new Error(json.error ?? `request failed (${res.status})`);
       return json;
     }
-    Promise.all([fetchOne("QQQ"), fetchOne("SPX")])
-      .then(([qqqJson, spxJson]) => {
+    Promise.all([fetchOne("QQQ"), fetchOne("SPY")])
+      .then(([qqqJson, spyJson]) => {
         if (cancelled) return;
         setQqq(qqqJson);
-        setSpx(spxJson);
+        setSpy(spyJson);
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message);
@@ -391,11 +334,11 @@ function BlindSpotsView() {
   if (loading) {
     return (
       <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem] text-[var(--text-faint)]">
-        Loading QQQ + SPX confluence…
+        Loading QQQ + SPY confluence…
       </div>
     );
   }
-  if (error || !qqq || !spx) {
+  if (error || !qqq || !spy) {
     return (
       <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
         ERR: {error ?? "missing data"}
@@ -403,15 +346,15 @@ function BlindSpotsView() {
     );
   }
 
-  const { clusters, ratio, bandwidth } = computeBlindSpots(qqq, spx, 8);
+  const { clusters, ratio, bandwidth } = computeBlindSpots(qqq, spy, 8);
   const maxScore = clusters[0]?.score ?? 1;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="QQQ SPOT" value={fmtNum(qqq.rnd.forward, 2)} />
-        <StatTile label="SPX SPOT" value={fmtNum(spx.rnd.forward, 2)} />
-        <StatTile label="RATIO (QQQ/SPX)" value={fmtNum(ratio, 4)} />
+        <StatTile label="QQQ SPOT" value={fmtNum(qqq.spot, 2)} />
+        <StatTile label="SPY SPOT" value={fmtNum(spy.spot, 2)} />
+        <StatTile label="RATIO (QQQ/SPY)" value={fmtNum(ratio, 4)} />
         <StatTile label="CLUSTER BAND" value={`±${fmtNum(bandwidth, 2)}`} />
       </div>
 
@@ -423,20 +366,20 @@ function BlindSpotsView() {
           MenthorQ&apos;s published Blind Spots idea: take option-derived levels from several correlated instruments
           (for NQ: NQ futures options, NDX, QQQ, and MAG7 stocks), convert every level onto one instrument&apos;s price
           scale, and cluster where several land near each other — the overlap density, not any single chain, is the
-          signal. This feed only carries QQQ and SPX, so this is that same mechanic run on two assets instead of five
-          or six — a smaller, honest version of the idea, not a reproduction of their product.
+          signal. This data source carries QQQ and SPY, so this is that same mechanic run on two assets instead of
+          five or six — a smaller, honest version of the idea, not a reproduction of their product.
         </p>
         <p className="m-0 mt-3 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
-          Each symbol contributes Call Resistance, Put Support, King Node, HVL (gamma flip), Max Pain, and its top 3
-          secondary GEX strikes. SPX levels are converted to QQQ-equivalent prices via the ratio method (
-          <code>level × QQQspot/SPXspot</code>) — appropriate here since the two trade at very different numeric
-          levels. Every candidate price is scored by a Gaussian-kernel overlap density — weight × proximity to every
-          contributing level, summed — and the ranked local maxima are the Blind Spots (BL1 = strongest overlap).
+          Each symbol contributes its own 0DTE Call Resistance, Put Support, King Node, Gamma Flip, Max Pain, and top 3
+          secondary GEX strikes — all self-derived by peak prominence, same method as Hedge Pressure. SPY levels are
+          converted to QQQ-equivalent prices via the ratio method (<code>level × QQQspot/SPYspot</code>). Every
+          candidate price is scored by a Gaussian-kernel overlap density — weight × proximity to every contributing
+          level, summed — and the ranked local maxima are the Blind Spots (BL1 = strongest overlap).
         </p>
         <p className="m-0 mt-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
           MenthorQ does not publish its weighting formula, clustering tolerance, correlation window, or dealer-side
           classifier — the weights, the ±0.4%-of-spot bandwidth, and the 0.85x discount on converted (non-native)
-          levels here are stated assumptions, not recovered constants. 0DTE book only.
+          levels here are stated assumptions, not recovered constants. 0DTE book only, both assets.
         </p>
       </div>
 
@@ -495,7 +438,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
         <SymbolToggle symbol={symbol} onChange={setSymbol} />
         {data && (
           <div className="font-mono text-[0.62rem] text-[var(--text-faint)]">
-            as of {new Date(data.asOf).toLocaleTimeString()} · {data.selection.exp}
+            as of {new Date(data.asOf).toLocaleTimeString()} · 0DTE {data.resolvedExpiry}
           </div>
         )}
       </div>

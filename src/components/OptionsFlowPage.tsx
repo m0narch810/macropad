@@ -2,12 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { GexResponse, GexSymbol } from "@/lib/gex";
-import { fmtNum, fmtPct, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
+import { computeHedgePressure, fmtNum, fmtPct, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
-import Exposure3D from "@/components/optionsflow/Exposure3D";
 
-export type OptionsFlowView = "gex" | "dex" | "volsurface" | "walls" | "expectedmove" | "pressure";
+export type OptionsFlowView = "gex" | "dex" | "volsurface" | "walls" | "expectedmove" | "pressure" | "hedgepressure";
 
 const SYMBOLS: GexSymbol[] = ["QQQ", "SPX"];
 
@@ -66,7 +65,8 @@ function VisualCard({ title, subtitle, children }: { title: string; subtitle?: s
 
 function GexExposureView({ data }: { data: GexResponse }) {
   const top = useMemo(() => topStrikesByMagnitude(data.exposure.perStrike, (r) => r.gex, 22), [data]);
-  const chartData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, call: r.callGex, put: r.putGex }));
+  const netData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, net: r.gex }));
+  const splitData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, call: r.callGex, put: r.putGex }));
 
   return (
     <div className="flex flex-col gap-6">
@@ -78,16 +78,12 @@ function GexExposureView({ data }: { data: GexResponse }) {
       </div>
       <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">{data.structure.regimeNote}</p>
 
-      <VisualCard title="GEX BY STRIKE" subtitle="Call (up) vs. put (down), top 22 strikes by |GEX|">
-        <ExposureBarChart data={chartData} mode="split" unitLabel="GEX" />
+      <VisualCard title="GEX BY STRIKE" subtitle="Net GEX — positive (green) above zero, negative (red) below, top 22 strikes by |GEX|">
+        <ExposureBarChart data={netData} mode="net" unitLabel="GEX" />
       </VisualCard>
 
       <VisualCard title="GEX HEATMAP" subtitle="Intensity-scaled, call/put rows">
-        <ExposureHeatmap data={chartData} mode="split" />
-      </VisualCard>
-
-      <VisualCard title="3D EXPOSURE SURFACE" subtitle="Drag to orbit, scroll to zoom">
-        <Exposure3D data={chartData} mode="split" />
+        <ExposureHeatmap data={splitData} mode="split" />
       </VisualCard>
     </div>
   );
@@ -116,10 +112,6 @@ function DexExposureView({ data }: { data: GexResponse }) {
 
       <VisualCard title="DEX HEATMAP" subtitle="Intensity-scaled, net row">
         <ExposureHeatmap data={chartData} mode="net" />
-      </VisualCard>
-
-      <VisualCard title="3D EXPOSURE SURFACE" subtitle="Drag to orbit, scroll to zoom">
-        <Exposure3D data={chartData} mode="net" />
       </VisualCard>
     </div>
   );
@@ -280,6 +272,80 @@ function PutCallPressureView({ data }: { data: GexResponse }) {
   );
 }
 
+function HedgePressureRow({ rank, row, maxScore }: { rank: number; row: ReturnType<typeof computeHedgePressure>[number]; maxScore: number }) {
+  const widthPct = maxScore > 0 ? (row.score / maxScore) * 100 : 0;
+  return (
+    <div className="flex items-center gap-3 border-b border-[var(--border)] py-2.5 last:border-0">
+      <div className="w-6 shrink-0 font-mono text-[0.68rem] text-[var(--text-faint)]">{rank}</div>
+      <div className="w-16 shrink-0 font-mono text-[0.82rem] font-semibold">{fmtNum(row.strike, 0)}</div>
+      <div className="relative h-6 flex-1 overflow-hidden bg-[var(--panel-2)]">
+        <div
+          className="h-full transition-[width] duration-300"
+          style={{ width: `${widthPct}%`, background: row.gex >= 0 ? "var(--up)" : "var(--down)" }}
+        />
+        <div className="absolute inset-0 flex items-center justify-end px-2 font-mono text-[0.66rem] text-[var(--text)]">
+          {row.score.toFixed(1)}
+        </div>
+      </div>
+      <div className="hidden w-24 shrink-0 text-right font-mono text-[0.66rem] text-[var(--text-faint)] sm:block">
+        {fmtPct(row.distPct, 1)}
+      </div>
+      <div className="flex w-32 shrink-0 flex-wrap justify-end gap-1">
+        {row.flags.map((f) => (
+          <span
+            key={f}
+            className="border border-[var(--border-strong)] px-1.5 py-0.5 font-mono text-[0.56rem] font-semibold uppercase tracking-[0.04em] text-[var(--text-dim)]"
+          >
+            {f}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function HedgePressureView({ data }: { data: GexResponse }) {
+  const ranked = useMemo(() => computeHedgePressure(data, 15), [data]);
+  const maxScore = ranked[0]?.score ?? 1;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="REGIME" value={data.structure.regime.toUpperCase()} />
+        <StatTile label="TOP STRIKE" value={fmtNum(ranked[0]?.strike, 0)} />
+        <StatTile label="GAMMA FLIP" value={fmtNum(data.aggregate.flip.nearestFlip, 2)} />
+        <StatTile label="MAX PAIN" value={fmtNum(data.aggregate.maxPain, 0)} />
+      </div>
+
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+        <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
+          METHODOLOGY
+        </div>
+        <p className="m-0 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
+          Dealers must stay delta-neutral, so hedging isn&apos;t optional — it&apos;s forced by three mechanics: <b>gamma</b> (a
+          strike&apos;s exposure to a hedge trade per $1 spot move), <b>charm</b> (forced rebalancing from time decay alone,
+          even with zero price movement), and <b>open interest concentration</b> (a strike only matters if size actually
+          sits there). Score = 45% |GEX| + 30% |charm| + 15% OI share + 10% proximity to spot, each normalized against the
+          book&apos;s max. This is a ranking built from public options-chain exposure, not a literal dealer position —
+          treat it as where forced flow is most likely to concentrate, not certainty.
+        </p>
+      </div>
+
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="partno" style={{ color: "var(--text-faint)" }}>
+            RANKED BY HEDGE PRESSURE
+          </div>
+          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">STRIKE · SCORE · DIST% · FLAGS</div>
+        </div>
+        {ranked.map((row, i) => (
+          <HedgePressureRow key={row.strike} rank={i + 1} row={row} maxScore={maxScore} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [symbol, setSymbol] = useState<GexSymbol>("QQQ");
   const [data, setData] = useState<GexResponse | null>(null);
@@ -342,6 +408,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
           {view === "walls" && <StrikeWallsView data={data} />}
           {view === "expectedmove" && <ExpectedMoveView data={data} />}
           {view === "pressure" && <PutCallPressureView data={data} />}
+          {view === "hedgepressure" && <HedgePressureView data={data} />}
         </>
       )}
     </div>

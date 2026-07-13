@@ -94,6 +94,55 @@ export function topStrikesByMagnitude<T extends { strike: number }>(rows: T[], p
     .sort((a, b) => a.strike - b.strike);
 }
 
+export interface HedgePressureRow {
+  strike: number;
+  score: number;
+  gex: number;
+  chex: number;
+  totalOi: number;
+  distPct: number;
+  flags: string[];
+}
+
+/**
+ * Ranks strikes by how much dealer hedging flow they mechanically force,
+ * combining three real triggers: gamma (forced trade per $1 spot move),
+ * charm (forced trade per day from pure time decay, no move needed), and
+ * OI concentration (a strike only matters if enough size sits there).
+ * Proximity to spot gets a smaller weight since near strikes get triggered
+ * by smaller moves, but far walls with heavy OI still carry real weight.
+ * This is a composite estimate for ranking, not a literal dealer book.
+ */
+export function computeHedgePressure(data: GexResponse, count = 15): HedgePressureRow[] {
+  const spot = data.rnd.forward || data.aggregate.flip.nearestFlip;
+  const rows = data.exposure.perStrike;
+  const maxAbsGex = Math.max(1, ...rows.map((r) => Math.abs(r.gex)));
+  const maxAbsChex = Math.max(1, ...rows.map((r) => Math.abs(r.chex)));
+  const maxOi = Math.max(1, ...rows.map((r) => r.callOi + r.putOi));
+  const proximityBandPct = 8;
+
+  const scored: HedgePressureRow[] = rows.map((r) => {
+    const totalOi = r.callOi + r.putOi;
+    const distPct = spot ? ((r.strike - spot) / spot) * 100 : 0;
+    const proximity = Math.max(0, 1 - Math.abs(distPct) / proximityBandPct);
+
+    const normGamma = Math.abs(r.gex) / maxAbsGex;
+    const normCharm = Math.abs(r.chex) / maxAbsChex;
+    const normOi = totalOi / maxOi;
+
+    const score = 100 * (0.45 * normGamma + 0.3 * normCharm + 0.15 * normOi + 0.1 * proximity);
+
+    const flags: string[] = [];
+    if (r.strike === data.aggregate.callWall) flags.push("CALL WALL");
+    if (r.strike === data.aggregate.putWall) flags.push("PUT WALL");
+    if (r.strike === data.structure.kingNode.strike) flags.push(data.structure.kingNode.type.toUpperCase());
+
+    return { strike: r.strike, score, gex: r.gex, chex: r.chex, totalOi, distPct, flags };
+  });
+
+  return scored.sort((a, b) => b.score - a.score).slice(0, count);
+}
+
 export function fmtNum(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   return n.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: 0 });

@@ -48,6 +48,7 @@ const OPTIONS_FLOW_PAGES = [
   { id: "options-flow:walls", label: "STRIKE WALLS", blurb: "Open interest concentrations that act as magnets and barriers into expiry." },
   { id: "options-flow:expectedmove", label: "EXPECTED MOVE", blurb: "What the options market is pricing for the session, the week, and the next event." },
   { id: "options-flow:pressure", label: "PUT/CALL PRESSURE", blurb: "Positioning imbalance across strikes and expiries, and which way it is leaning." },
+  { id: "options-flow:hedgepressure", label: "HEDGE PRESSURE", blurb: "Strikes ranked by how much dealer hedging flow they mechanically force." },
 ];
 
 const SHORT_LABEL: Record<string, string> = {

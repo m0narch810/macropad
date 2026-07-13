@@ -47,6 +47,7 @@ const OPTIONS_FLOW_PAGES = [
   { id: "options-flow:hedgepressure", label: "HEDGE PRESSURE", blurb: "Strikes ranked by how much dealer hedging flow they mechanically force." },
   { id: "options-flow:tesseract", label: "TESSERACT ZONES", blurb: "QQQ/SPY/SPX/NDX option-derived levels converted to one scale and clustered by overlap." },
   { id: "options-flow:volregime", label: "VOL REGIME", blurb: "Live CBOE volatility and tail-risk indices — VIX1D, VIX, VXN, VVIX, SKEW." },
+  { id: "options-flow:hedgeterrain", label: "HEDGE TERRAIN", blurb: "The whole book repriced across hypothetical price and time — cliffs, basins, and gamma-flip uncertainty." },
 ];
 
 const SHORT_LABEL: Record<string, string> = {

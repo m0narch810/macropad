@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   buildStrikeRowsFromChain,
   deriveGexResponse,
+  DIVIDEND_YIELD,
   type ChainStrikeInput,
   type CrossExpiryRow,
   type DealerFlowContext,
@@ -16,11 +17,6 @@ import { fitSvi, sviImpliedVol, type SviPoint } from "@/lib/svi";
 // META/GOOGL/AMZN all returned SPX's exact spot/strikes under their own
 // name, no error). Only these four gave genuinely distinct spot prices.
 const ALLOWED_SYMBOLS = new Set<GexSymbol>(["QQQ", "SPY", "SPX", "NDX"]);
-
-// Continuous dividend-yield approximation, not discrete ex-dividend jumps -
-// a stated simplification of the pricer, not a hidden one. QQQ/NDX track the
-// Nasdaq-100 (lower yield, tech-heavy); SPY/SPX track the S&P 500.
-const DIVIDEND_YIELD: Record<GexSymbol, number> = { QQQ: 0.006, NDX: 0.006, SPY: 0.012, SPX: 0.012 };
 
 // Upstream latency, measured directly against each endpoint: /zero_dte ~1.5s,
 // /gex ~2.9s, /dealer_anomalies ~0.3s, /probability ~9.6s, /option-matrix

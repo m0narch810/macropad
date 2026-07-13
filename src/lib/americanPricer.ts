@@ -142,6 +142,14 @@ export function lrGreeks(inputs: PricerInputs): Greeks {
   return { price: v0, delta, gamma, theta, vega, vanna, charm };
 }
 
+/** Delta only, via 2 reprices instead of lrGreeks' ~11 - for scanning a grid of hypothetical spot/time/vol scenarios where only delta (to sum into total hedge shares) is needed, not the full Greek set. */
+export function lrDelta(inputs: PricerInputs): number {
+  const hS = inputs.spot * 0.005;
+  const vUp = lrPrice({ ...inputs, spot: inputs.spot + hS });
+  const vDown = lrPrice({ ...inputs, spot: inputs.spot - hS });
+  return (vUp - vDown) / (2 * hS);
+}
+
 /** Standard dollar-exposure convention: Greek x OI x contract multiplier x scale. Matches the industry GEX/DEX convention (Γ·OI·M·S²·0.01, Δ·OI·M·S). */
 export function dollarGex(gamma: number, oi: number, spot: number, multiplier = 100): number {
   return gamma * oi * multiplier * spot * spot * 0.01;

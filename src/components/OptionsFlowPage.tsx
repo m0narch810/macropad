@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import type { GexResponse, GexSymbol, HedgePressureRow, TesseractZone } from "@/lib/gex";
 import { computeHedgePressure, computeTesseractZones, fmtNum, fmtUsd, nearStrikeWindow } from "@/lib/gex";
+import type { HedgeTerrainResponse } from "@/app/api/hedgeterrain/route";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
 import Sparkline from "@/components/Sparkline";
 
-export type OptionsFlowView = "gex" | "dex" | "hedgepressure" | "tesseract" | "volregime";
+export type OptionsFlowView = "gex" | "dex" | "hedgepressure" | "tesseract" | "volregime" | "hedgeterrain";
 
 const SYMBOLS: GexSymbol[] = ["QQQ", "SPY"];
 const TESSERACT_SYMBOLS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
@@ -580,6 +581,274 @@ function VolRegimeView() {
   );
 }
 
+/** Diverging color for a hedge-shares value: green = dealers must buy, red = dealers must sell, scaled by magnitude relative to the grid's own max. */
+function hedgeColor(value: number, maxAbs: number): string {
+  if (maxAbs <= 0) return "var(--panel-2)";
+  const t = Math.max(-1, Math.min(1, value / maxAbs));
+  const pct = Math.round(Math.abs(t) * 85);
+  const base = t >= 0 ? "var(--up)" : "var(--down)";
+  return `color-mix(in srgb, ${base} ${pct}%, var(--panel-2) ${100 - pct}%)`;
+}
+
+function HedgeTerrainHeatmap({ grid }: { grid: HedgeTerrainResponse["grid"] }) {
+  const hoursAheadValues = [...new Set(grid.map((p) => p.hoursAhead))].sort((a, b) => a - b);
+  const priceValues = [...new Set(grid.map((p) => p.price))].sort((a, b) => a - b);
+  const maxAbs = Math.max(1, ...grid.map((p) => Math.abs(p.dealerHedgeShares)));
+  const byKey = new Map(grid.map((p) => [`${p.hoursAhead}:${p.price}`, p]));
+
+  return (
+    <div className="overflow-x-auto">
+      <div className="flex flex-col gap-px" style={{ minWidth: 640 }}>
+        {hoursAheadValues.map((hours) => (
+          <div key={hours} className="flex items-stretch gap-px">
+            <div className="flex w-16 shrink-0 items-center justify-end pr-2 font-mono text-[0.6rem] text-[var(--text-faint)]">
+              +{hours.toFixed(1)}h
+            </div>
+            <div className="flex flex-1 gap-px">
+              {priceValues.map((price) => {
+                const point = byKey.get(`${hours}:${price}`);
+                const value = point?.dealerHedgeShares ?? 0;
+                return (
+                  <div
+                    key={price}
+                    title={`${fmtNum(price, 2)} @ +${hours.toFixed(1)}h: ${fmtNum(value, 0)} shares`}
+                    className="h-7 flex-1"
+                    style={{ background: hedgeColor(value, maxAbs) }}
+                  />
+                );
+              })}
+            </div>
+          </div>
+        ))}
+        <div className="flex gap-px pl-16">
+          {priceValues.map((price, i) => (
+            <div
+              key={price}
+              className="flex-1 text-center font-mono text-[0.56rem] text-[var(--text-faint)]"
+              style={{ visibility: i % 3 === 0 ? "visible" : "hidden" }}
+            >
+              {fmtNum(price, 0)}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HedgeTerrainView() {
+  const [symbol, setSymbol] = useState<GexSymbol>("QQQ");
+  const [data, setData] = useState<HedgeTerrainResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/hedgeterrain?symbol=${symbol}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json: HedgeTerrainResponse) => {
+        if (cancelled) return;
+        if (!json.ok) throw new Error("upstream returned an error");
+        setData(json);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [symbol]);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex items-center justify-between">
+        <SymbolToggle symbol={symbol} onChange={setSymbol} />
+        {data && (
+          <div className="font-mono text-[0.62rem] text-[var(--text-faint)]">
+            as of {new Date(data.asOf).toLocaleTimeString()} · 0DTE {data.resolvedExpiry}
+          </div>
+        )}
+      </div>
+
+      {loading && (
+        <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem] text-[var(--text-faint)]">
+          Repricing the book across a price/time grid…
+        </div>
+      )}
+      {!loading && (error || !data) && (
+        <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
+          ERR: {error ?? "missing data"}
+        </div>
+      )}
+
+      {!loading && !error && data && (
+        <>
+          <p className="m-0 font-sans text-[0.78rem] leading-relaxed text-[var(--text-faint)]">
+            Every cell is a real reprice (Leisen-Reimer, frozen IV) at a hypothetical price and a hypothetical hours-
+            ahead projection — not historical data (this app has no snapshot storage), a forward projection from right
+            now.
+          </p>
+
+          <VisualCard title="HEDGE-PRESSURE TERRAIN" subtitle="Rows = hours ahead, columns = hypothetical price · green = dealers must buy, red = must sell">
+            <HedgeTerrainHeatmap grid={data.grid} />
+          </VisualCard>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+              <div className="partno mb-3" style={{ color: "var(--text-faint)" }}>
+                DELTA-REHEDGING CLIFFS
+              </div>
+              {data.cliffs.length === 0 && <p className="m-0 font-sans text-[0.78rem] text-[var(--text-faint)]">No steep sections found right now.</p>}
+              {data.cliffs.slice(0, 6).map((c, i) => (
+                <div key={i} className="flex items-center justify-between border-b border-[var(--border)] py-2 last:border-0 font-mono text-[0.72rem]">
+                  <span className="font-semibold">{fmtNum(c.price, 1)}</span>
+                  <span
+                    className="uppercase tracking-[0.06em]"
+                    style={{ color: c.classification === "accelerating" ? "var(--down)" : c.classification === "stabilizing" ? "var(--up)" : "var(--text-faint)" }}
+                  >
+                    {c.classification}
+                  </span>
+                  <span className="text-[var(--text-faint)]">{fmtNum(c.steepness, 0)} sh/$</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+              <div className="partno mb-3" style={{ color: "var(--text-faint)" }}>
+                HEDGE BASIN
+              </div>
+              {data.basin ? (
+                <div className="flex flex-col gap-1.5 font-mono text-[0.72rem] text-[var(--text-dim)]">
+                  <div>
+                    Center: <b>{fmtNum(data.basin.center, 2)}</b>
+                  </div>
+                  <div>
+                    Inner range: {fmtNum(data.basin.innerLow, 1)} – {fmtNum(data.basin.innerHigh, 1)}
+                  </div>
+                  <div>
+                    Escape boundaries: <span style={{ color: "var(--down)" }}>{fmtNum(data.basin.escapeLow, 1)}</span> /{" "}
+                    <span style={{ color: "var(--up)" }}>{fmtNum(data.basin.escapeHigh, 1)}</span>
+                  </div>
+                </div>
+              ) : (
+                <p className="m-0 font-sans text-[0.78rem] text-[var(--text-faint)]">Not enough grid data.</p>
+              )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+              <div className="partno mb-3" style={{ color: "var(--text-faint)" }}>
+                ACCELERATION (IGNITION) POINTS
+              </div>
+              {data.acceleration.length === 0 && <p className="m-0 font-sans text-[0.78rem] text-[var(--text-faint)]">None found.</p>}
+              {data.acceleration.map((a, i) => (
+                <div key={i} className="flex items-center justify-between border-b border-[var(--border)] py-2 last:border-0 font-mono text-[0.72rem]">
+                  <span className="font-semibold">{fmtNum(a.price, 1)}</span>
+                  <span className="text-[var(--text-faint)]">d²(hedge)/dP² = {fmtNum(a.acceleration, 1)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+              <div className="partno mb-3" style={{ color: "var(--text-faint)" }}>
+                GAMMA-FLIP UNCERTAINTY BAND
+              </div>
+              <p className="m-0 mb-2 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
+                Dealer positioning direction is an assumption. Two conventions, not one line:
+              </p>
+              <div className="flex flex-col gap-1 font-mono text-[0.72rem] text-[var(--text-dim)]">
+                <div>Standard (long calls / short puts): {data.gammaFlipBand.conventionA !== null ? fmtNum(data.gammaFlipBand.conventionA, 2) : "—"}</div>
+                <div>Inverted (short calls / long puts): {data.gammaFlipBand.conventionB !== null ? fmtNum(data.gammaFlipBand.conventionB, 2) : "—"}</div>
+                <div style={{ color: data.gammaFlipBand.agrees ? "var(--up)" : "var(--down)" }}>
+                  {data.gammaFlipBand.agrees ? "Agrees within 0.5% — a trustworthy flip level." : "Diverges — this flip is fragile to the sign assumption."}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+            <div className="partno mb-3" style={{ color: "var(--text-faint)" }}>
+              SVI SURFACE RESIDUALS — LARGEST DEVIATIONS FROM THE FITTED CURVE
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] font-mono text-[0.7rem]">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-left text-[var(--text-faint)]">
+                    <th className="px-2 py-1.5">STRIKE</th>
+                    <th className="px-2 py-1.5">SIDE</th>
+                    <th className="px-2 py-1.5">RAW IV</th>
+                    <th className="px-2 py-1.5">FITTED IV</th>
+                    <th className="px-2 py-1.5">RESIDUAL</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.sviResiduals.slice(0, 8).map((r, i) => (
+                    <tr key={i} className="border-b border-[var(--border)] last:border-0">
+                      <td className="px-2 py-1.5 font-semibold">{fmtNum(r.strike, 0)}</td>
+                      <td className="px-2 py-1.5 uppercase text-[var(--text-dim)]">{r.side}</td>
+                      <td className="px-2 py-1.5">{(r.rawIv * 100).toFixed(1)}%</td>
+                      <td className="px-2 py-1.5">{(r.fittedIv * 100).toFixed(1)}%</td>
+                      <td className="px-2 py-1.5" style={{ color: r.residualPct >= 0 ? "var(--up)" : "var(--down)" }}>
+                        {r.residualPct >= 0 ? "+" : ""}
+                        {r.residualPct.toFixed(1)}%
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+            <div className="partno mb-3" style={{ color: "var(--text-faint)" }}>
+              CROSS-EXPIRY CONVERGENCE
+            </div>
+            {data.crossExpiry.length === 0 && (
+              <p className="m-0 font-sans text-[0.78rem] text-[var(--text-faint)]">
+                Cross-expiry data timed out this load (the upstream endpoint is slow) — try again shortly.
+              </p>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[420px] font-mono text-[0.7rem]">
+                <thead>
+                  <tr className="border-b border-[var(--border)] text-left text-[var(--text-faint)]">
+                    <th className="px-2 py-1.5">EXPIRATION</th>
+                    <th className="px-2 py-1.5">DTE</th>
+                    <th className="px-2 py-1.5">CALL RESISTANCE</th>
+                    <th className="px-2 py-1.5">PUT SUPPORT</th>
+                    <th className="px-2 py-1.5">TOTAL OI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.crossExpiry.map((row, i) => (
+                    <tr key={i} className="border-b border-[var(--border)] last:border-0">
+                      <td className="px-2 py-1.5 font-semibold">{row.expiration}</td>
+                      <td className="px-2 py-1.5 text-[var(--text-dim)]">{row.dte}</td>
+                      <td className="px-2 py-1.5" style={{ color: "var(--up)" }}>
+                        {row.callResistance !== null ? fmtNum(row.callResistance, 0) : "—"}
+                      </td>
+                      <td className="px-2 py-1.5" style={{ color: "var(--down)" }}>
+                        {row.putSupport !== null ? fmtNum(row.putSupport, 0) : "—"}
+                      </td>
+                      <td className="px-2 py-1.5 text-[var(--text-dim)]">{fmtNum(row.totalOi, 0)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [symbol, setSymbol] = useState<GexSymbol>("QQQ");
   const [data, setData] = useState<GexResponse | null>(null);
@@ -587,7 +856,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (view === "tesseract" || view === "volregime") return;
+    if (view === "tesseract" || view === "volregime" || view === "hedgeterrain") return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -614,6 +883,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
 
   if (view === "tesseract") return <TesseractZonesView />;
   if (view === "volregime") return <VolRegimeView />;
+  if (view === "hedgeterrain") return <HedgeTerrainView />;
 
   return (
     <div className="flex flex-col gap-6">

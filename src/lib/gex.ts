@@ -1,6 +1,11 @@
-import { lrGreeks, dollarCharm, dollarDex, dollarGex, dollarTheta, dollarVanna, dollarVega } from "@/lib/americanPricer";
+import { lrDelta, lrGreeks, dollarCharm, dollarDex, dollarGex, dollarTheta, dollarVanna, dollarVega } from "@/lib/americanPricer";
 
 export type GexSymbol = "QQQ" | "SPY" | "SPX" | "NDX";
+
+// Continuous dividend-yield approximation, not discrete ex-dividend jumps -
+// a stated simplification of the pricer, not a hidden one. QQQ/NDX track the
+// Nasdaq-100 (lower yield, tech-heavy); SPY/SPX track the S&P 500.
+export const DIVIDEND_YIELD: Record<GexSymbol, number> = { QQQ: 0.006, NDX: 0.006, SPY: 0.012, SPX: 0.012 };
 
 export interface StrikeRow0DTE {
   strike: number;
@@ -527,6 +532,175 @@ export function computeTesseractZones(
   }));
 
   return { zones, ratios, bandwidth, curve: grid };
+}
+
+// ---------------------------------------------------------------------------
+// Hedge Terrain: reprice the whole book across a grid of hypothetical prices
+// and projected-forward times, instead of reading gamma at today's spot as a
+// static bar chart. There's no historical snapshot storage in this app, so
+// the "time" axis here is a genuine forward projection using our own
+// pricer (reduce T, same as charm's bump-and-reprice) - not a fabricated
+// history. Every point sums real per-strike delta (frozen-IV, per the
+// pricer's stated scope) into dealer hedge shares: dealers are assumed to
+// hold the opposite of the aggregate customer position implied by OI, so
+// their required hedge is the negative of that aggregate delta.
+// ---------------------------------------------------------------------------
+
+export interface HedgeGridPoint {
+  price: number;
+  hoursAhead: number;
+  /** Shares dealers must transact to stay hedged at this hypothetical (price, time) - positive = must buy, negative = must sell. */
+  dealerHedgeShares: number;
+}
+
+export function computeHedgeGrid(
+  chain: ChainStrikeInput[],
+  spot: number,
+  totalHoursToExpiry: number,
+  r: number,
+  q: number,
+  priceRangePct = 0.05,
+  priceSteps = 21,
+  timeSteps = 5
+): HedgeGridPoint[] {
+  const active = chain.filter((row) => row.oi > 0 && row.iv > 0);
+  const grid: HedgeGridPoint[] = [];
+
+  for (let ti = 0; ti <= timeSteps; ti++) {
+    const hoursAhead = (totalHoursToExpiry * ti) / timeSteps;
+    const hoursRemaining = Math.max(0.05, totalHoursToExpiry - hoursAhead);
+    const T = hoursRemaining / 24 / 365;
+
+    for (let pi = 0; pi <= priceSteps; pi++) {
+      const price = spot * (1 - priceRangePct + (2 * priceRangePct * pi) / priceSteps);
+
+      let totalCustomerDelta = 0;
+      for (const row of active) {
+        const delta = lrDelta({ spot: price, strike: row.strike, T, vol: row.iv, r, q, isCall: row.side === "call" });
+        totalCustomerDelta += delta * row.oi * 100;
+      }
+
+      grid.push({ price, hoursAhead, dealerHedgeShares: -totalCustomerDelta });
+    }
+  }
+
+  return grid;
+}
+
+export interface HedgeCliff {
+  price: number;
+  steepness: number;
+  classification: "stabilizing" | "accelerating" | "neutral";
+}
+
+/** Slope of the dealerHedgeShares-vs-price curve at hoursAhead=0 - steep sections are "cliffs" where a small move forces a large rebalance. */
+export function computeHedgeCliffs(gridAtNow: HedgeGridPoint[]): HedgeCliff[] {
+  const sorted = [...gridAtNow].sort((a, b) => a.price - b.price);
+  if (sorted.length < 3) return [];
+
+  const slopes: number[] = [];
+  for (let i = 1; i < sorted.length - 1; i++) {
+    const slope = (sorted[i + 1].dealerHedgeShares - sorted[i - 1].dealerHedgeShares) / (sorted[i + 1].price - sorted[i - 1].price);
+    slopes.push(slope);
+  }
+  const absSlopes = slopes.map(Math.abs).sort((a, b) => a - b);
+  const median = absSlopes[Math.floor(absSlopes.length / 2)] || 1;
+
+  const cliffs: HedgeCliff[] = [];
+  for (let i = 0; i < slopes.length; i++) {
+    const point = sorted[i + 1];
+    const slope = slopes[i];
+    if (Math.abs(slope) < median * 1.5) continue; // only genuinely steep sections count as a cliff
+    // Rising price + dealers must buy more (positive, increasing) = accelerating (short-gamma); rising price + dealers sell more = stabilizing (long-gamma).
+    const classification: HedgeCliff["classification"] = slope > 0 ? "accelerating" : "stabilizing";
+    cliffs.push({ price: point.price, steepness: slope, classification });
+  }
+  return cliffs.sort((a, b) => Math.abs(b.steepness) - Math.abs(a.steepness));
+}
+
+export interface HedgeBasin {
+  center: number;
+  innerLow: number;
+  innerHigh: number;
+  escapeLow: number;
+  escapeHigh: number;
+}
+
+/** The basin center is where required hedging is smallest (price dealers have least reason to fight); escape boundaries are where the slope first becomes a cliff on either side. */
+export function computeHedgeBasin(gridAtNow: HedgeGridPoint[], cliffs: HedgeCliff[]): HedgeBasin | null {
+  const sorted = [...gridAtNow].sort((a, b) => a.price - b.price);
+  if (!sorted.length) return null;
+
+  const center = sorted.reduce((best, p) => (Math.abs(p.dealerHedgeShares) < Math.abs(best.dealerHedgeShares) ? p : best), sorted[0]).price;
+
+  const below = cliffs.filter((c) => c.price < center).sort((a, b) => b.price - a.price)[0];
+  const above = cliffs.filter((c) => c.price > center).sort((a, b) => a.price - b.price)[0];
+
+  const spread = (sorted[sorted.length - 1].price - sorted[0].price) * 0.15;
+  return {
+    center,
+    innerLow: center - spread,
+    innerHigh: center + spread,
+    escapeLow: below?.price ?? sorted[0].price,
+    escapeHigh: above?.price ?? sorted[sorted.length - 1].price,
+  };
+}
+
+export interface AccelerationPoint {
+  price: number;
+  acceleration: number;
+}
+
+/** Second derivative of the hedge curve - where the *rate of change itself* is increasing fastest, a potential "ignition point" before price ever reaches the largest single cliff. */
+export function computeHedgeAcceleration(gridAtNow: HedgeGridPoint[], count = 3): AccelerationPoint[] {
+  const sorted = [...gridAtNow].sort((a, b) => a.price - b.price);
+  if (sorted.length < 5) return [];
+
+  const points: AccelerationPoint[] = [];
+  for (let i = 2; i < sorted.length - 2; i++) {
+    const h = sorted[i + 1].price - sorted[i].price || 1;
+    const second = (sorted[i + 1].dealerHedgeShares - 2 * sorted[i].dealerHedgeShares + sorted[i - 1].dealerHedgeShares) / (h * h);
+    points.push({ price: sorted[i].price, acceleration: second });
+  }
+  return points.sort((a, b) => Math.abs(b.acceleration) - Math.abs(a.acceleration)).slice(0, count);
+}
+
+export interface GammaFlipBand {
+  /** Standard convention: dealers long calls, short puts (same as GEX/Hedge Pressure elsewhere in this app). */
+  conventionA: number | null;
+  /** Fully inverted assumption: dealers short calls, long puts. */
+  conventionB: number | null;
+  /** True when both conventions land within 0.5% of spot - a flip level that survives the assumption is more trustworthy than one that doesn't. */
+  agrees: boolean;
+}
+
+/** Dealer positioning direction is an assumption, not observed fact - showing the flip under two conventions instead of one line is the honest version of "the" gamma flip. */
+export function computeGammaFlipBand(chain: ChainStrikeInput[], spot: number, T: number, r: number, q: number): GammaFlipBand {
+  const standardRows = buildStrikeRowsFromChain(chain, spot, T, r, q);
+  const invertedChain: ChainStrikeInput[] = chain.map((row) => ({ ...row, side: row.side === "call" ? "put" : "call" }));
+  const invertedRows = buildStrikeRowsFromChain(invertedChain, spot, T, r, q);
+
+  const conventionA = deriveGammaFlip(standardRows, spot);
+  const conventionB = deriveGammaFlip(invertedRows, spot);
+  const agrees = conventionA !== null && conventionB !== null && Math.abs(conventionA - conventionB) < spot * 0.005;
+
+  return { conventionA, conventionB, agrees };
+}
+
+export interface SviResidualRow {
+  strike: number;
+  side: "call" | "put";
+  rawIv: number;
+  fittedIv: number;
+  residualPct: number;
+}
+
+export interface CrossExpiryLevel {
+  expiration: string;
+  dte: number;
+  callResistance: number | null;
+  putSupport: number | null;
+  totalOi: number;
 }
 
 export function fmtNum(n: number | null | undefined, digits = 2): string {

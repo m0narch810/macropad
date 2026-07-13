@@ -42,8 +42,15 @@ function sse(params: SviParams, points: SviPoint[]): number {
   return sum;
 }
 
-/** Nelder-Mead simplex minimization - no external optimization library needed for a 5-parameter fit. */
-function nelderMead(objective: (x: number[]) => number, x0: number[], iterations = 400): number[] {
+/**
+ * Nelder-Mead simplex minimization - no external optimization library needed
+ * for a 5-parameter fit. stepSizes controls the initial simplex spread per
+ * parameter - defaulting to "10% of x0, or 0.1 if x0 is ~0" silently breaks
+ * on parameters whose natural scale isn't near 1 (e.g. SVI's m/sigma for
+ * 0DTE strikes, where the real log-moneyness range can be +-0.03 - a fixed
+ * 0.1 step is 3x the entire data range and the optimizer barely moves).
+ */
+function nelderMead(objective: (x: number[]) => number, x0: number[], stepSizes: number[], iterations = 400): number[] {
   const n = x0.length;
   const alpha = 1,
     gamma = 2,
@@ -53,7 +60,7 @@ function nelderMead(objective: (x: number[]) => number, x0: number[], iterations
   let simplex: number[][] = [x0.slice()];
   for (let i = 0; i < n; i++) {
     const point = x0.slice();
-    point[i] += point[i] !== 0 ? point[i] * 0.1 : 0.1;
+    point[i] += stepSizes[i];
     simplex.push(point);
   }
 
@@ -99,7 +106,19 @@ export function fitSvi(points: SviPoint[]): SviParams {
   }
 
   const avgW = validPoints.reduce((s, p) => s + p.w, 0) / validPoints.length;
-  const x0 = [avgW * 0.5, avgW * 0.5, -0.3, 0, 0.1]; // [a, b, rho, m, sigma] - reasonable equity-skew starting guess
+
+  // sigma/m must be scaled to this data's own log-moneyness range, not a
+  // fixed guess - 0DTE strikes cluster within a few % of spot (k range as
+  // narrow as +-0.03), and a sigma=0.1 starting guess (appropriate for a
+  // multi-week surface) swamps sqrt((k-m)^2+sigma^2) with sigma^2 regardless
+  // of k, degenerating the fit to a flat curve. Caught exactly this: a real
+  // fit against live 0DTE data returned identical IV at three different
+  // strikes before this fix.
+  const ks = validPoints.map((p) => p.k);
+  const kMin = Math.min(...ks);
+  const kMax = Math.max(...ks);
+  const kRange = Math.max(1e-4, kMax - kMin);
+  const kMean = ks.reduce((s, k) => s + k, 0) / ks.length;
 
   const objective = (x: number[]) => {
     const [a, b, rho, m, sigma] = x;
@@ -107,14 +126,27 @@ export function fitSvi(points: SviPoint[]): SviParams {
     return sse({ a, b, rho, m, sigma }, validPoints);
   };
 
-  const [a, b, rho, m, sigma] = nelderMead(objective, x0);
-  return {
-    a,
-    b: Math.max(0, b),
-    rho: Math.max(-0.999, Math.min(0.999, rho)),
-    m,
-    sigma: Math.max(1e-4, sigma),
-  };
+  const stepSizes = [avgW * 0.5 || 1e-6, avgW * 0.5 || 1e-6, 0.1, kRange * 0.25 || 1e-3, kRange * 0.25 || 1e-3];
+
+  // Multi-start: a single Nelder-Mead run can settle into a bad local
+  // minimum (caught exactly this against live 0DTE data - one starting
+  // guess converged to a nearly-flat curve that ignored the real smile
+  // shape entirely). Several starting guesses spanning plausible rho/curve
+  // combinations, keep whichever converges to the lowest SSE.
+  const startingGuesses = [-0.7, -0.3, 0, 0.3, 0.7].map((rho0) => [avgW * 0.5, avgW * 0.5, rho0, kMean, kRange / 4]);
+  let bestParams: SviParams | null = null;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const guess of startingGuesses) {
+    const [a, b, rho, m, sigma] = nelderMead(objective, guess, stepSizes);
+    const candidate: SviParams = { a, b: Math.max(0, b), rho: Math.max(-0.999, Math.min(0.999, rho)), m, sigma: Math.max(1e-4, sigma) };
+    const score = sse(candidate, validPoints);
+    if (score < bestScore) {
+      bestScore = score;
+      bestParams = candidate;
+    }
+  }
+
+  return bestParams!;
 }
 
 /** Smoothed IV at a given strike, from a fitted SVI slice. */

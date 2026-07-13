@@ -365,13 +365,15 @@ function BlindSpotsView() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    Promise.all([
-      fetch("/api/gex?symbol=QQQ", { cache: "no-store" }).then((r) => r.json()),
-      fetch("/api/gex?symbol=SPX", { cache: "no-store" }).then((r) => r.json()),
-    ])
-      .then(([qqqJson, spxJson]: [GexResponse, GexResponse]) => {
+    async function fetchOne(symbol: string): Promise<GexResponse> {
+      const res = await fetch(`/api/gex?symbol=${symbol}`, { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok || !json.ok) throw new Error(json.error ?? `request failed (${res.status})`);
+      return json;
+    }
+    Promise.all([fetchOne("QQQ"), fetchOne("SPX")])
+      .then(([qqqJson, spxJson]) => {
         if (cancelled) return;
-        if (!qqqJson.ok || !spxJson.ok) throw new Error("upstream returned an error");
         setQqq(qqqJson);
         setSpx(spxJson);
       })

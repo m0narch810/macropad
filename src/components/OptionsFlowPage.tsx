@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { BlindSpotCluster, GexResponse, GexSymbol, HedgePressureRow, HedgeTaylorTerm } from "@/lib/gex";
-import { computeBlindSpots, computeHedgePressure, fmtNum, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
+import { computeBlindSpots, computeHedgePressure, fmtNum, fmtUsd, nearStrikeWindow } from "@/lib/gex";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
 
@@ -64,7 +64,8 @@ function VisualCard({ title, subtitle, children }: { title: string; subtitle?: s
 }
 
 function GexExposureView({ data }: { data: GexResponse }) {
-  const top = useMemo(() => topStrikesByMagnitude(data.exposure.perStrike, (r) => r.gex, 22), [data]);
+  const spot = data.rnd.forward || data.aggregate.flip.nearestFlip;
+  const top = useMemo(() => nearStrikeWindow(data.exposure.perStrike, spot, 22), [data, spot]);
   const netData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, net: r.gex }));
   const splitData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, call: r.callGex, put: r.putGex }));
 
@@ -78,7 +79,7 @@ function GexExposureView({ data }: { data: GexResponse }) {
       </div>
       <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">{data.structure.regimeNote}</p>
 
-      <VisualCard title="GEX BY STRIKE" subtitle="Net GEX — positive (green) above zero, negative (red) below, top 22 strikes by |GEX|">
+      <VisualCard title="GEX BY STRIKE" subtitle="Net GEX — positive (green) above zero, negative (red) below, 22 strikes nearest spot">
         <ExposureBarChart data={netData} mode="net" unitLabel="GEX" />
       </VisualCard>
 
@@ -90,7 +91,8 @@ function GexExposureView({ data }: { data: GexResponse }) {
 }
 
 function DexExposureView({ data }: { data: GexResponse }) {
-  const top = useMemo(() => topStrikesByMagnitude(data.exposure.perStrike, (r) => r.dex, 22), [data]);
+  const spot = data.rnd.forward || data.aggregate.flip.nearestFlip;
+  const top = useMemo(() => nearStrikeWindow(data.exposure.perStrike, spot, 22), [data, spot]);
   const chartData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, net: r.dex }));
   const totalDex = data.exposure.perStrike.reduce((sum, r) => sum + r.dex, 0);
 
@@ -106,7 +108,7 @@ function DexExposureView({ data }: { data: GexResponse }) {
         Net delta exposure per strike — positive means dealers are net long delta and must sell into rallies to stay hedged; negative means the opposite.
       </p>
 
-      <VisualCard title="DEX BY STRIKE" subtitle="Net dealer delta exposure, top 22 strikes by |DEX|">
+      <VisualCard title="DEX BY STRIKE" subtitle="Net dealer delta exposure, 22 strikes nearest spot">
         <ExposureBarChart data={chartData} mode="net" unitLabel="DEX" />
       </VisualCard>
 

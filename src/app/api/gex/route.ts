@@ -14,9 +14,11 @@ interface UpstreamPayload {
 }
 
 async function fetchUpstream(symbol: string, base: string, key: string) {
-  // book=0dte pinned explicitly - every page (GEX, DEX, Hedge Pressure) must
-  // read the same, nearest-expiry book. Don't rely on the upstream's default.
-  const upstream = await fetch(`${base}/greeks?symbol=${symbol}&book=0dte&key=${key}`, {
+  // dte=0 pinned explicitly, on top of book=0dte - the upstream's own default
+  // selection has been observed to lag onto a later expiry (5 calendar days
+  // out) while dte=0 consistently resolves to the true nearest book. Every
+  // page (GEX, DEX, Hedge Pressure, Blind Spots) must read the same book.
+  const upstream = await fetch(`${base}/greeks?symbol=${symbol}&book=0dte&dte=0&key=${key}`, {
     headers: { "bypass-tunnel-reminder": "true" },
     cache: "no-store",
   });

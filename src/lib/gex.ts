@@ -112,6 +112,20 @@ export function topStrikesByMagnitude<T extends { strike: number }>(rows: T[], p
     .sort((a, b) => a.strike - b.strike);
 }
 
+/**
+ * The N strikes nearest spot, in strike order - a contiguous window rather
+ * than a magnitude-picked scatter. topStrikesByMagnitude can (correctly)
+ * jump from e.g. 670 to 685 to 704 if that's where |GEX| concentrates,
+ * which reads as the chart "skipping" strikes; this instead shows the local
+ * exposure landscape around price the way a trader actually scans it.
+ */
+export function nearStrikeWindow<T extends { strike: number }>(rows: T[], spot: number, count = 22): T[] {
+  return [...rows]
+    .sort((a, b) => Math.abs(a.strike - spot) - Math.abs(b.strike - spot))
+    .slice(0, count)
+    .sort((a, b) => a.strike - b.strike);
+}
+
 export interface HedgeTaylorTerm {
   key: "gamma" | "charm" | "vanna" | "speed" | "color" | "zomma" | "vomma";
   label: string;

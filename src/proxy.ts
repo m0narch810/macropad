@@ -1,54 +1,32 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 const PROTECTED_PREFIXES = ["/app"];
 const AUTH_PAGES = ["/signin"];
+const ACCESS_KEY = "yyy-alg000";
+const COOKIE_NAME = "trifekta_key";
 
-export default async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          for (const { name, value } of cookiesToSet) request.cookies.set(name, value);
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) response.cookies.set(name, value, options);
-        },
-      },
-    }
-  );
-
-  // Required call: this both validates the session and refreshes it if
-  // expired, keeping the cookie current for the rest of the request chain.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function proxy(request: NextRequest) {
+  const hasAccess = request.cookies.get(COOKIE_NAME)?.value === ACCESS_KEY;
 
   const path = request.nextUrl.pathname;
   const isProtected = PROTECTED_PREFIXES.some((p) => path === p || path.startsWith(`${p}/`));
   const isAuthPage = AUTH_PAGES.some((p) => path === p);
 
-  if (isProtected && !user) {
+  if (isProtected && !hasAccess) {
     const url = request.nextUrl.clone();
     url.pathname = "/signin";
     url.searchParams.set("next", path);
     return NextResponse.redirect(url);
   }
 
-  if (isAuthPage && user) {
+  if (isAuthPage && hasAccess) {
     const url = request.nextUrl.clone();
     url.pathname = "/app";
     url.search = "";
     return NextResponse.redirect(url);
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {

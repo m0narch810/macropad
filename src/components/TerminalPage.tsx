@@ -709,7 +709,7 @@ export default function TerminalPage({ panels, markets }: { panels: MacroPanel[]
 
   useEffect(() => {
     emit([
-      [{ t: "trifekta terminal", c: "var(--text)" }],
+      [{ t: "yyy terminal", c: "var(--text)" }],
       [
         {
           t: `${indicators.length} indicators · bias · replay · regime fingerprint · news · calendar · docs — all wired in, live.`,

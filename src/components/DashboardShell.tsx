@@ -76,7 +76,7 @@ function Wordmark({ compact = false }: { compact?: boolean }) {
     <span className="flex select-none items-center gap-2.5 whitespace-nowrap">
       <BrandMark size={compact ? 18 : 22} className="shrink-0" />
       <span className={`font-mono font-bold tracking-[0.2em] text-[var(--text)] ${compact ? "text-[0.8rem]" : "text-[0.88rem]"}`}>
-        TRIFEKTA<span className="blink-cursor text-[var(--text-faint)]">_</span>
+        YYY<span className="blink-cursor text-[var(--text-faint)]">_</span>
       </span>
     </span>
   );
@@ -415,6 +415,9 @@ export default function DashboardShell({
 
   return (
     <div className="flex min-h-screen flex-col">
+      <div className="flex items-center justify-center border-b border-[var(--border)] bg-[var(--down)] px-4 py-1.5 text-center font-mono text-[0.68rem] font-semibold uppercase tracking-[0.08em] text-white">
+        Internal use only — YYY personnel. Not for external distribution.
+      </div>
       <MarketTicker markets={markets} />
       <IndicatorTicker series={tickerSeries} />
 

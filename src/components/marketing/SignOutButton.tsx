@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export default function SignOutButton({ className }: { className?: string }) {
   const router = useRouter();
@@ -10,8 +9,7 @@ export default function SignOutButton({ className }: { className?: string }) {
 
   async function handleSignOut() {
     setPending(true);
-    const supabase = createSupabaseBrowserClient();
-    await supabase.auth.signOut();
+    await fetch("/api/key-auth", { method: "DELETE" });
     router.push("/");
     router.refresh();
   }

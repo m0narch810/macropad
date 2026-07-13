@@ -40,7 +40,7 @@ const firaCode = Fira_Code({
 });
 
 export const metadata: Metadata = {
-  title: "Trifekta · The Regime Desk",
+  title: "YYY Terminal · The Regime Desk",
   description:
     "Live macro desk: US macro, yield rates, positioning, transmission, geopolitics, and volatility. Every read scored, one composite bias, one screen.",
 };

@@ -1,16 +1,16 @@
 import { Suspense } from "react";
 import AuthShell from "@/components/marketing/AuthShell";
-import DiscordSignInForm from "@/components/marketing/DiscordSignInForm";
+import KeySignInForm from "@/components/marketing/KeySignInForm";
 
 export const metadata = {
-  title: "Sign in · Trifekta",
+  title: "Sign in · YYY Terminal",
 };
 
 export default function SignInPage() {
   return (
     <AuthShell>
       <Suspense fallback={null}>
-        <DiscordSignInForm />
+        <KeySignInForm />
       </Suspense>
     </AuthShell>
   );

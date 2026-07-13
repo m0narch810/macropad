@@ -17,22 +17,6 @@ export default async function MarketingNav() {
           <Wordmark />
         </Link>
 
-        <nav className="hidden items-center gap-7 md:flex">
-          {[
-            ["/#system", "System"],
-            ["/coverage", "Coverage"],
-            ["/pricing", "Pricing"],
-          ].map(([href, label]) => (
-            <Link
-              key={href}
-              href={href}
-              className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors duration-150 hover:text-[var(--text)]"
-            >
-              {label}
-            </Link>
-          ))}
-        </nav>
-
         {user ? (
           <div className="flex items-center gap-3 sm:gap-4">
             <Link

@@ -156,7 +156,7 @@ export default function TerminalHero({
   // Auto-run a welcome + scan on mount so the hero is alive before any input.
   useEffect(() => {
     emit([
-      [{ t: "trifekta regime terminal", c: "var(--text)" }],
+      [{ t: "yyy regime terminal", c: "var(--text)" }],
       [{ t: "type a command, or tap one below. try: read cpi", c: "var(--text-faint)" }],
       [{ t: "" }],
     ]);

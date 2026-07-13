@@ -59,9 +59,9 @@ export default function DocumentationPage({ panels }: { panels: MacroPanel[] }) 
   return (
     <div className="flex flex-col gap-10">
       <div>
-        <Section title="What Trifekta is">
+        <Section title="What YYY Terminal is">
           <p className="m-0">
-            Trifekta is a macro desk on one screen. It tracks the indicators that drive risk assets across
+            YYY Terminal is a macro desk on one screen. It tracks the indicators that drive risk assets across
             six areas, US macro, rates, futures positioning, cross asset transmission, geopolitics, and
             volatility, scores each one for direction and strength, and rolls the whole set into a composite
             bias you can inspect and replay. Everything on this page is about how to use it.

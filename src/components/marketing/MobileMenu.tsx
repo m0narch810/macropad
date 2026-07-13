@@ -21,12 +21,7 @@ export default function MobileMenu({ signedIn }: { signedIn: boolean }) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, [open]);
 
-  const links: [string, string][] = [
-    ["/#system", "System"],
-    ["/coverage", "Coverage"],
-    ["/pricing", "Pricing"],
-    ...(signedIn ? [] : ([["/signin", "Sign in"]] as [string, string][])),
-  ];
+  const links: [string, string][] = signedIn ? [] : [["/signin", "Sign in"]];
 
   return (
     <div ref={ref} className="relative md:hidden">

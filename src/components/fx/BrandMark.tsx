@@ -4,7 +4,7 @@ import { useEffect, useRef } from "react";
 import { resolveInkRgb, onThemeChange } from "@/lib/canvasInk";
 
 /*
- * The Trifekta mark: three contour peaks - center summit tallest, flanks
+ * The YYY mark: three contour peaks - center summit tallest, flanks
  * lower - a 1-2-3 podium drawn as terrain. Same topo language as
  * AsciiContour, reduced to an emblem. Each ridge breathes slightly out of
  * phase with the others. Canvas is tiny (<= 32px), redraws at ~15fps,

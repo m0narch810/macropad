@@ -13,22 +13,7 @@ export default function MarketingFooter() {
           <div className="partno mt-5">SYNCED DAILY · ONE BOARD</div>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-14 gap-y-8 sm:grid-cols-3">
-          <div>
-            <div className="eyebrow mb-3">Product</div>
-            <div className="flex flex-col gap-2.5">
-              <Link href="/#system" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors duration-150 hover:text-[var(--text)]">System</Link>
-              <Link href="/coverage" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors duration-150 hover:text-[var(--text)]">Coverage</Link>
-              <Link href="/pricing" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors duration-150 hover:text-[var(--text)]">Pricing</Link>
-            </div>
-          </div>
-          <div>
-            <div className="eyebrow mb-3">Company</div>
-            <div className="flex flex-col gap-2.5">
-              <a href="mailto:hello@trifekta.app" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors duration-150 hover:text-[var(--text)]">Contact</a>
-              <a href="mailto:hello@trifekta.app" className="font-sans text-[0.82rem] text-[var(--text-dim)] transition-colors duration-150 hover:text-[var(--text)]">Support</a>
-            </div>
-          </div>
+        <div className="grid grid-cols-1 gap-x-14 gap-y-8 sm:grid-cols-3">
           <div>
             <div className="eyebrow mb-3">Desk</div>
             <div className="flex flex-col gap-2.5">
@@ -41,7 +26,7 @@ export default function MarketingFooter() {
       <div className="border-t border-[var(--border)] px-5 py-5 sm:px-8">
         <div className="mx-auto flex max-w-[1120px] flex-wrap items-center justify-between gap-3">
           <p className="m-0 font-mono text-[0.66rem] text-[var(--text-faint)]">
-            &copy; {new Date().getFullYear()} Trifekta. Informational only, not investment advice.
+            &copy; {new Date().getFullYear()} YYY Terminal. Informational only, not investment advice.
           </p>
           <p className="m-0 font-mono text-[0.66rem] text-[var(--text-faint)]">Made for the regime, not the noise.</p>
         </div>

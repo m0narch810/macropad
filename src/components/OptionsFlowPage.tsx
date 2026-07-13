@@ -173,7 +173,8 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
           {row.confidence}
         </div>
         <div className="hidden w-16 shrink-0 text-right font-mono text-[0.6rem] text-[var(--text-faint)] md:block">
-          p={row.densityWeight.toFixed(2)}
+          {row.sigmaZ >= 0 ? "+" : ""}
+          {row.sigmaZ.toFixed(1)}σ
         </div>
         <div className="flex w-28 shrink-0 flex-wrap justify-end gap-1">
           {row.flags.slice(0, 2).map((f) => (
@@ -200,7 +201,8 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
             ))}
           </div>
           <div className="font-mono text-[0.64rem] text-[var(--text-faint)]">
-            Raw Taylor flow: {fmtUsd(row.taylorFlow)} × density weight {row.densityWeight.toFixed(2)} = expected {fmtUsd(row.expectedFlow)}
+            Raw Taylor flow: {fmtUsd(row.taylorFlow)} × same-day reach weight {row.reachWeight.toFixed(3)} ({row.sigmaZ >= 0 ? "+" : ""}
+            {row.sigmaZ.toFixed(2)}σ from spot) = expected {fmtUsd(row.expectedFlow)}
           </div>
           {row.flags.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-1">
@@ -229,7 +231,7 @@ function HedgePressureView({ data }: { data: GexResponse }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="REGIME" value={data.structure.regime.toUpperCase()} />
         <StatTile label="TOP STRIKE" value={fmtNum(ranked[0]?.strike, 0)} />
-        <StatTile label="GAMMA FLIP" value={fmtNum(data.aggregate.flip.nearestFlip, 2)} />
+        <StatTile label="1-DAY MOVE (1σ)" value={`±${fmtNum(context.sigma1dPct, 2)}%`} />
         <StatTile label="MAX PAIN" value={fmtNum(data.aggregate.maxPain, 0)} />
       </div>
 
@@ -265,25 +267,39 @@ function HedgePressureView({ data }: { data: GexResponse }) {
           </p>
         </div>
         <p className="m-0 mt-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)]">
-          The ranking metric is <b>expected</b> flow: |ΔHedge(K)| weighted by this book&apos;s own risk-neutral
-          probability density (Breeden-Litzenberger, extracted from the chain) of spot actually landing near K — a real
-          market-implied probability, not an arbitrary distance decay. <b>Confidence</b> is kept fully separate from the
-          dollar estimate: it counts how many independent signals — gamma/charm/vanna dominance, live OI build, and
-          cross-expiry wall alignment — agree the strike matters, rather than folding durability into the size.
+          The ranking metric is <b>expected</b> flow: |ΔHedge(K)| weighted by same-day reachability — a Gaussian in
+          log-return space, scored against this book&apos;s own explicit 1-trading-day move estimate (±
+          {fmtNum(context.sigma1dPct, 2)}% today), not the option&apos;s own risk-neutral density. That density answers
+          &ldquo;can spot reach K by expiry&rdquo; — often several days out even on the book this feed labels
+          &ldquo;0dte&rdquo; — which let far-out strikes look reachable over a multi-day window while being a tail
+          event for a single session. Scoring same-day reachability directly fixes that: strikes decay toward zero with
+          no floor once they&apos;re more than a couple of standard deviations from spot, so &ldquo;most likely to see a
+          reaction today&rdquo; is exactly what the rank means. Each row shows its distance in σ (standard deviations)
+          from spot.
+        </p>
+        <p className="m-0 mt-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)]">
+          <b>Confidence</b> is a separate tag, not a second likelihood score — reachability is already priced into the
+          rank, so it doesn&apos;t need repeating. Confidence instead asks whether <i>other, independent</i> evidence
+          corroborates this being a real, durable level: is it within 2σ today, does gamma or charm actually dominate
+          the breakdown (rather than the smaller higher-order terms), is vanna meaningful, is OI at this strike actively
+          building, is it also a wall in another expiry, and is it this book&apos;s own call/put wall. A strike can rank
+          #1 by dollars and still show MEDIUM if fewer of those corroborate — that&apos;s the tag doing its job, not a
+          contradiction of the rank above it.
         </p>
         <p className="m-0 mt-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
           Why not a full stochastic-vol (Heston) model: that needs numerical calibration against a raw IV surface to
           fit mean-reversion and vol-of-vol, and the smile it would capture is already priced into these greeks. The
           Taylor expansion is exact at this point and uses only what the feed gives — no re-derivation of the pricing
           model. This is a composite estimate from public options-chain exposure, not a literal dealer book — the sign
-          convention (dealers long calls, short puts) is the standard assumption, not observed fact. 0DTE book only.
+          convention (dealers long calls, short puts) is the standard assumption, not observed fact. Same-day (1
+          trading day) reachability throughout, regardless of the underlying contract&apos;s actual days to expiry.
         </p>
       </div>
 
       <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="partno" style={{ color: "var(--text-faint)" }}>
-            RANKED BY EXPECTED HEDGE FLOW
+            RANKED BY EXPECTED HEDGE FLOW — MOST LIKELY STRIKES TO REACT TODAY
           </div>
           <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS TAYLOR-TERM BREAKDOWN</div>
         </div>

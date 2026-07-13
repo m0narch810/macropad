@@ -120,12 +120,14 @@ export interface HedgeTaylorTerm {
 
 export interface HedgePressureRow {
   strike: number;
-  /** |taylorFlow| x density weight - the ranking metric. */
+  /** |taylorFlow| x same-day reachability weight - the ranking metric. */
   expectedFlow: number;
-  /** Signed second-order Taylor-expansion estimate, before density weighting. */
+  /** Signed second-order Taylor-expansion estimate, before reachability weighting. */
   taylorFlow: number;
-  /** Risk-neutral probability mass in a dK-wide bucket around this strike, from the feed's own Breeden-Litzenberger density. */
-  densityWeight: number;
+  /** exp(-z^2/2) reachability weight, z = distance in 1-trading-day standard deviations. No floor - genuinely far strikes decay toward 0. */
+  reachWeight: number;
+  /** Signed distance from spot in 1-trading-day standard deviations. */
+  sigmaZ: number;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   terms: HedgeTaylorTerm[];
   gex: number;
@@ -140,6 +142,7 @@ export interface HedgePressureContext {
   dSPct: number;
   dtDays: number;
   dSigmaPts: number;
+  sigma1dPct: number;
 }
 
 /** Extracts strike numbers from a dev-diagnostic array of unknown shape (bare numbers, or objects carrying a `strike` field). */
@@ -154,19 +157,27 @@ function extractStrikes(arr: unknown[]): Set<number> {
   return out;
 }
 
-/** Nearest-point lookup into the risk-neutral density curve - 799 points is cheap to scan per render. */
-function densityAt(rnd: GexResponse["rnd"], price: number): number {
-  if (!rnd.strikes?.length || !rnd.density?.length) return 0;
-  let bestIdx = 0;
-  let bestDist = Infinity;
-  for (let i = 0; i < rnd.strikes.length; i++) {
-    const dist = Math.abs(rnd.strikes[i] - price);
-    if (dist < bestDist) {
-      bestDist = dist;
-      bestIdx = i;
-    }
-  }
-  return rnd.density[bestIdx] ?? 0;
+/**
+ * Same-day (1-trading-day) reachability weight, Gaussian in log-return
+ * space: z = ln(K/spot) / sigma1d, weight = exp(-z^2/2).
+ *
+ * This deliberately does NOT use the option's own risk-neutral density
+ * (rnd.strikes/rnd.density). That density is built from the option's actual
+ * time-to-expiry - which, on this feed, is frequently several calendar days
+ * out even for the book it labels "0dte" (there is often no contract
+ * expiring literally today) - so it answers "can spot reach K by expiry,"
+ * not "can spot reach K by today's close." Using it here was the bug: a
+ * strike 4% away can look plausibly reachable over 5 days while being a
+ * 2-3 sigma tail event for a single session, and the multi-day density
+ * doesn't know the difference. Scoring reachability against sigma1d instead
+ * - the feed's own explicit 1-day move estimate - keeps every ranking
+ * strictly same-day, regardless of how many days the underlying contract
+ * has left.
+ */
+function reachabilityWeight(strike: number, spot: number, sigma1dPct: number): { weight: number; z: number } {
+  if (!spot || sigma1dPct <= 0) return { weight: 0, z: 0 };
+  const z = Math.log(strike / spot) / (sigma1dPct / 100);
+  return { weight: Math.exp((-z * z) / 2), z };
 }
 
 /**
@@ -187,13 +198,17 @@ function densityAt(rnd: GexResponse["rnd"], price: number): number {
  * require calibrating a fresh vol surface the feed doesn't expose, on top of
  * greeks that already price in the smile.
  *
- * The result is then weighted by the feed's own Breeden-Litzenberger
- * risk-neutral density (rnd.strikes/rnd.density) - an actual market-implied
- * probability of landing near that strike - turning "hedge dollars if
- * triggered" into "expected hedge dollars." OI concentration, OI flow/dDOI
- * (is the exposure live or going stale), and cross-expiry wall alignment are
- * kept OUT of the dollar estimate entirely and used only for a separate
- * confidence tag - they speak to durability of a number, not its size.
+ * The result is then weighted by same-day (1-trading-day) reachability - a
+ * Gaussian in log-return space using the feed's own explicit 1-day move
+ * estimate (shadow.volMap.hPct) - turning "hedge dollars if triggered" into
+ * "expected hedge dollars, today." This replaces the option's own multi-day
+ * risk-neutral density, which measures reachability by expiry, not by
+ * close - see reachabilityWeight() for why that distinction is the whole
+ * fix. OI concentration, OI flow/dDOI (is the exposure live or going
+ * stale), and cross-expiry wall alignment are kept OUT of the dollar
+ * estimate entirely and used only for a separate confidence tag - they
+ * speak to durability of a number, not its size, and are NOT a measure of
+ * how likely the strike is to be reached (that's the rank itself).
  *
  * This is a composite estimate built from public options-chain exposure,
  * not a literal dealer book - the sign convention (dealers long calls, short
@@ -201,10 +216,12 @@ function densityAt(rnd: GexResponse["rnd"], price: number): number {
  */
 export function computeHedgePressure(data: GexResponse, count = 15): { rows: HedgePressureRow[]; context: HedgePressureContext } {
   const rows = data.exposure.perStrike;
+  const spot = data.rnd.forward || data.aggregate.flip.nearestFlip;
 
   const dSPct = Math.max(0.05, data.development?.volTrig?.movePct ?? 0.5);
   const dtDays = 1;
   const dSigmaPts = (data.development?.iv?.deltaOverDays ?? 0) * 100;
+  const sigma1dPct = data.shadow?.volMap?.hPct ?? dSPct;
 
   const building = extractStrikes(data.development?.oi?.wallBuild ?? []);
   const dissolving = extractStrikes(data.development?.oi?.wallDissolve ?? []);
@@ -242,28 +259,27 @@ export function computeHedgePressure(data: GexResponse, count = 15): { rows: Hed
     return { r, terms, taylorFlow };
   });
 
-  const maxDensity = Math.max(1e-9, ...data.rnd.strikes.map((_, i) => data.rnd.density[i] ?? 0));
-
   const scored: HedgePressureRow[] = withFlow.map(({ r, terms, taylorFlow }) => {
     const totalOi = r.callOi + r.putOi;
-    const spot = data.rnd.forward || data.aggregate.flip.nearestFlip;
     const distPct = spot ? ((r.strike - spot) / spot) * 100 : 0;
 
-    const rawDensity = densityAt(data.rnd, r.strike);
-    const densityWeight = maxDensity > 0 ? rawDensity / maxDensity : 0;
-    const expectedFlow = Math.abs(taylorFlow) * Math.max(0.05, densityWeight);
+    const { weight: reachWeight, z: sigmaZ } = reachabilityWeight(r.strike, spot, sigma1dPct);
+    const expectedFlow = Math.abs(taylorFlow) * reachWeight;
 
     const isBuilding = building.has(r.strike);
     const isDissolving = dissolving.has(r.strike);
     const isCrossExpiryWall = otherExpiryWalls.has(r.strike);
     const isFrontWall = r.strike === data.aggregate.callWall || r.strike === data.aggregate.putWall;
+    const isReachableToday = Math.abs(sigmaZ) <= 2;
 
     const gammaDominant = Math.abs(terms[0].dollars) > 0.4 * Math.abs(taylorFlow || 1);
     const charmDominant = Math.abs(terms[1].dollars) > 0.4 * Math.abs(taylorFlow || 1);
     const vannaDominant = Math.abs(terms[2].dollars) > 0.2 * Math.abs(taylorFlow || 1);
 
-    const agreements = [gammaDominant, charmDominant, vannaDominant, isBuilding, isCrossExpiryWall, isFrontWall].filter(Boolean).length;
-    const confidence: HedgePressureRow["confidence"] = agreements >= 3 ? "HIGH" : agreements >= 2 ? "MEDIUM" : "LOW";
+    const agreements = [isReachableToday, gammaDominant || charmDominant, vannaDominant, isBuilding, isCrossExpiryWall, isFrontWall].filter(
+      Boolean
+    ).length;
+    const confidence: HedgePressureRow["confidence"] = agreements >= 4 ? "HIGH" : agreements >= 2 ? "MEDIUM" : "LOW";
 
     const flags: string[] = [];
     if (r.strike === data.aggregate.callWall) flags.push("CALL WALL");
@@ -279,7 +295,8 @@ export function computeHedgePressure(data: GexResponse, count = 15): { rows: Hed
       strike: r.strike,
       expectedFlow,
       taylorFlow,
-      densityWeight,
+      reachWeight,
+      sigmaZ,
       confidence,
       terms,
       gex: r.gex,
@@ -291,7 +308,7 @@ export function computeHedgePressure(data: GexResponse, count = 15): { rows: Hed
     };
   });
 
-  return { rows: scored.sort((a, b) => b.expectedFlow - a.expectedFlow).slice(0, count), context: { dSPct, dtDays, dSigmaPts } };
+  return { rows: scored.sort((a, b) => b.expectedFlow - a.expectedFlow).slice(0, count), context: { dSPct, dtDays, dSigmaPts, sigma1dPct } };
 }
 
 export interface BlindSpotSourceLevel {

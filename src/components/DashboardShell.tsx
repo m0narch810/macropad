@@ -16,6 +16,7 @@ import CalendarPage from "@/components/CalendarPage";
 import BoardPage from "@/components/BoardPage";
 import TerminalPage from "@/components/TerminalPage";
 import DocumentationPage from "@/components/DocumentationPage";
+import OptionsFlowPage, { type OptionsFlowView } from "@/components/OptionsFlowPage";
 import { MARKET_SYMBOLS } from "@/lib/markets";
 import { getSignTone } from "@/lib/bias";
 import SignOutButton from "@/components/marketing/SignOutButton";
@@ -209,32 +210,6 @@ function OptionsFlowNavItem({ label, isActive, onClick }: { label: string; isAct
       <PanelIcon id="options-flow" className="shrink-0" style={{ color: isActive ? "var(--text)" : "var(--text-faint)" }} />
       <span className="min-w-0 flex-1 truncate">{label}</span>
     </button>
-  );
-}
-
-/** Coming-soon screen for the Options Flow section. */
-function ComingSoon({ label, blurb }: { label: string; blurb: string }) {
-  return (
-    <div className="mx-auto max-w-2xl py-8">
-      <div className="hud border border-[var(--border)] bg-[var(--panel)] p-8 text-center sm:p-12">
-        <div className="partno mb-4" style={{ color: "var(--text-dim)" }}>
-          STATUS: COMING SOON
-        </div>
-        <PanelIcon id="options-flow" className="mx-auto mb-5" style={{ color: "var(--text-faint)", width: 34, height: 34 }} />
-        <h2 className="font-display m-0 text-[1.6rem] leading-tight sm:text-[2rem]">{label}</h2>
-        <p className="mx-auto mt-4 max-w-md font-sans text-[0.92rem] leading-relaxed text-[var(--text-dim)]">{blurb}</p>
-        <p className="mx-auto mt-3 max-w-md font-sans text-[0.86rem] leading-relaxed text-[var(--text-faint)]">
-          The options desk is being built out now. It is not live yet, but it is on the way. Check back soon.
-        </p>
-        <div className="mt-6 inline-flex items-center gap-2 border border-[var(--border-strong)] px-3 py-1.5 font-mono text-[0.62rem] uppercase tracking-[0.14em] text-[var(--text-dim)]">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--amber)] opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--amber)]" />
-          </span>
-          In development
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -635,7 +610,7 @@ export default function DashboardShell({
                   <Scramble text={activeOptionsFlow.label} />
                 </h1>
               </header>
-              <ComingSoon label={activeOptionsFlow.label} blurb={activeOptionsFlow.blurb} />
+              <OptionsFlowPage view={activeOptionsFlow.id.split(":")[1] as OptionsFlowView} />
             </>
           ) : isCalendar ? (
             <>

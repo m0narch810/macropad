@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { GexResponse, GexSymbol, HedgePressureRow, HedgeTaylorTerm } from "@/lib/gex";
-import { computeHedgePressure, fmtNum, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
+import type { BlindSpotCluster, GexResponse, GexSymbol, HedgePressureRow, HedgeTaylorTerm } from "@/lib/gex";
+import { computeBlindSpots, computeHedgePressure, fmtNum, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
 
-export type OptionsFlowView = "gex" | "dex" | "hedgepressure";
+export type OptionsFlowView = "gex" | "dex" | "hedgepressure" | "blindspots";
 
 const SYMBOLS: GexSymbol[] = ["QQQ", "SPX"];
 
@@ -295,6 +295,146 @@ function HedgePressureView({ data }: { data: GexResponse }) {
   );
 }
 
+function BlindSpotClusterRow({ cluster, maxScore }: { cluster: BlindSpotCluster; maxScore: number }) {
+  const [expanded, setExpanded] = useState(false);
+  const widthPct = maxScore > 0 ? (cluster.score / maxScore) * 100 : 0;
+
+  return (
+    <div className="border-b border-[var(--border)] last:border-0">
+      <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-3 py-2.5 text-left">
+        <div className="w-8 shrink-0 font-mono text-[0.68rem] font-semibold text-[var(--text-faint)]">BL{cluster.rank}</div>
+        <div className="w-20 shrink-0 font-mono text-[0.82rem] font-semibold">{fmtNum(cluster.price, 1)}</div>
+        <div className="relative h-6 flex-1 overflow-hidden bg-[var(--panel-2)]">
+          <div className="h-full bg-[var(--accent)] transition-[width] duration-300" style={{ width: `${widthPct}%` }} />
+          <div className="absolute inset-0 flex items-center justify-end px-2 font-mono text-[0.66rem] text-[var(--text)]">
+            {cluster.score.toFixed(2)}
+          </div>
+        </div>
+        <div className="hidden w-28 shrink-0 text-right font-mono text-[0.62rem] text-[var(--text-faint)] sm:block">
+          {cluster.contributors.length} level{cluster.contributors.length === 1 ? "" : "s"}
+        </div>
+        <div className="w-4 shrink-0 text-center font-mono text-[0.6rem] text-[var(--text-faint)]">{expanded ? "▾" : "▸"}</div>
+      </button>
+
+      {expanded && (
+        <div className="mb-3 ml-11 flex flex-col gap-1.5 border-l border-[var(--border)] py-2 pl-4">
+          {cluster.contributors.map((c, i) => (
+            <div key={i} className="flex items-center gap-2 font-mono text-[0.66rem] text-[var(--text-dim)]">
+              <span
+                className="border border-[var(--border-strong)] px-1.5 py-0.5 font-semibold uppercase tracking-[0.04em]"
+                style={{ color: c.asset === "QQQ" ? "var(--up)" : "var(--accent)" }}
+              >
+                {c.asset}
+              </span>
+              {c.label} @ {fmtNum(c.nativePrice, 1)}
+              {c.asset !== "QQQ" && <span className="text-[var(--text-faint)]">→ {fmtNum(c.convertedPrice, 1)} (QQQ-equiv)</span>}
+              <span className="text-[var(--text-faint)]">weight {c.weight.toFixed(2)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BlindSpotsView() {
+  const [qqq, setQqq] = useState<GexResponse | null>(null);
+  const [spx, setSpx] = useState<GexResponse | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    Promise.all([
+      fetch("/api/gex?symbol=QQQ", { cache: "no-store" }).then((r) => r.json()),
+      fetch("/api/gex?symbol=SPX", { cache: "no-store" }).then((r) => r.json()),
+    ])
+      .then(([qqqJson, spxJson]: [GexResponse, GexResponse]) => {
+        if (cancelled) return;
+        if (!qqqJson.ok || !spxJson.ok) throw new Error("upstream returned an error");
+        setQqq(qqqJson);
+        setSpx(spxJson);
+      })
+      .catch((err: Error) => {
+        if (!cancelled) setError(err.message);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem] text-[var(--text-faint)]">
+        Loading QQQ + SPX confluence…
+      </div>
+    );
+  }
+  if (error || !qqq || !spx) {
+    return (
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
+        ERR: {error ?? "missing data"}
+      </div>
+    );
+  }
+
+  const { clusters, ratio, bandwidth } = computeBlindSpots(qqq, spx, 8);
+  const maxScore = clusters[0]?.score ?? 1;
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="QQQ SPOT" value={fmtNum(qqq.rnd.forward, 2)} />
+        <StatTile label="SPX SPOT" value={fmtNum(spx.rnd.forward, 2)} />
+        <StatTile label="RATIO (QQQ/SPX)" value={fmtNum(ratio, 4)} />
+        <StatTile label="CLUSTER BAND" value={`±${fmtNum(bandwidth, 2)}`} />
+      </div>
+
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+        <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
+          METHODOLOGY — REDUCED 2-ASSET CONFLUENCE, NOT MENTHORQ&apos;S MODEL
+        </div>
+        <p className="m-0 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
+          MenthorQ&apos;s published Blind Spots idea: take option-derived levels from several correlated instruments
+          (for NQ: NQ futures options, NDX, QQQ, and MAG7 stocks), convert every level onto one instrument&apos;s price
+          scale, and cluster where several land near each other — the overlap density, not any single chain, is the
+          signal. This feed only carries QQQ and SPX, so this is that same mechanic run on two assets instead of five
+          or six — a smaller, honest version of the idea, not a reproduction of their product.
+        </p>
+        <p className="m-0 mt-3 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
+          Each symbol contributes Call Resistance, Put Support, King Node, HVL (gamma flip), Max Pain, and its top 3
+          secondary GEX strikes. SPX levels are converted to QQQ-equivalent prices via the ratio method (
+          <code>level × QQQspot/SPXspot</code>) — appropriate here since the two trade at very different numeric
+          levels. Every candidate price is scored by a Gaussian-kernel overlap density — weight × proximity to every
+          contributing level, summed — and the ranked local maxima are the Blind Spots (BL1 = strongest overlap).
+        </p>
+        <p className="m-0 mt-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
+          MenthorQ does not publish its weighting formula, clustering tolerance, correlation window, or dealer-side
+          classifier — the weights, the ±0.4%-of-spot bandwidth, and the 0.85x discount on converted (non-native)
+          levels here are stated assumptions, not recovered constants. 0DTE book only.
+        </p>
+      </div>
+
+      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+        <div className="mb-3 flex items-center justify-between">
+          <div className="partno" style={{ color: "var(--text-faint)" }}>
+            RANKED BLIND SPOTS (QQQ SCALE)
+          </div>
+          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS CONTRIBUTING LEVELS</div>
+        </div>
+        {clusters.map((cluster) => (
+          <BlindSpotClusterRow key={cluster.rank} cluster={cluster} maxScore={maxScore} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [symbol, setSymbol] = useState<GexSymbol>("QQQ");
   const [data, setData] = useState<GexResponse | null>(null);
@@ -302,6 +442,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    if (view === "blindspots") return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -324,7 +465,9 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
     return () => {
       cancelled = true;
     };
-  }, [symbol]);
+  }, [symbol, view]);
+
+  if (view === "blindspots") return <BlindSpotsView />;
 
   return (
     <div className="flex flex-col gap-6">

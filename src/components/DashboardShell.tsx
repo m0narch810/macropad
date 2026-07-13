@@ -45,6 +45,7 @@ const OPTIONS_FLOW_PAGES = [
   { id: "options-flow:gex", label: "GEX", blurb: "Dealer gamma exposure by strike, and the levels it pulls price toward." },
   { id: "options-flow:dex", label: "DEX", blurb: "Dealer delta exposure by strike, and which way it forces hedging flow." },
   { id: "options-flow:hedgepressure", label: "HEDGE PRESSURE", blurb: "Strikes ranked by how much dealer hedging flow they mechanically force." },
+  { id: "options-flow:blindspots", label: "BLIND SPOTS", blurb: "QQQ/SPX option-derived levels converted to one scale and clustered by overlap." },
 ];
 
 const SHORT_LABEL: Record<string, string> = {

@@ -294,6 +294,112 @@ export function computeHedgePressure(data: GexResponse, count = 15): { rows: Hed
   return { rows: scored.sort((a, b) => b.expectedFlow - a.expectedFlow).slice(0, count), context: { dSPct, dtDays, dSigmaPts } };
 }
 
+export interface BlindSpotSourceLevel {
+  asset: GexSymbol;
+  label: string;
+  nativePrice: number;
+  convertedPrice: number;
+  weight: number;
+}
+
+export interface BlindSpotCluster {
+  rank: number;
+  price: number;
+  score: number;
+  contributors: BlindSpotSourceLevel[];
+}
+
+/** Pulls a small set of named, weighted option-derived levels out of one symbol's book - the inputs a confluence model clusters. */
+function extractLevels(data: GexResponse): { asset: GexSymbol; label: string; price: number; weight: number }[] {
+  const maxGex = Math.max(1, ...data.exposure.perStrike.map((r) => Math.abs(r.gex)));
+  const secondary = topStrikesByMagnitude(data.exposure.perStrike, (r) => r.gex, 3);
+
+  const levels = [
+    { asset: data.symbol, label: "Call Resistance", price: data.aggregate.callWall, weight: Math.abs(data.aggregate.callWallGex) / maxGex },
+    { asset: data.symbol, label: "Put Support", price: data.aggregate.putWall, weight: Math.abs(data.aggregate.putWallGex) / maxGex },
+    { asset: data.symbol, label: "King Node", price: data.structure.kingNode.strike, weight: Math.abs(data.structure.kingNode.gex) / maxGex },
+    { asset: data.symbol, label: "HVL (gamma flip)", price: data.aggregate.flip.nearestFlip, weight: 0.5 },
+    { asset: data.symbol, label: "Max Pain", price: data.aggregate.maxPain, weight: 0.35 },
+    ...secondary.map((r, i) => ({ asset: data.symbol, label: `GEX ${i + 1}`, price: r.strike, weight: Math.abs(r.gex) / maxGex })),
+  ];
+
+  return levels.filter((l) => Number.isFinite(l.price) && l.price > 0);
+}
+
+/**
+ * A reduced, two-asset reconstruction of the published MenthorQ Blind Spots
+ * idea: option-derived levels from more than one instrument, converted onto
+ * a shared price scale, cluster where several land near each other. The real
+ * product uses NQ futures options + NDX + QQQ + individual MAG7 chains; this
+ * feed only carries QQQ and SPX, so this is a 2-asset version of the same
+ * mechanic, not a reproduction of their model - MenthorQ doesn't publish
+ * their weighting formula, clustering tolerance, or dealer-side classifier,
+ * so those are stated assumptions here, not recovered constants.
+ *
+ * Method: convert every SPX level to a QQQ-equivalent price using the ratio
+ * method (level x QQQspot/SPXspot - appropriate here since the two trade at
+ * very different numeric levels, unlike e.g. ES/SPX where a spread method
+ * fits better). Score every candidate QQQ price with a Gaussian-kernel
+ * overlap density C(x) = sum(weight_i * exp(-(x-L_i)^2 / 2h^2)), h a
+ * clustering tolerance in QQQ points. Local maxima, ranked by cluster
+ * strength, are the Blind Spots.
+ */
+export function computeBlindSpots(qqq: GexResponse, spx: GexResponse, count = 8): { clusters: BlindSpotCluster[]; ratio: number; bandwidth: number } {
+  const qqqSpot = qqq.rnd.forward || qqq.aggregate.flip.nearestFlip;
+  const spxSpot = spx.rnd.forward || spx.aggregate.flip.nearestFlip;
+  const ratio = qqqSpot / spxSpot;
+
+  const qqqLevels = extractLevels(qqq).map((l) => ({ ...l, convertedPrice: l.price }));
+  const spxLevels = extractLevels(spx).map((l) => ({ ...l, convertedPrice: l.price * ratio, weight: l.weight * 0.85 }));
+  const allLevels: BlindSpotSourceLevel[] = [...qqqLevels, ...spxLevels].map((l) => ({
+    asset: l.asset,
+    label: l.label,
+    nativePrice: l.price,
+    convertedPrice: l.convertedPrice,
+    weight: l.weight,
+  }));
+
+  const bandwidth = qqqSpot * 0.004; // clustering tolerance: ~0.4% of QQQ spot, a stated assumption
+
+  function densityAt(x: number): number {
+    return allLevels.reduce((sum, l) => sum + l.weight * Math.exp(-((x - l.convertedPrice) ** 2) / (2 * bandwidth * bandwidth)), 0);
+  }
+
+  // Evaluate the overlap curve at every candidate level plus a fine grid between the extremes, then find local maxima.
+  const candidateXs = new Set<number>(allLevels.map((l) => l.convertedPrice));
+  const sortedPrices = allLevels.map((l) => l.convertedPrice).sort((a, b) => a - b);
+  const lo = sortedPrices[0];
+  const hi = sortedPrices[sortedPrices.length - 1];
+  const steps = 200;
+  for (let i = 0; i <= steps; i++) candidateXs.add(lo + ((hi - lo) * i) / steps);
+
+  const grid = [...candidateXs].sort((a, b) => a - b).map((x) => ({ x, c: densityAt(x) }));
+
+  const peaks: { x: number; c: number }[] = [];
+  for (let i = 0; i < grid.length; i++) {
+    const prev = grid[i - 1]?.c ?? -Infinity;
+    const next = grid[i + 1]?.c ?? -Infinity;
+    if (grid[i].c >= prev && grid[i].c >= next) peaks.push(grid[i]);
+  }
+
+  // Collapse peaks within one bandwidth of each other (a flat top produces several adjacent "local maxima").
+  peaks.sort((a, b) => b.c - a.c);
+  const merged: { x: number; c: number }[] = [];
+  for (const p of peaks) {
+    if (merged.some((m) => Math.abs(m.x - p.x) < bandwidth)) continue;
+    merged.push(p);
+  }
+
+  const clusters: BlindSpotCluster[] = merged.slice(0, count).map((peak, i) => ({
+    rank: i + 1,
+    price: peak.x,
+    score: peak.c,
+    contributors: allLevels.filter((l) => Math.abs(l.convertedPrice - peak.x) < bandwidth * 1.5).sort((a, b) => b.weight - a.weight),
+  }));
+
+  return { clusters, ratio, bandwidth };
+}
+
 export function fmtNum(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   return n.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: 0 });

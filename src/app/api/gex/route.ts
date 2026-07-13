@@ -1,7 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { deriveGexResponse, type GexSymbol, type StrikeRow0DTE } from "@/lib/gex";
 
-const ALLOWED_SYMBOLS = new Set<GexSymbol>(["QQQ", "SPY"]);
+// The source API silently falls back to SPX's own data for any ticker it
+// doesn't actually carry (confirmed directly: IWM/DIA/NVDA/AAPL/MSFT/TSLA/
+// META/GOOGL/AMZN all returned SPX's exact spot/strikes under their own
+// name, no error). Only these four gave genuinely distinct spot prices.
+const ALLOWED_SYMBOLS = new Set<GexSymbol>(["QQQ", "SPY", "SPX", "NDX"]);
 const GREEKS = ["gex", "dex", "vex", "tex", "cex", "vegaex"] as const;
 
 // Upstream allows 1 request per 10s per symbol - cache responses across all

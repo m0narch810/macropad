@@ -1,14 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { BlindSpotCluster, GexResponse, GexSymbol, HedgePressureRow } from "@/lib/gex";
-import { computeBlindSpots, computeHedgePressure, fmtNum, fmtUsd, nearStrikeWindow } from "@/lib/gex";
+import { Area, AreaChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import type { GexResponse, GexSymbol, HedgePressureRow, TesseractZone } from "@/lib/gex";
+import { computeHedgePressure, computeTesseractZones, fmtNum, fmtUsd, nearStrikeWindow } from "@/lib/gex";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
 
-export type OptionsFlowView = "gex" | "dex" | "hedgepressure" | "blindspots";
+export type OptionsFlowView = "gex" | "dex" | "hedgepressure" | "tesseract";
 
 const SYMBOLS: GexSymbol[] = ["QQQ", "SPY"];
+const TESSERACT_SYMBOLS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
 
 function SymbolToggle({ symbol, onChange }: { symbol: GexSymbol; onChange: (s: GexSymbol) => void }) {
   return (
@@ -261,30 +263,81 @@ function HedgePressureView({ data }: { data: GexResponse }) {
   );
 }
 
-function BlindSpotClusterRow({ cluster, maxScore }: { cluster: BlindSpotCluster; maxScore: number }) {
+const ZONE_RANK_COLOR = ["var(--up)", "var(--accent)", "#8b7fd6", "#4aa8d8", "#d9a441"];
+
+/** The overlap-density curve across price, with each zone marked - the "shape" the tesseract name refers to. */
+function TesseractCurveChart({ curve, zones, spot }: { curve: { x: number; c: number }[]; zones: TesseractZone[]; spot: number }) {
+  return (
+    <div className="h-[260px] w-full">
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={curve} margin={{ top: 12, right: 16, bottom: 0, left: 0 }}>
+          <defs>
+            <linearGradient id="tesseractFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.55} />
+              <stop offset="100%" stopColor="var(--accent)" stopOpacity={0.03} />
+            </linearGradient>
+          </defs>
+          <XAxis
+            dataKey="x"
+            type="number"
+            domain={["dataMin", "dataMax"]}
+            tickFormatter={(v) => fmtNum(Number(v), 0)}
+            tick={{ fill: "var(--text-faint)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={{ stroke: "var(--border)" }}
+          />
+          <YAxis hide domain={[0, "dataMax"]} />
+          <Tooltip
+            contentStyle={{ background: "var(--panel)", border: "1px solid var(--border-strong)", borderRadius: 3, fontSize: 11 }}
+            labelFormatter={(x) => `${fmtNum(Number(x), 1)}`}
+            formatter={(v) => [Number(v).toFixed(2), "overlap"]}
+          />
+          <Area type="monotone" dataKey="c" stroke="var(--accent)" strokeWidth={1.5} fill="url(#tesseractFill)" isAnimationActive={false} dot={false} />
+          {zones.map((z, i) => (
+            <ReferenceDot
+              key={z.rank}
+              x={z.price}
+              y={z.score}
+              r={4}
+              fill={ZONE_RANK_COLOR[Math.min(i, ZONE_RANK_COLOR.length - 1)]}
+              stroke="var(--bg)"
+              strokeWidth={1.5}
+            />
+          ))}
+          <ReferenceDot x={spot} y={0} r={5} fill="var(--text)" stroke="var(--bg)" strokeWidth={1.5} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+function TesseractZoneRow({ zone, maxScore, rankColor }: { zone: TesseractZone; maxScore: number; rankColor: string }) {
   const [expanded, setExpanded] = useState(false);
-  const widthPct = maxScore > 0 ? (cluster.score / maxScore) * 100 : 0;
+  const widthPct = maxScore > 0 ? (zone.score / maxScore) * 100 : 0;
 
   return (
     <div className="border-b border-[var(--border)] last:border-0">
       <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-3 py-2.5 text-left">
-        <div className="w-8 shrink-0 font-mono text-[0.68rem] font-semibold text-[var(--text-faint)]">BL{cluster.rank}</div>
-        <div className="w-20 shrink-0 font-mono text-[0.82rem] font-semibold">{fmtNum(cluster.price, 1)}</div>
+        <div className="flex w-9 shrink-0 items-center gap-1.5 font-mono text-[0.68rem] font-semibold text-[var(--text-faint)]">
+          <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: rankColor }} />
+          {zone.rank}
+        </div>
+        <div className="w-20 shrink-0 font-mono text-[0.82rem] font-semibold">{fmtNum(zone.price, 1)}</div>
         <div className="relative h-6 flex-1 overflow-hidden bg-[var(--panel-2)]">
-          <div className="h-full bg-[var(--accent)] transition-[width] duration-300" style={{ width: `${widthPct}%` }} />
+          <div className="h-full transition-[width] duration-300" style={{ width: `${widthPct}%`, background: rankColor }} />
           <div className="absolute inset-0 flex items-center justify-end px-2 font-mono text-[0.66rem] text-[var(--text)]">
-            {cluster.score.toFixed(2)}
+            {zone.score.toFixed(2)}
           </div>
         </div>
         <div className="hidden w-28 shrink-0 text-right font-mono text-[0.62rem] text-[var(--text-faint)] sm:block">
-          {cluster.contributors.length} level{cluster.contributors.length === 1 ? "" : "s"}
+          {zone.contributors.length} level{zone.contributors.length === 1 ? "" : "s"}
         </div>
         <div className="w-4 shrink-0 text-center font-mono text-[0.6rem] text-[var(--text-faint)]">{expanded ? "▾" : "▸"}</div>
       </button>
 
       {expanded && (
         <div className="mb-3 ml-11 flex flex-col gap-1.5 border-l border-[var(--border)] py-2 pl-4">
-          {cluster.contributors.map((c, i) => (
+          {zone.contributors.map((c, i) => (
             <div key={i} className="flex items-center gap-2 font-mono text-[0.66rem] text-[var(--text-dim)]">
               <span
                 className="border border-[var(--border-strong)] px-1.5 py-0.5 font-semibold uppercase tracking-[0.04em]"
@@ -303,9 +356,8 @@ function BlindSpotClusterRow({ cluster, maxScore }: { cluster: BlindSpotCluster;
   );
 }
 
-function BlindSpotsView() {
-  const [qqq, setQqq] = useState<GexResponse | null>(null);
-  const [spy, setSpy] = useState<GexResponse | null>(null);
+function TesseractZonesView() {
+  const [bySymbol, setBySymbol] = useState<Partial<Record<GexSymbol, GexResponse>> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -313,17 +365,18 @@ function BlindSpotsView() {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    async function fetchOne(symbol: string): Promise<GexResponse> {
+    async function fetchOne(symbol: GexSymbol): Promise<GexResponse> {
       const res = await fetch(`/api/gex?symbol=${symbol}`, { cache: "no-store" });
       const json = await res.json();
       if (!res.ok || !json.ok) throw new Error(json.error ?? `request failed (${res.status})`);
       return json;
     }
-    Promise.all([fetchOne("QQQ"), fetchOne("SPY")])
-      .then(([qqqJson, spyJson]) => {
+    Promise.all(TESSERACT_SYMBOLS.map(fetchOne))
+      .then((results) => {
         if (cancelled) return;
-        setQqq(qqqJson);
-        setSpy(spyJson);
+        const map: Partial<Record<GexSymbol, GexResponse>> = {};
+        TESSERACT_SYMBOLS.forEach((s, i) => (map[s] = results[i]));
+        setBySymbol(map);
       })
       .catch((err: Error) => {
         if (!cancelled) setError(err.message);
@@ -339,11 +392,13 @@ function BlindSpotsView() {
   if (loading) {
     return (
       <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem] text-[var(--text-faint)]">
-        Loading QQQ + SPY confluence…
+        Loading {TESSERACT_SYMBOLS.join(" + ")} confluence…
       </div>
     );
   }
-  if (error || !qqq || !spy) {
+  const home = bySymbol?.QQQ;
+  const others = bySymbol ? TESSERACT_SYMBOLS.slice(1).map((s) => bySymbol[s]).filter((d): d is GexResponse => !!d) : [];
+  if (error || !home || others.length < TESSERACT_SYMBOLS.length - 1) {
     return (
       <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
         ERR: {error ?? "missing data"}
@@ -351,52 +406,31 @@ function BlindSpotsView() {
     );
   }
 
-  const { clusters, ratio, bandwidth } = computeBlindSpots(qqq, spy, 8);
-  const maxScore = clusters[0]?.score ?? 1;
+  const { zones, bandwidth, curve } = computeTesseractZones(home, others, 5);
+  const maxScore = zones[0]?.score ?? 1;
 
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="QQQ SPOT" value={fmtNum(qqq.spot, 2)} />
-        <StatTile label="SPY SPOT" value={fmtNum(spy.spot, 2)} />
-        <StatTile label="RATIO (QQQ/SPY)" value={fmtNum(ratio, 4)} />
-        <StatTile label="CLUSTER BAND" value={`±${fmtNum(bandwidth, 2)}`} />
+        <StatTile label="QQQ SPOT" value={fmtNum(home.spot, 2)} />
+        <StatTile label="ASSETS" value={TESSERACT_SYMBOLS.join(" · ")} />
+        <StatTile label="TOP ZONE" value={fmtNum(zones[0]?.price, 1)} />
+        <StatTile label="BAND" value={`±${fmtNum(bandwidth, 2)}`} />
       </div>
 
-      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
-        <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          METHODOLOGY — REDUCED 2-ASSET CONFLUENCE, NOT MENTHORQ&apos;S MODEL
-        </div>
-        <p className="m-0 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
-          MenthorQ&apos;s published Blind Spots idea: take option-derived levels from several correlated instruments
-          (for NQ: NQ futures options, NDX, QQQ, and MAG7 stocks), convert every level onto one instrument&apos;s price
-          scale, and cluster where several land near each other — the overlap density, not any single chain, is the
-          signal. This data source carries QQQ and SPY, so this is that same mechanic run on two assets instead of
-          five or six — a smaller, honest version of the idea, not a reproduction of their product.
-        </p>
-        <p className="m-0 mt-3 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
-          Each symbol contributes its own 0DTE Call Resistance, Put Support, King Node, Gamma Flip, Max Pain, and top 3
-          secondary GEX strikes — all self-derived by peak prominence, same method as Hedge Pressure. SPY levels are
-          converted to QQQ-equivalent prices via the ratio method (<code>level × QQQspot/SPYspot</code>). Every
-          candidate price is scored by a Gaussian-kernel overlap density — weight × proximity to every contributing
-          level, summed — and the ranked local maxima are the Blind Spots (BL1 = strongest overlap).
-        </p>
-        <p className="m-0 mt-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
-          MenthorQ does not publish its weighting formula, clustering tolerance, correlation window, or dealer-side
-          classifier — the weights, the ±0.4%-of-spot bandwidth, and the 0.85x discount on converted (non-native)
-          levels here are stated assumptions, not recovered constants. 0DTE book only, both assets.
-        </p>
-      </div>
+      <VisualCard title="CONFLUENCE CURVE" subtitle="Peaks = where multiple assets' levels line up (dot = spot)">
+        <TesseractCurveChart curve={curve} zones={zones} spot={home.spot} />
+      </VisualCard>
 
       <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="partno" style={{ color: "var(--text-faint)" }}>
-            RANKED BLIND SPOTS (QQQ SCALE)
+            TESSERACT ZONES (QQQ SCALE)
           </div>
           <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS CONTRIBUTING LEVELS</div>
         </div>
-        {clusters.map((cluster) => (
-          <BlindSpotClusterRow key={cluster.rank} cluster={cluster} maxScore={maxScore} />
+        {zones.map((zone, i) => (
+          <TesseractZoneRow key={zone.rank} zone={zone} maxScore={maxScore} rankColor={ZONE_RANK_COLOR[Math.min(i, ZONE_RANK_COLOR.length - 1)]} />
         ))}
       </div>
     </div>
@@ -410,7 +444,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (view === "blindspots") return;
+    if (view === "tesseract") return;
     let cancelled = false;
     setLoading(true);
     setError(null);
@@ -435,7 +469,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
     };
   }, [symbol, view]);
 
-  if (view === "blindspots") return <BlindSpotsView />;
+  if (view === "tesseract") return <TesseractZonesView />;
 
   return (
     <div className="flex flex-col gap-6">

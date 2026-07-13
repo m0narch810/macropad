@@ -1,4 +1,4 @@
-export type GexSymbol = "QQQ" | "SPY";
+export type GexSymbol = "QQQ" | "SPY" | "SPX" | "NDX";
 
 export interface StrikeRow0DTE {
   strike: number;
@@ -297,10 +297,10 @@ export function computeHedgePressure(data: GexResponse, count = 15): { rows: Hed
 }
 
 // ---------------------------------------------------------------------------
-// Blind Spots
+// Tesseract Zones (formerly a 2-asset "Blind Spots" reconstruction)
 // ---------------------------------------------------------------------------
 
-export interface BlindSpotSourceLevel {
+export interface TesseractContributor {
   asset: GexSymbol;
   label: string;
   nativePrice: number;
@@ -308,11 +308,11 @@ export interface BlindSpotSourceLevel {
   weight: number;
 }
 
-export interface BlindSpotCluster {
+export interface TesseractZone {
   rank: number;
   price: number;
   score: number;
-  contributors: BlindSpotSourceLevel[];
+  contributors: TesseractContributor[];
 }
 
 /** Pulls a small set of named, weighted option-derived levels out of one symbol's book - the inputs a confluence model clusters. */
@@ -336,27 +336,40 @@ function extractLevels(data: GexResponse): { asset: GexSymbol; label: string; pr
 /**
  * A reduced reconstruction of the published MenthorQ Blind Spots idea:
  * option-derived levels from more than one instrument, converted onto a
- * shared price scale, cluster where several land near each other. The real
- * product uses NQ futures options + NDX + QQQ + individual MAG7 chains;
- * this data source carries QQQ and SPY, so this is a 2-asset version of the
- * same mechanic, not a reproduction of their model - MenthorQ doesn't
- * publish their weighting formula, clustering tolerance, or dealer-side
- * classifier, so those are stated assumptions here, not recovered constants.
+ * shared price scale, cluster where several land near each other - a
+ * "tesseract": a shape only visible when several assets' projections line
+ * up, not any single chain's opinion. The
+ * real product uses NQ futures options + NDX + QQQ + individual MAG7
+ * chains; this data source only carries QQQ, SPY, SPX, and NDX as
+ * genuinely distinct instruments (every other ticker tried against it
+ * silently returned SPX's own numbers relabeled - confirmed directly, not
+ * assumed), so this is a 4-asset version of the same mechanic, not a
+ * reproduction of their model. MenthorQ doesn't publish their weighting
+ * formula, clustering tolerance, or dealer-side classifier, so those are
+ * stated assumptions here, not recovered constants.
  *
- * Method: convert every SPY level to a QQQ-equivalent price using the ratio
- * method (level x QQQspot/SPYspot). Score every candidate QQQ price with a
- * Gaussian-kernel overlap density C(x) = sum(weight_i * exp(-(x-L_i)^2 /
- * 2h^2)), h a clustering tolerance in QQQ points. Local maxima, ranked by
- * cluster strength, are the Blind Spots.
+ * Method: convert every non-home level to a home-equivalent price using the
+ * ratio method (level x homeSpot/assetSpot). Score every candidate home
+ * price with a Gaussian-kernel overlap density C(x) = sum(weight_i *
+ * exp(-(x-L_i)^2 / 2h^2)), h a clustering tolerance in home-asset points.
+ * Local maxima, ranked by cluster strength, are the Tesseract Zones.
  */
-export function computeBlindSpots(qqq: GexResponse, spy: GexResponse, count = 8): { clusters: BlindSpotCluster[]; ratio: number; bandwidth: number } {
-  const qqqSpot = qqq.spot;
-  const spySpot = spy.spot;
-  const ratio = qqqSpot / spySpot;
+export function computeTesseractZones(
+  home: GexResponse,
+  others: GexResponse[],
+  count = 8
+): { zones: TesseractZone[]; ratios: Partial<Record<GexSymbol, number>>; bandwidth: number; curve: { x: number; c: number }[] } {
+  const homeSpot = home.spot;
+  const ratios: Partial<Record<GexSymbol, number>> = {};
 
-  const qqqLevels = extractLevels(qqq).map((l) => ({ ...l, convertedPrice: l.price }));
-  const spyLevels = extractLevels(spy).map((l) => ({ ...l, convertedPrice: l.price * ratio, weight: l.weight * 0.85 }));
-  const allLevels: BlindSpotSourceLevel[] = [...qqqLevels, ...spyLevels].map((l) => ({
+  const homeLevels = extractLevels(home).map((l) => ({ ...l, convertedPrice: l.price }));
+  const otherLevels = others.flatMap((data) => {
+    const ratio = homeSpot / data.spot;
+    ratios[data.symbol] = ratio;
+    return extractLevels(data).map((l) => ({ ...l, convertedPrice: l.price * ratio, weight: l.weight * 0.85 }));
+  });
+
+  const allLevels: TesseractContributor[] = [...homeLevels, ...otherLevels].map((l) => ({
     asset: l.asset,
     label: l.label,
     nativePrice: l.price,
@@ -364,7 +377,7 @@ export function computeBlindSpots(qqq: GexResponse, spy: GexResponse, count = 8)
     weight: l.weight,
   }));
 
-  const bandwidth = qqqSpot * 0.004; // clustering tolerance: ~0.4% of QQQ spot, a stated assumption
+  const bandwidth = homeSpot * 0.004; // clustering tolerance: ~0.4% of home-asset spot, a stated assumption
 
   function densityAt(x: number): number {
     return allLevels.reduce((sum, l) => sum + l.weight * Math.exp(-((x - l.convertedPrice) ** 2) / (2 * bandwidth * bandwidth)), 0);
@@ -372,9 +385,10 @@ export function computeBlindSpots(qqq: GexResponse, spy: GexResponse, count = 8)
 
   const candidateXs = new Set<number>(allLevels.map((l) => l.convertedPrice));
   const sortedPrices = allLevels.map((l) => l.convertedPrice).sort((a, b) => a - b);
-  const lo = sortedPrices[0];
-  const hi = sortedPrices[sortedPrices.length - 1];
-  const steps = 200;
+  const pad = (sortedPrices[sortedPrices.length - 1] - sortedPrices[0]) * 0.15 || bandwidth * 3;
+  const lo = sortedPrices[0] - pad;
+  const hi = sortedPrices[sortedPrices.length - 1] + pad;
+  const steps = 240;
   for (let i = 0; i <= steps; i++) candidateXs.add(lo + ((hi - lo) * i) / steps);
 
   const grid = [...candidateXs].sort((a, b) => a - b).map((x) => ({ x, c: densityAt(x) }));
@@ -393,14 +407,14 @@ export function computeBlindSpots(qqq: GexResponse, spy: GexResponse, count = 8)
     merged.push(p);
   }
 
-  const clusters: BlindSpotCluster[] = merged.slice(0, count).map((peak, i) => ({
+  const zones: TesseractZone[] = merged.slice(0, count).map((peak, i) => ({
     rank: i + 1,
     price: peak.x,
     score: peak.c,
     contributors: allLevels.filter((l) => Math.abs(l.convertedPrice - peak.x) < bandwidth * 1.5).sort((a, b) => b.weight - a.weight),
   }));
 
-  return { clusters, ratio, bandwidth };
+  return { zones, ratios, bandwidth, curve: grid };
 }
 
 export function fmtNum(n: number | null | undefined, digits = 2): string {

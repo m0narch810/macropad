@@ -1,10 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { GexResponse, GexSymbol } from "@/lib/gex";
-import { fmtNum, fmtPct, fmtUsd } from "@/lib/gex";
+import { fmtNum, fmtPct, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
+import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
+import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
+import Exposure3D from "@/components/optionsflow/Exposure3D";
 
-export type OptionsFlowView = "greeks" | "volsurface" | "walls" | "expectedmove" | "pressure";
+export type OptionsFlowView = "gex" | "dex" | "volsurface" | "walls" | "expectedmove" | "pressure";
 
 const SYMBOLS: GexSymbol[] = ["QQQ", "SPX"];
 
@@ -46,49 +49,78 @@ function tone(n: number): "up" | "down" | "neutral" {
   return "neutral";
 }
 
-function GreeksExposureView({ data }: { data: GexResponse }) {
-  const rows = [...data.exposure.perStrike].sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex)).slice(0, 20);
+/** A titled card wrapping one visualization, consistent chrome across bar/heatmap/3D. */
+function VisualCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
+      <div className="mb-4 flex items-baseline justify-between gap-2">
+        <div className="partno" style={{ color: "var(--text-faint)" }}>
+          {title}
+        </div>
+        {subtitle && <div className="font-mono text-[0.64rem] text-[var(--text-faint)]">{subtitle}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function GexExposureView({ data }: { data: GexResponse }) {
+  const top = useMemo(() => topStrikesByMagnitude(data.exposure.perStrike, (r) => r.gex, 22), [data]);
+  const chartData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, call: r.callGex, put: r.putGex }));
+
   return (
     <div className="flex flex-col gap-6">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="TOTAL GEX" value={fmtUsd(data.exposure.totalGex)} tone={tone(data.exposure.totalGex)} />
         <StatTile label="REGIME" value={data.structure.regime.toUpperCase()} />
         <StatTile label="KING NODE" value={`${fmtNum(data.structure.kingNode.strike, 0)} (${data.structure.kingNode.type})`} />
-        <StatTile label="ATM IV" value={fmtPct(data.quality.atmIv * 100, 1)} />
+        <StatTile label="GAMMA FLIP" value={fmtNum(data.aggregate.flip.nearestFlip, 2)} />
       </div>
       <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">{data.structure.regimeNote}</p>
-      <div className="overflow-x-auto border border-[var(--border)]">
-        <table className="w-full min-w-[640px] font-mono text-[0.72rem]">
-          <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--panel)] text-left text-[var(--text-faint)]">
-              <th className="px-3 py-2">STRIKE</th>
-              <th className="px-3 py-2">GEX</th>
-              <th className="px-3 py-2">DEX</th>
-              <th className="px-3 py-2">VEX</th>
-              <th className="px-3 py-2">CHEX</th>
-              <th className="px-3 py-2">IV</th>
-              <th className="px-3 py-2">CALL OI</th>
-              <th className="px-3 py-2">PUT OI</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.strike} className="border-b border-[var(--border)] last:border-0">
-                <td className="px-3 py-1.5 font-semibold">{fmtNum(r.strike, 0)}</td>
-                <td className="px-3 py-1.5" style={{ color: r.gex >= 0 ? "var(--up)" : "var(--down)" }}>
-                  {fmtUsd(r.gex)}
-                </td>
-                <td className="px-3 py-1.5">{fmtUsd(r.dex)}</td>
-                <td className="px-3 py-1.5">{fmtUsd(r.vex)}</td>
-                <td className="px-3 py-1.5">{fmtUsd(r.chex)}</td>
-                <td className="px-3 py-1.5">{fmtNum(r.iv, 1)}</td>
-                <td className="px-3 py-1.5 text-[var(--text-dim)]">{fmtNum(r.callOi, 0)}</td>
-                <td className="px-3 py-1.5 text-[var(--text-dim)]">{fmtNum(r.putOi, 0)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <VisualCard title="GEX BY STRIKE" subtitle="Call (up) vs. put (down), top 22 strikes by |GEX|">
+        <ExposureBarChart data={chartData} mode="split" unitLabel="GEX" />
+      </VisualCard>
+
+      <VisualCard title="GEX HEATMAP" subtitle="Intensity-scaled, call/put rows">
+        <ExposureHeatmap data={chartData} mode="split" />
+      </VisualCard>
+
+      <VisualCard title="3D EXPOSURE SURFACE" subtitle="Drag to orbit, scroll to zoom">
+        <Exposure3D data={chartData} mode="split" />
+      </VisualCard>
+    </div>
+  );
+}
+
+function DexExposureView({ data }: { data: GexResponse }) {
+  const top = useMemo(() => topStrikesByMagnitude(data.exposure.perStrike, (r) => r.dex, 22), [data]);
+  const chartData: ExposureBarDatum[] = top.map((r) => ({ strike: r.strike, net: r.dex }));
+  const totalDex = data.exposure.perStrike.reduce((sum, r) => sum + r.dex, 0);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        <StatTile label="TOTAL DEX" value={fmtUsd(totalDex)} tone={tone(totalDex)} />
+        <StatTile label="REGIME" value={data.structure.regime.toUpperCase()} />
+        <StatTile label="KING NODE" value={`${fmtNum(data.structure.kingNode.strike, 0)} (${data.structure.kingNode.type})`} />
+        <StatTile label="ATM IV" value={fmtPct(data.quality.atmIv * 100, 1)} />
       </div>
+      <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">
+        Net delta exposure per strike — positive means dealers are net long delta and must sell into rallies to stay hedged; negative means the opposite.
+      </p>
+
+      <VisualCard title="DEX BY STRIKE" subtitle="Net dealer delta exposure, top 22 strikes by |DEX|">
+        <ExposureBarChart data={chartData} mode="net" unitLabel="DEX" />
+      </VisualCard>
+
+      <VisualCard title="DEX HEATMAP" subtitle="Intensity-scaled, net row">
+        <ExposureHeatmap data={chartData} mode="net" />
+      </VisualCard>
+
+      <VisualCard title="3D EXPOSURE SURFACE" subtitle="Drag to orbit, scroll to zoom">
+        <Exposure3D data={chartData} mode="net" />
+      </VisualCard>
     </div>
   );
 }
@@ -304,7 +336,8 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
 
       {!loading && !error && data && (
         <>
-          {view === "greeks" && <GreeksExposureView data={data} />}
+          {view === "gex" && <GexExposureView data={data} />}
+          {view === "dex" && <DexExposureView data={data} />}
           {view === "volsurface" && <VolSurfaceView data={data} />}
           {view === "walls" && <StrikeWallsView data={data} />}
           {view === "expectedmove" && <ExpectedMoveView data={data} />}

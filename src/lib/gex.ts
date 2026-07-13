@@ -86,6 +86,14 @@ export interface GexResponse {
   selection: { book: string; exp: string };
 }
 
+/** Picks the N strikes with the largest |value| under `pick`, then re-sorts them ascending by strike for a coherent x-axis. */
+export function topStrikesByMagnitude<T extends { strike: number }>(rows: T[], pick: (row: T) => number, count = 22): T[] {
+  return [...rows]
+    .sort((a, b) => Math.abs(pick(b)) - Math.abs(pick(a)))
+    .slice(0, count)
+    .sort((a, b) => a.strike - b.strike);
+}
+
 export function fmtNum(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   return n.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: 0 });

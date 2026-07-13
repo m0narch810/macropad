@@ -42,7 +42,8 @@ const DOCS_ID = "docs";
 // landing on a "coming soon" screen until the feature ships.
 const OPTIONS_FLOW_PREFIX = "options-flow";
 const OPTIONS_FLOW_PAGES = [
-  { id: "options-flow:greeks", label: "GREEKS EXPOSURE", blurb: "Dealer gamma, delta, vanna and charm, and the levels they pull price toward." },
+  { id: "options-flow:gex", label: "GEX", blurb: "Dealer gamma exposure by strike, and the levels it pulls price toward." },
+  { id: "options-flow:dex", label: "DEX", blurb: "Dealer delta exposure by strike, and which way it forces hedging flow." },
   { id: "options-flow:volsurface", label: "VOL SURFACE", blurb: "Implied volatility skew and term structure across strikes and expiries." },
   { id: "options-flow:walls", label: "STRIKE WALLS", blurb: "Open interest concentrations that act as magnets and barriers into expiry." },
   { id: "options-flow:expectedmove", label: "EXPECTED MOVE", blurb: "What the options market is pricing for the session, the week, and the next event." },

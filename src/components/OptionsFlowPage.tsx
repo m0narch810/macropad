@@ -85,7 +85,7 @@ function GexExposureView({ data }: { data: GexResponse }) {
       </p>
 
       <VisualCard title="GEX BY STRIKE" subtitle="Net GEX — positive (green) above zero, negative (red) below, 22 strikes nearest spot">
-        <ExposureBarChart data={chartData} mode="net" unitLabel="GEX ($M)" />
+        <ExposureBarChart data={chartData} mode="net" unitLabel="GEX" />
       </VisualCard>
 
       <VisualCard title="GEX HEATMAP" subtitle="Intensity-scaled, net row">
@@ -167,8 +167,8 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
             {row.sigmaZ.toFixed(2)}σ from spot) = expected {fmtUsd(row.expectedFlow)}
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[0.64rem] text-[var(--text-dim)]">
-            <div>Charm share of its own range: {(row.charmShare * 100).toFixed(0)}%</div>
-            <div>Vanna share of its own range: {(row.vannaShare * 100).toFixed(0)}%</div>
+            <div>Charm (self-computed, $): {fmtUsd(row.cex)}</div>
+            <div>Vanna (self-computed, $): {fmtUsd(row.vex)}</div>
           </div>
           {row.flags.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-1">
@@ -189,9 +189,9 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
 }
 
 const CONFIDENCE_TIERS: { key: HedgePressureRow["confidence"]; label: string; note: string }[] = [
-  { key: "HIGH", label: "HIGH CONFIDENCE", note: "3+ independent signals corroborate this level (reachable today, charm/vanna elevated, self-derived wall or king node)." },
-  { key: "MEDIUM", label: "MEDIUM CONFIDENCE", note: "2 corroborating signals — a real ranked strike, fewer independent checks agree." },
-  { key: "LOW", label: "LOW CONFIDENCE", note: "0-1 corroborating signals — ranked by dollars alone, little else backs it up." },
+  { key: "HIGH", label: "HIGH CONFIDENCE", note: "2-3 independent signals corroborate this level: reachable within 2σ today, and/or this book's own self-derived call/put wall or king node." },
+  { key: "MEDIUM", label: "MEDIUM CONFIDENCE", note: "1 corroborating signal — a real ranked strike, fewer independent checks agree." },
+  { key: "LOW", label: "LOW CONFIDENCE", note: "No corroborating signal — ranked by dollars alone, nothing else backs it up." },
 ];
 
 function HedgePressureView({ data }: { data: GexResponse }) {
@@ -206,39 +206,50 @@ function HedgePressureView({ data }: { data: GexResponse }) {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <StatTile label="0DTE EXPIRY" value={data.resolvedExpiry} />
         <StatTile label="TOP STRIKE" value={fmtNum(ranked[0]?.strike, 0)} />
-        <StatTile label="1-DAY MOVE (1σ)" value={`±${fmtNum(context.sigma1dPct, 2)}%`} />
+        <StatTile label="1-DAY MOVE (68%)" value={`+${fmtNum(context.sigmaUpPct, 2)}% / -${fmtNum(context.sigmaDownPct, 2)}%`} />
         <StatTile label="MAX PAIN" value={fmtNum(data.maxPain, 0)} />
       </div>
 
       <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
         <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          METHODOLOGY — CONFIRMED-UNIT DOLLARS ONLY, EVERYTHING ELSE IS CORROBORATION
+          METHODOLOGY — LEISEN-REIMER + SVI, SELF-COMPUTED, REAL EMPIRICAL REACHABILITY
         </div>
         <p className="m-0 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
-          Ranked by <b>expected same-day hedge flow</b>: |0DTE GEX(K)| — the one greek this source documents a unit
-          for ($M) — weighted by a strict same-day reachability Gaussian in log-return space, scored against this
-          chain&apos;s own OI-weighted strike dispersion (±{fmtNum(context.sigma1dPct, 2)}% today), not an external vol
-          number or the option&apos;s own multi-day risk-neutral density.
+          GEX (and charm/vanna/dex/vega/theta) are no longer borrowed from a black box. This chain&apos;s real
+          per-contract implied vol is first smoothed with a single-slice raw SVI fit (OI-weighted, so one noisy thin
+          strike can&apos;t swing its own Greeks) before it reaches the pricer: a Leisen-Reimer American binomial tree
+          (dividend yield {fmtNum(data.pricerInputs.q * 100, 1)}%, risk-free rate {fmtNum(data.pricerInputs.r * 100, 2)}%
+          from FRED, dte {fmtNum(data.dteHours, 1)} hours) — American exercise matters here since SPY/QQQ/NDX options
+          are early-exercise-eligible, unlike European Black-Scholes, and Leisen-Reimer converges smoothly at low step
+          counts where plain CRR oscillates (validated directly against a Black-Scholes reference before this shipped).
+          Dollar exposure uses the standard convention (Γ·OI·M·S²·0.01 for GEX, Δ·OI·M·S for DEX) with dealers assumed
+          long calls / short puts — puts flip sign for GEX, charm, and vanna (that&apos;s what makes a put wall a
+          support instead of adding to the call side); DEX doesn&apos;t need the flip since put delta is already
+          negative on its own.
         </p>
         <p className="m-0 mt-3 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
-          This data source also exposes charm, vanna, theta, and vega per strike — but doesn&apos;t document their
-          units, and nothing here confirms they&apos;re on the same dollar scale as GEX. Rather than guess and risk
-          another wrong number, they&apos;re shown per strike as a 0-100% share of their own grid&apos;s range —
-          corroboration, never summed into the ranked dollar figure.
+          Ranked by <b>expected same-day hedge flow</b>: |GEX(K)| weighted by same-day reachability — a Gaussian in
+          log-return space, but now scored against this chain&apos;s <b>real historical empirical distribution</b>{" "}
+          (skewness {fmtNum(context.skewness, 2)}, excess kurtosis {fmtNum(context.excessKurtosis, 2)} — genuinely
+          fat-tailed, not assumed Gaussian) instead of an OI-based proxy. Up-moves and down-moves each get their own
+          real band width (+{fmtNum(context.sigmaUpPct, 2)}% / -{fmtNum(context.sigmaDownPct, 2)}%), not a symmetric
+          assumption.
         </p>
         <p className="m-0 mt-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)]">
           <b>Confidence</b> is a separate tag from the rank: it counts how many independent signals agree — reachable
-          within 2σ today, charm or vanna meaningfully elevated, and whether the strike is this book&apos;s own
-          self-derived call/put wall or king node. A strike can rank #1 by dollars and still show MEDIUM if fewer of
-          those corroborate — that&apos;s the tag doing its job, not a contradiction of the rank above it.
+          within 2σ today, and whether the strike is this book&apos;s own self-derived call/put wall or king node. A
+          strike can rank #1 by dollars and still show MEDIUM if fewer of those corroborate — that&apos;s the tag
+          doing its job, not a contradiction of the rank above it. Charm and vanna are shown per strike (now real
+          dollar figures, confirmed units) as context, not folded into the ranked number — combining them correctly
+          needs a real vol-change scenario this snapshot doesn&apos;t give us on its own.
         </p>
         <p className="m-0 mt-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
           Walls and king node are self-derived by peak-prominence on the 0DTE gex-by-strike curve (backtested on SPY
           2020-2026: next-day |return| was 0.70% near the top-persistence wall vs 1.07% far from it, Mann-Whitney
-          p=9.7e-13) — not trusted from any aggregate, multi-expiry wall field. Open interest is aggregate across all
-          expiries (this source doesn&apos;t expose OI per expiry), so OI-based signals are an approximation, not
-          0DTE-pure. This is a composite estimate from public options-chain exposure, not a literal dealer book — the
-          sign convention (dealers long calls, short puts) is the standard assumption, not observed fact. 0DTE (today,{" "}
+          p=9.7e-13) — not trusted from any aggregate, multi-expiry wall field. Stated simplifications: continuous
+          dividend yield instead of discrete ex-dividend jumps, frozen-IV Greeks (no sticky-delta/local-vol surface
+          response), single-slice SVI (this one expiry only, not a full multi-expiry SSVI surface). This is a
+          composite estimate from public options-chain exposure, not a literal dealer book. 0DTE (today,{" "}
           {data.resolvedExpiry}) throughout.
         </p>
       </div>

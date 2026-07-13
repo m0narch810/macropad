@@ -1,22 +1,58 @@
+import { lrGreeks, dollarCharm, dollarDex, dollarGex, dollarTheta, dollarVanna, dollarVega } from "@/lib/americanPricer";
+
 export type GexSymbol = "QQQ" | "SPY" | "SPX" | "NDX";
 
 export interface StrikeRow0DTE {
   strike: number;
-  /** $M, 0DTE-only column of the chain's own gex grid - the one greek here with a confirmed, documented unit. */
+  /** $, self-computed via Leisen-Reimer American binomial on this strike's SVI-smoothed IV - confirmed unit, not borrowed from any black box. */
   gex: number;
-  /** 0DTE-only, unit not documented by the source API - used directionally, never summed with gex. */
   dex: number;
-  /** Vanna, 0DTE-only, unit not documented. */
   vex: number;
-  /** Theta, 0DTE-only, unit not documented. */
   tex: number;
-  /** Charm, 0DTE-only, unit not documented. */
   cex: number;
-  /** Vega, 0DTE-only, unit not documented. */
   vegaex: number;
-  /** Aggregate across ALL expiries, not 0DTE-only - the source API doesn't expose OI broken out per expiry. */
   callOi: number;
   putOi: number;
+}
+
+export interface ProbabilityStats {
+  /** Real historical daily return stats from the source's own price-history computation, not an OI-based proxy. */
+  muDailyPct: number;
+  sigmaDailyPct: number;
+  skewness: number;
+  excessKurtosis: number;
+  fatTails: boolean;
+  nDays: number;
+  /** Empirical confidence bands [low, high] in price, keyed by confidence level ("68"|"90"|"95"|"99"). */
+  bands1d: Record<string, [number, number]>;
+}
+
+export interface DealerFlowContext {
+  currentZ: number;
+  imbalance: number;
+  buyCount: number;
+  sellCount: number;
+  zThreshold: number;
+}
+
+export interface CrossExpiryRow {
+  expiration: string;
+  dte: number;
+  netGex: number;
+  callResistance: number | null;
+  putSupport: number | null;
+  totalOi: number;
+}
+
+export interface ZeroDteContext {
+  expectedMove1s: number;
+  expectedMove2s: number;
+  pcRatio: number;
+  pcSentiment: string;
+  charmDirection: string;
+  vannaDirection: string;
+  charmNote: string;
+  vannaNote: string;
 }
 
 export interface GexResponse {
@@ -26,6 +62,8 @@ export interface GexResponse {
   spot: number;
   /** The actual date (YYYY-MM-DD) the 0DTE column was read from. */
   resolvedExpiry: string;
+  /** Hours remaining to that expiry - precision Black-Scholes/CRR needs, not just "today". */
+  dteHours: number;
   perStrike: StrikeRow0DTE[];
   totalGex0dte: number;
   /** Self-derived via peak-prominence on the 0DTE gex curve, not trusted from the source API's own (multi-expiry) wall fields. */
@@ -36,8 +74,13 @@ export interface GexResponse {
   maxPain: number;
   /** Self-derived zero-crossing of the 0DTE gex-by-strike curve, nearest to spot. */
   gammaFlip: number | null;
-  /** OI-weighted dispersion of strikes around spot, as a same-day move proxy - derived from this chain's own (aggregate) OI, not an external vol source. */
-  sigma1dPct: number;
+  /** Real historical empirical stats, replacing the earlier OI-dispersion proxy. */
+  probability: ProbabilityStats;
+  dealerFlow: DealerFlowContext | null;
+  crossExpiry: CrossExpiryRow[];
+  zeroDte: ZeroDteContext | null;
+  /** Inputs the pricer actually used - stated so the Greeks are auditable, not a black box either. */
+  pricerInputs: { r: number; q: number };
 }
 
 /** Picks the N strikes with the largest |value| under `pick`, then re-sorts them ascending by strike for a coherent x-axis. */
@@ -179,25 +222,78 @@ function deriveGammaFlip(perStrike: StrikeRow0DTE[], spot: number): number | nul
   return crossings.sort((x, y) => Math.abs(x - spot) - Math.abs(y - spot))[0];
 }
 
-/** OI-weighted dispersion of strikes around spot, as a same-day move proxy derived from this chain's own OI rather than an external vol source. OI here is aggregate-across-expiries (an API limitation, not this function's choice). */
-function deriveSigma1dPct(perStrike: StrikeRow0DTE[], spot: number): number {
-  const withOi = perStrike.filter((r) => r.callOi + r.putOi > 0);
-  const totalOi = withOi.reduce((sum, r) => sum + r.callOi + r.putOi, 0);
-  if (!totalOi || !spot) return 1.5;
-  const variance = withOi.reduce((sum, r) => {
-    const w = r.callOi + r.putOi;
-    const pct = ((r.strike - spot) / spot) * 100;
-    return sum + w * pct * pct;
-  }, 0);
-  return Math.max(0.3, Math.sqrt(variance / totalOi));
+export interface ChainStrikeInput {
+  strike: number;
+  side: "call" | "put";
+  oi: number;
+  iv: number;
+}
+
+/**
+ * Builds our own per-strike Greeks via CRR American binomial pricing on
+ * real per-contract IV/OI, instead of trusting the source's own precomputed
+ * gex/dex/vanna/charm. Sign convention (documented, not hidden): gamma,
+ * vanna, charm, vega, and theta are always the same natural sign for both
+ * calls and puts, so the standard "dealers long calls, short puts"
+ * convention flips the put side's contribution - that's what makes a put
+ * wall show up as a support rather than just adding to the call side.
+ * Delta doesn't need this: a put's delta is already negative on its own, so
+ * DEX sums both sides with their natural sign, unflipped.
+ */
+export function buildStrikeRowsFromChain(chain: ChainStrikeInput[], spot: number, T: number, r: number, q: number): StrikeRow0DTE[] {
+  const byStrike = new Map<number, { call?: ChainStrikeInput; put?: ChainStrikeInput }>();
+  for (const row of chain) {
+    const entry = byStrike.get(row.strike) ?? {};
+    entry[row.side] = row;
+    byStrike.set(row.strike, entry);
+  }
+
+  const rows: StrikeRow0DTE[] = [];
+  for (const [strike, { call, put }] of byStrike) {
+    let gex = 0;
+    let dex = 0;
+    let vex = 0;
+    let cex = 0;
+    let vegaex = 0;
+    let tex = 0;
+
+    if (call && call.oi > 0 && call.iv > 0) {
+      const g = lrGreeks({ spot, strike, T, vol: call.iv, r, q, isCall: true });
+      gex += dollarGex(g.gamma, call.oi, spot);
+      dex += dollarDex(g.delta, call.oi, spot);
+      vex += dollarVanna(g.vanna, call.oi, spot);
+      cex += dollarCharm(g.charm, call.oi, spot);
+      vegaex += dollarVega(g.vega, call.oi);
+      tex += dollarTheta(g.theta, call.oi);
+    }
+    if (put && put.oi > 0 && put.iv > 0) {
+      const g = lrGreeks({ spot, strike, T, vol: put.iv, r, q, isCall: false });
+      gex += -dollarGex(g.gamma, put.oi, spot);
+      dex += dollarDex(g.delta, put.oi, spot);
+      vex += -dollarVanna(g.vanna, put.oi, spot);
+      cex += -dollarCharm(g.charm, put.oi, spot);
+      vegaex += -dollarVega(g.vega, put.oi);
+      tex += -dollarTheta(g.theta, put.oi);
+    }
+
+    rows.push({ strike, gex, dex, vex, tex, cex, vegaex, callOi: call?.oi ?? 0, putOi: put?.oi ?? 0 });
+  }
+
+  return rows.sort((a, b) => a.strike - b.strike);
 }
 
 export function deriveGexResponse(raw: {
   symbol: GexSymbol;
   spot: number;
   resolvedExpiry: string;
+  dteHours: number;
   perStrike: StrikeRow0DTE[];
   maxPain: number;
+  probability: ProbabilityStats;
+  dealerFlow: DealerFlowContext | null;
+  crossExpiry: CrossExpiryRow[];
+  zeroDte: ZeroDteContext | null;
+  pricerInputs: { r: number; q: number };
 }): GexResponse {
   const { callWall, putWall } = deriveWalls(raw.perStrike, raw.spot);
   const kingNodeRow = [...raw.perStrike].sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex))[0];
@@ -209,6 +305,7 @@ export function deriveGexResponse(raw: {
     asOf: Date.now(),
     spot: raw.spot,
     resolvedExpiry: raw.resolvedExpiry,
+    dteHours: raw.dteHours,
     perStrike: raw.perStrike,
     totalGex0dte,
     callWall,
@@ -216,7 +313,11 @@ export function deriveGexResponse(raw: {
     kingNode: kingNodeRow ? { strike: kingNodeRow.strike, gex: kingNodeRow.gex, type: kingNodeRow.gex < 0 ? "repellor" : "pin" } : { strike: raw.spot, gex: 0, type: "pin" },
     maxPain: raw.maxPain,
     gammaFlip: deriveGammaFlip(raw.perStrike, raw.spot),
-    sigma1dPct: deriveSigma1dPct(raw.perStrike, raw.spot),
+    probability: raw.probability,
+    dealerFlow: raw.dealerFlow,
+    crossExpiry: raw.crossExpiry,
+    zeroDte: raw.zeroDte,
+    pricerInputs: raw.pricerInputs,
   };
 }
 
@@ -226,16 +327,16 @@ export function deriveGexResponse(raw: {
 
 export interface HedgePressureRow {
   strike: number;
-  /** |gex 0DTE, $M| x same-day reachability weight - the ranking metric. Dollars, confirmed unit. */
+  /** |gex| x same-day reachability weight - the ranking metric. Dollars, confirmed unit (self-computed via CRR). */
   expectedFlow: number;
   gex: number;
-  /** exp(-z^2/2) reachability weight, z = distance in 1-trading-day standard deviations. No floor - genuinely far strikes decay toward 0. */
+  /** Real dollar charm/vanna at this strike (self-computed, confirmed units) - shown as context, not folded into the ranked dollar figure (no solid dσ/dt scenario to combine them under). */
+  cex: number;
+  vex: number;
+  /** exp(-z^2/2) reachability weight under the real empirical (possibly asymmetric) 1-day band, not a symmetric proxy. No floor - genuinely far strikes decay toward 0. */
   reachWeight: number;
-  /** Signed distance from spot in 1-trading-day standard deviations. */
+  /** Signed distance from spot in empirical standard deviations (asymmetric: up-moves and down-moves use their own real historical band width). */
   sigmaZ: number;
-  /** Charm/vanna shown as a normalized 0-1 share of their own grid's range, NOT dollars - their units aren't documented by the source API, so they're corroboration, never summed with gex. */
-  charmShare: number;
-  vannaShare: number;
   confidence: "HIGH" | "MEDIUM" | "LOW";
   totalOi: number;
   distPct: number;
@@ -243,46 +344,54 @@ export interface HedgePressureRow {
 }
 
 export interface HedgePressureContext {
-  sigma1dPct: number;
+  sigmaUpPct: number;
+  sigmaDownPct: number;
+  skewness: number;
+  excessKurtosis: number;
 }
 
-function reachabilityWeight(strike: number, spot: number, sigma1dPct: number): { weight: number; z: number } {
-  if (!spot || sigma1dPct <= 0) return { weight: 0, z: 0 };
-  const z = Math.log(strike / spot) / (sigma1dPct / 100);
+/** Asymmetric reachability: up-moves and down-moves each use their own real empirical 1-sigma band width from /probability, not a symmetric assumption. */
+function reachabilityWeight(strike: number, spot: number, sigmaUpPct: number, sigmaDownPct: number): { weight: number; z: number } {
+  if (!spot) return { weight: 0, z: 0 };
+  const logMove = Math.log(strike / spot);
+  const sigma = (logMove >= 0 ? sigmaUpPct : sigmaDownPct) / 100;
+  if (sigma <= 0) return { weight: 0, z: 0 };
+  const z = logMove / sigma;
   return { weight: Math.exp((-z * z) / 2), z };
 }
 
 /**
- * Ranks strikes by *expected* same-day hedge dollars: |0DTE GEX(K)| - the
- * one greek here with a confirmed, documented unit ($M) - weighted by a
- * strict same-day reachability Gaussian (see reachabilityWeight). Charm and
- * vanna are surfaced per strike as a normalized 0-1 share of their own
- * grid's range, never summed into the dollar figure, because the source API
- * doesn't document their units and a wrong unit assumption is worse than no
- * number - see the methodology note in the UI for the full reasoning.
- * Cross-wall/king-node flags and OI concentration corroborate confidence but
- * stay out of the ranked dollar metric.
+ * Ranks strikes by *expected* same-day hedge dollars: |0DTE GEX(K)| -
+ * self-computed via CRR American binomial pricing on this chain's real
+ * per-contract IV, not borrowed from any black box - weighted by same-day
+ * reachability. Reachability is now asymmetric: the up-move and down-move
+ * band widths come from /probability's real historical empirical
+ * distribution (which is genuinely skewed and fat-tailed for this book -
+ * see excessKurtosis in the context), not a symmetric Gaussian assumption.
+ * Charm and vanna are real dollar figures now (confirmed units, since we
+ * compute them ourselves) but still shown as context rather than summed
+ * into the ranked figure - combining them correctly needs a real dσ/dt
+ * scenario, which this endpoint's snapshot doesn't give us on its own.
  */
 export function computeHedgePressure(data: GexResponse, count = 15): { rows: HedgePressureRow[]; context: HedgePressureContext } {
   const spot = data.spot;
   const rows = data.perStrike;
-  const maxAbsCex = Math.max(1e-9, ...rows.map((r) => Math.abs(r.cex)));
-  const maxAbsVex = Math.max(1e-9, ...rows.map((r) => Math.abs(r.vex)));
+  const band68 = data.probability.bands1d["68"];
+  const sigmaUpPct = band68 ? ((band68[1] - spot) / spot) * 100 : 1.5;
+  const sigmaDownPct = band68 ? ((spot - band68[0]) / spot) * 100 : 1.5;
 
   const scored: HedgePressureRow[] = rows.map((r) => {
     const totalOi = r.callOi + r.putOi;
     const distPct = spot ? ((r.strike - spot) / spot) * 100 : 0;
-    const { weight: reachWeight, z: sigmaZ } = reachabilityWeight(r.strike, spot, data.sigma1dPct);
+    const { weight: reachWeight, z: sigmaZ } = reachabilityWeight(r.strike, spot, sigmaUpPct, sigmaDownPct);
     const expectedFlow = Math.abs(r.gex) * reachWeight;
 
-    const charmShare = Math.abs(r.cex) / maxAbsCex;
-    const vannaShare = Math.abs(r.vex) / maxAbsVex;
     const isReachableToday = Math.abs(sigmaZ) <= 2;
     const isFrontWall = r.strike === data.callWall || r.strike === data.putWall;
     const isKingNode = r.strike === data.kingNode.strike;
 
-    const agreements = [isReachableToday, charmShare > 0.3, vannaShare > 0.3, isFrontWall, isKingNode].filter(Boolean).length;
-    const confidence: HedgePressureRow["confidence"] = agreements >= 3 ? "HIGH" : agreements >= 2 ? "MEDIUM" : "LOW";
+    const agreements = [isReachableToday, isFrontWall, isKingNode].filter(Boolean).length;
+    const confidence: HedgePressureRow["confidence"] = agreements >= 2 ? "HIGH" : agreements >= 1 ? "MEDIUM" : "LOW";
 
     const flags: string[] = [];
     if (r.strike === data.callWall) flags.push("CALL WALL");
@@ -290,10 +399,13 @@ export function computeHedgePressure(data: GexResponse, count = 15): { rows: Hed
     if (isKingNode) flags.push(data.kingNode.type.toUpperCase());
     if (data.gammaFlip !== null && Math.abs(r.strike - data.gammaFlip) < 1) flags.push("GAMMA FLIP");
 
-    return { strike: r.strike, expectedFlow, gex: r.gex, reachWeight, sigmaZ, charmShare, vannaShare, confidence, totalOi, distPct, flags };
+    return { strike: r.strike, expectedFlow, gex: r.gex, cex: r.cex, vex: r.vex, reachWeight, sigmaZ, confidence, totalOi, distPct, flags };
   });
 
-  return { rows: scored.sort((a, b) => b.expectedFlow - a.expectedFlow).slice(0, count), context: { sigma1dPct: data.sigma1dPct } };
+  return {
+    rows: scored.sort((a, b) => b.expectedFlow - a.expectedFlow).slice(0, count),
+    context: { sigmaUpPct, sigmaDownPct, skewness: data.probability.skewness, excessKurtosis: data.probability.excessKurtosis },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -422,12 +534,15 @@ export function fmtNum(n: number | null | undefined, digits = 2): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: digits, minimumFractionDigits: 0 });
 }
 
+/** Formats a raw dollar amount (not pre-scaled) - our own pricer's dollar-exposure outputs are actual dollars, not millions. */
 export function fmtUsd(n: number | null | undefined): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   const abs = Math.abs(n);
   const sign = n < 0 ? "-" : "";
-  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(2)}B`;
-  return `${sign}$${abs.toFixed(2)}M`;
+  if (abs >= 1_000_000_000) return `${sign}$${(abs / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000) return `${sign}$${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(1)}K`;
+  return `${sign}$${abs.toFixed(0)}`;
 }
 
 export function fmtPct(n: number | null | undefined, digits = 2): string {

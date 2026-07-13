@@ -131,8 +131,8 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
   const widthPct = maxFlow > 0 ? (row.expectedFlow / maxFlow) * 100 : 0;
 
   return (
-    <div className="border-b border-[var(--border)] last:border-0">
-      <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-3 py-2.5 text-left">
+    <div className="border-b border-[var(--border)] last:border-0" style={{ borderLeft: `3px solid ${CONFIDENCE_COLOR[row.confidence]}` }}>
+      <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-3 py-2.5 pl-3 text-left">
         <div className="w-6 shrink-0 font-mono text-[0.68rem] text-[var(--text-faint)]">{rank}</div>
         <div className="w-16 shrink-0 font-mono text-[0.82rem] font-semibold">{fmtNum(row.strike, 0)}</div>
         <div className="relative h-6 flex-1 overflow-hidden bg-[var(--panel-2)]">
@@ -144,17 +144,7 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
             {fmtUsd(row.expectedFlow)}
           </div>
         </div>
-        <div
-          className="hidden w-16 shrink-0 text-center font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em] sm:block"
-          style={{ color: CONFIDENCE_COLOR[row.confidence] }}
-        >
-          {row.confidence}
-        </div>
-        <div className="hidden w-16 shrink-0 text-right font-mono text-[0.6rem] text-[var(--text-faint)] md:block">
-          {row.sigmaZ >= 0 ? "+" : ""}
-          {row.sigmaZ.toFixed(1)}σ
-        </div>
-        <div className="flex w-28 shrink-0 flex-wrap justify-end gap-1">
+        <div className="flex w-32 shrink-0 flex-wrap justify-end gap-1">
           {row.flags.slice(0, 2).map((f) => (
             <span
               key={f}
@@ -195,9 +185,18 @@ function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: Hedge
   );
 }
 
+const CONFIDENCE_TIERS: { key: HedgePressureRow["confidence"]; label: string; note: string }[] = [
+  { key: "HIGH", label: "HIGH CONFIDENCE", note: "3+ independent signals corroborate this level (reachable today, charm/vanna elevated, self-derived wall or king node)." },
+  { key: "MEDIUM", label: "MEDIUM CONFIDENCE", note: "2 corroborating signals — a real ranked strike, fewer independent checks agree." },
+  { key: "LOW", label: "LOW CONFIDENCE", note: "0-1 corroborating signals — ranked by dollars alone, little else backs it up." },
+];
+
 function HedgePressureView({ data }: { data: GexResponse }) {
   const { rows: ranked, context } = useMemo(() => computeHedgePressure(data, 15), [data]);
   const maxFlow = ranked[0]?.expectedFlow ?? 1;
+  const grouped = CONFIDENCE_TIERS.map((tier) => ({ ...tier, rows: ranked.filter((r) => r.confidence === tier.key) })).filter(
+    (g) => g.rows.length > 0
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -241,15 +240,21 @@ function HedgePressureView({ data }: { data: GexResponse }) {
         </p>
       </div>
 
-      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
-        <div className="mb-3 flex items-center justify-between">
-          <div className="partno" style={{ color: "var(--text-faint)" }}>
-            RANKED BY EXPECTED HEDGE FLOW — MOST LIKELY STRIKES TO REACT TODAY
+      <div className="flex flex-col gap-4">
+        {grouped.map((group) => (
+          <div key={group.key} className="border border-[var(--border)] bg-[var(--panel)] p-5">
+            <div className="mb-1 flex items-center gap-2">
+              <span className="inline-block h-2 w-2 shrink-0 rounded-full" style={{ background: CONFIDENCE_COLOR[group.key] }} />
+              <div className="partno" style={{ color: CONFIDENCE_COLOR[group.key] }}>
+                {group.label}
+              </div>
+              <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">({group.rows.length})</div>
+            </div>
+            <p className="m-0 mb-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">{group.note}</p>
+            {group.rows.map((row) => (
+              <HedgePressureRankRow key={row.strike} rank={ranked.indexOf(row) + 1} row={row} maxFlow={maxFlow} />
+            ))}
           </div>
-          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS BREAKDOWN</div>
-        </div>
-        {ranked.map((row, i) => (
-          <HedgePressureRankRow key={row.strike} rank={i + 1} row={row} maxFlow={maxFlow} />
         ))}
       </div>
     </div>

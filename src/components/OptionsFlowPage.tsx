@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { GexResponse, GexSymbol } from "@/lib/gex";
-import { computeHedgePressure, fmtNum, fmtPct, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
+import type { GexResponse, GexSymbol, HedgePressureComponent } from "@/lib/gex";
+import { computeHedgePressure, fmtNum, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
 
-export type OptionsFlowView = "gex" | "dex" | "volsurface" | "walls" | "expectedmove" | "pressure" | "hedgepressure";
+export type OptionsFlowView = "gex" | "dex" | "hedgepressure";
 
 const SYMBOLS: GexSymbol[] = ["QQQ", "SPX"];
 
@@ -48,7 +48,7 @@ function tone(n: number): "up" | "down" | "neutral" {
   return "neutral";
 }
 
-/** A titled card wrapping one visualization, consistent chrome across bar/heatmap/3D. */
+/** A titled card wrapping one visualization, consistent chrome across bar/heatmap views. */
 function VisualCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
   return (
     <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
@@ -100,7 +100,7 @@ function DexExposureView({ data }: { data: GexResponse }) {
         <StatTile label="TOTAL DEX" value={fmtUsd(totalDex)} tone={tone(totalDex)} />
         <StatTile label="REGIME" value={data.structure.regime.toUpperCase()} />
         <StatTile label="KING NODE" value={`${fmtNum(data.structure.kingNode.strike, 0)} (${data.structure.kingNode.type})`} />
-        <StatTile label="ATM IV" value={fmtPct(data.quality.atmIv * 100, 1)} />
+        <StatTile label="ATM IV" value={fmtNum(data.quality.atmIv * 100, 1) + "%"} />
       </div>
       <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">
         Net delta exposure per strike — positive means dealers are net long delta and must sell into rallies to stay hedged; negative means the opposite.
@@ -117,189 +117,103 @@ function DexExposureView({ data }: { data: GexResponse }) {
   );
 }
 
-function VolSurfaceView({ data }: { data: GexResponse }) {
-  const { skew } = data.shadow;
+const CONFIDENCE_COLOR: Record<string, string> = {
+  HIGH: "var(--up)",
+  MEDIUM: "var(--amber, #d9a441)",
+  LOW: "var(--text-faint)",
+};
+
+const COMPONENT_COLOR: Record<HedgePressureComponent["key"], string> = {
+  gamma: "var(--up)",
+  convexity: "var(--accent)",
+  charm: "var(--down)",
+  vanna: "#8b7fd6",
+  oi: "var(--text-dim)",
+  flow: "#4aa8d8",
+  proximity: "var(--text-faint)",
+};
+
+/** Stacked contribution bar - shows each weighted component's share of the total score, not just the fused number. */
+function ComponentBreakdownBar({ components, total }: { components: HedgePressureComponent[]; total: number }) {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="ATM IV" value={fmtPct(data.quality.atmIv * 100, 1)} />
-        <StatTile label="CALL IV" value={fmtPct(skew.callIvPct, 1)} />
-        <StatTile label="PUT IV" value={fmtPct(skew.putIvPct, 1)} />
-        <StatTile label="SKEW GAP" value={`${fmtNum(skew.gapPts, 2)} pts`} tone={tone(skew.gapPts)} />
-      </div>
-      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
-        <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          SKEW READ
-        </div>
-        <div className="font-mono text-[1rem] font-semibold uppercase">{skew.read}</div>
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile label="FORWARD" value={fmtNum(data.rnd.forward, 2)} />
-        <StatTile label="RND MEAN" value={fmtNum(data.rnd.mean, 2)} />
-        <StatTile label="RND MASS" value={fmtPct(data.rnd.quality.mass * 100, 2)} />
-      </div>
-      <div className="overflow-x-auto border border-[var(--border)]">
-        <table className="w-full min-w-[420px] font-mono text-[0.72rem]">
-          <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--panel)] text-left text-[var(--text-faint)]">
-              <th className="px-3 py-2">P25</th>
-              <th className="px-3 py-2">P50 (MEDIAN)</th>
-              <th className="px-3 py-2">P75</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td className="px-3 py-1.5">{fmtNum(data.rnd.quality.p25, 2)}</td>
-              <td className="px-3 py-1.5 font-semibold">{fmtNum(data.rnd.quality.p50, 2)}</td>
-              <td className="px-3 py-1.5">{fmtNum(data.rnd.quality.p75, 2)}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+    <div className="flex h-4 w-full overflow-hidden bg-[var(--panel-2)]">
+      {components.map((c) => {
+        const contribution = c.weight * c.normalized * 100;
+        const widthPct = total > 0 ? (contribution / total) * 100 : 0;
+        return widthPct > 0.5 ? (
+          <div
+            key={c.key}
+            title={`${c.label}: ${contribution.toFixed(1)} pts`}
+            style={{ width: `${widthPct}%`, background: COMPONENT_COLOR[c.key] }}
+          />
+        ) : null;
+      })}
     </div>
   );
 }
 
-function StrikeWallsView({ data }: { data: GexResponse }) {
-  const { aggregate, structure } = data;
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="CALL WALL" value={fmtNum(aggregate.callWall, 0)} tone="up" />
-        <StatTile label="PUT WALL" value={fmtNum(aggregate.putWall, 0)} tone="down" />
-        <StatTile label="MAX PAIN" value={fmtNum(aggregate.maxPain, 0)} />
-        <StatTile label="GAMMA FLIP" value={fmtNum(aggregate.flip.nearestFlip, 2)} />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <StatTile label="CALL WALL GEX" value={fmtUsd(aggregate.callWallGex)} tone="up" />
-        <StatTile label="PUT WALL GEX" value={fmtUsd(aggregate.putWallGex)} tone="down" />
-      </div>
-      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
-        <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          KING NODE
-        </div>
-        <div className="font-mono text-[1rem] font-semibold">
-          {fmtNum(structure.kingNode.strike, 0)} — {structure.kingNode.type} ({fmtUsd(structure.kingNode.gex)})
-        </div>
-      </div>
-      <div className="overflow-x-auto border border-[var(--border)]">
-        <table className="w-full min-w-[480px] font-mono text-[0.72rem]">
-          <thead>
-            <tr className="border-b border-[var(--border)] bg-[var(--panel)] text-left text-[var(--text-faint)]">
-              <th className="px-3 py-2">LEVEL</th>
-              <th className="px-3 py-2">TYPE</th>
-              <th className="px-3 py-2">DIST %</th>
-              <th className="px-3 py-2">GEX</th>
-            </tr>
-          </thead>
-          <tbody>
-            {structure.levels.map((l, i) => (
-              <tr key={i} className="border-b border-[var(--border)] last:border-0">
-                <td className="px-3 py-1.5 font-semibold">{fmtNum(l.price, 2)}</td>
-                <td className="px-3 py-1.5 uppercase text-[var(--text-dim)]">{l.type}</td>
-                <td className="px-3 py-1.5">{fmtPct(l.distPct, 2)}</td>
-                <td className="px-3 py-1.5" style={{ color: l.gex >= 0 ? "var(--up)" : "var(--down)" }}>
-                  {fmtUsd(l.gex)}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function ExpectedMoveView({ data }: { data: GexResponse }) {
-  const { rnd, shadow, aggregate, development } = data;
-  const upMove = rnd.forward * (1 + shadow.volMap.sigUpPts / 100) - rnd.forward;
-  const downMove = rnd.forward - rnd.forward * (1 - shadow.volMap.sigDnPts / 100);
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="FORWARD" value={fmtNum(rnd.forward, 2)} />
-        <StatTile label="EXP MOVE UP" value={`+${fmtNum(upMove, 2)}`} tone="up" />
-        <StatTile label="EXP MOVE DOWN" value={`-${fmtNum(downMove, 2)}`} tone="down" />
-        <StatTile label="VOL TRIGGER" value={fmtNum(aggregate.volTrigger.price, 2)} />
-      </div>
-      <div className="grid grid-cols-3 gap-3">
-        <StatTile label="P25 (LOW)" value={fmtNum(rnd.quality.p25, 2)} />
-        <StatTile label="P50 (MEDIAN)" value={fmtNum(rnd.quality.p50, 2)} />
-        <StatTile label="P75 (HIGH)" value={fmtNum(rnd.quality.p75, 2)} />
-      </div>
-      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
-        <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          MOVE STABILITY
-        </div>
-        <div className="font-mono text-[0.9rem]">
-          Last observed move: {fmtPct(development.volTrig.movePct, 2)} — {development.volTrig.stability}
-        </div>
-      </div>
-      <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">
-        {aggregate.volTrigger.belowTrigger ? "Spot is below the vol trigger — " : "Spot is above the vol trigger — "}
-        {aggregate.volTrigger.method}.
-      </p>
-    </div>
-  );
-}
-
-function PutCallPressureView({ data }: { data: GexResponse }) {
-  const { development, dealer } = data;
-  return (
-    <div className="flex flex-col gap-6">
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatTile label="PUT/CALL RATIO" value={fmtNum(development.oi.pcr, 3)} tone={development.oi.pcr > 1 ? "down" : "up"} />
-        <StatTile label="PCR TREND" value={development.oi.pcrTrend.toUpperCase()} />
-        <StatTile label="DEALER BIAS" value={dealer.drift.bias} tone={dealer.drift.bias === "BULLISH" ? "up" : dealer.drift.bias === "BEARISH" ? "down" : "neutral"} />
-        <StatTile label="NET DRIFT" value={fmtUsd(dealer.drift.netPerHourUsd) + "/hr"} tone={tone(dealer.drift.netPerHourUsd)} />
-      </div>
-      <div className="grid grid-cols-2 gap-3">
-        <StatTile label="CALL FLOW" value={`${fmtUsd(dealer.drift.call.perHourUsd)}/hr ${dealer.drift.call.direction}`} tone="up" />
-        <StatTile label="PUT FLOW" value={`${fmtUsd(dealer.drift.put.perHourUsd)}/hr ${dealer.drift.put.direction}`} tone="down" />
-      </div>
-      <p className="m-0 font-sans text-[0.85rem] leading-relaxed text-[var(--text-dim)]">{dealer.drift.note}</p>
-      <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
-        <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          WALL ALIGNMENT
-        </div>
-        <div className="font-mono text-[0.85rem]">
-          Front: call {fmtNum(dealer.alignment.front.callWall, 0)} / put {fmtNum(dealer.alignment.front.putWall, 0)} · All-book: call{" "}
-          {fmtNum(dealer.alignment.allBook.callWall, 0)} / put {fmtNum(dealer.alignment.allBook.putWall, 0)} —{" "}
-          {dealer.alignment.aligned ? "aligned" : "not aligned"}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function HedgePressureRow({ rank, row, maxScore }: { rank: number; row: ReturnType<typeof computeHedgePressure>[number]; maxScore: number }) {
+function HedgePressureRankRow({ rank, row, maxScore }: { rank: number; row: ReturnType<typeof computeHedgePressure>[number]; maxScore: number }) {
+  const [expanded, setExpanded] = useState(false);
   const widthPct = maxScore > 0 ? (row.score / maxScore) * 100 : 0;
+
   return (
-    <div className="flex items-center gap-3 border-b border-[var(--border)] py-2.5 last:border-0">
-      <div className="w-6 shrink-0 font-mono text-[0.68rem] text-[var(--text-faint)]">{rank}</div>
-      <div className="w-16 shrink-0 font-mono text-[0.82rem] font-semibold">{fmtNum(row.strike, 0)}</div>
-      <div className="relative h-6 flex-1 overflow-hidden bg-[var(--panel-2)]">
-        <div
-          className="h-full transition-[width] duration-300"
-          style={{ width: `${widthPct}%`, background: row.gex >= 0 ? "var(--up)" : "var(--down)" }}
-        />
-        <div className="absolute inset-0 flex items-center justify-end px-2 font-mono text-[0.66rem] text-[var(--text)]">
-          {row.score.toFixed(1)}
+    <div className="border-b border-[var(--border)] last:border-0">
+      <button onClick={() => setExpanded((v) => !v)} className="flex w-full items-center gap-3 py-2.5 text-left">
+        <div className="w-6 shrink-0 font-mono text-[0.68rem] text-[var(--text-faint)]">{rank}</div>
+        <div className="w-16 shrink-0 font-mono text-[0.82rem] font-semibold">{fmtNum(row.strike, 0)}</div>
+        <div className="relative h-6 flex-1 overflow-hidden bg-[var(--panel-2)]">
+          <div
+            className="h-full transition-[width] duration-300"
+            style={{ width: `${widthPct}%`, background: row.gex >= 0 ? "var(--up)" : "var(--down)" }}
+          />
+          <div className="absolute inset-0 flex items-center justify-end px-2 font-mono text-[0.66rem] text-[var(--text)]">
+            {row.score.toFixed(1)}
+          </div>
         </div>
-      </div>
-      <div className="hidden w-24 shrink-0 text-right font-mono text-[0.66rem] text-[var(--text-faint)] sm:block">
-        {fmtPct(row.distPct, 1)}
-      </div>
-      <div className="flex w-32 shrink-0 flex-wrap justify-end gap-1">
-        {row.flags.map((f) => (
-          <span
-            key={f}
-            className="border border-[var(--border-strong)] px-1.5 py-0.5 font-mono text-[0.56rem] font-semibold uppercase tracking-[0.04em] text-[var(--text-dim)]"
-          >
-            {f}
-          </span>
-        ))}
-      </div>
+        <div
+          className="hidden w-16 shrink-0 text-center font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em] sm:block"
+          style={{ color: CONFIDENCE_COLOR[row.confidence] }}
+        >
+          {row.confidence}
+        </div>
+        <div className="flex w-32 shrink-0 flex-wrap justify-end gap-1">
+          {row.flags.slice(0, 2).map((f) => (
+            <span
+              key={f}
+              className="border border-[var(--border-strong)] px-1.5 py-0.5 font-mono text-[0.56rem] font-semibold uppercase tracking-[0.04em] text-[var(--text-dim)]"
+            >
+              {f}
+            </span>
+          ))}
+        </div>
+        <div className="w-4 shrink-0 text-center font-mono text-[0.6rem] text-[var(--text-faint)]">{expanded ? "▾" : "▸"}</div>
+      </button>
+
+      {expanded && (
+        <div className="mb-3 ml-9 flex flex-col gap-2 border-l border-[var(--border)] py-2 pl-4">
+          <ComponentBreakdownBar components={row.components} total={row.score} />
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[0.64rem] text-[var(--text-dim)] sm:grid-cols-4">
+            {row.components.map((c) => (
+              <div key={c.key} className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 shrink-0" style={{ background: COMPONENT_COLOR[c.key] }} />
+                {c.label}: {(c.weight * c.normalized * 100).toFixed(1)}
+              </div>
+            ))}
+          </div>
+          {row.flags.length > 0 && (
+            <div className="flex flex-wrap gap-1 pt-1">
+              {row.flags.map((f) => (
+                <span
+                  key={f}
+                  className="border border-[var(--border-strong)] px-1.5 py-0.5 font-mono text-[0.56rem] font-semibold uppercase tracking-[0.04em] text-[var(--text-dim)]"
+                >
+                  {f}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -319,15 +233,48 @@ function HedgePressureView({ data }: { data: GexResponse }) {
 
       <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
         <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          METHODOLOGY
+          METHODOLOGY — SEVEN INDEPENDENT SIGNALS, NOT ONE FUSED NUMBER
         </div>
-        <p className="m-0 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
-          Dealers must stay delta-neutral, so hedging isn&apos;t optional — it&apos;s forced by three mechanics: <b>gamma</b> (a
-          strike&apos;s exposure to a hedge trade per $1 spot move), <b>charm</b> (forced rebalancing from time decay alone,
-          even with zero price movement), and <b>open interest concentration</b> (a strike only matters if size actually
-          sits there). Score = 45% |GEX| + 30% |charm| + 15% OI share + 10% proximity to spot, each normalized against the
-          book&apos;s max. This is a ranking built from public options-chain exposure, not a literal dealer position —
-          treat it as where forced flow is most likely to concentrate, not certainty.
+        <div className="grid grid-cols-1 gap-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)] sm:grid-cols-2">
+          <p className="m-0">
+            <b style={{ color: COMPONENT_COLOR.gamma }}>Gamma (30%)</b> — |GEX| at the strike: forced hedge trade per $1
+            spot move. The standard, OI-based measure.
+          </p>
+          <p className="m-0">
+            <b style={{ color: COMPONENT_COLOR.convexity }}>Convexity (15%)</b> — a second, independent way to measure
+            gamma: the local slope of the book-wide gamma-flip curve at that price. Where the curve is steepest, a small
+            move changes the required hedge fastest — not just &ldquo;large,&rdquo; but accelerating.
+          </p>
+          <p className="m-0">
+            <b style={{ color: COMPONENT_COLOR.charm }}>Charm (20%)</b> — forced rebalancing from time decay alone, even
+            at a frozen price. Heaviest into the close.
+          </p>
+          <p className="m-0">
+            <b style={{ color: COMPONENT_COLOR.vanna }}>Vanna (10%)</b> — forced rebalancing from IV changes alone, even
+            at a frozen price and frozen clock. The third real trigger, usually ignored by simple GEX boards.
+          </p>
+          <p className="m-0">
+            <b style={{ color: COMPONENT_COLOR.oi }}>OI concentration (10%)</b> — a strike only matters if real size sits
+            there.
+          </p>
+          <p className="m-0">
+            <b style={{ color: COMPONENT_COLOR.flow }}>OI flow / dDOI (10%)</b> — not a greek at all: is open interest at
+            this strike building (live, growing risk) or dissolving (going stale)? Falls back to neutral until the feed
+            has enough sessions.
+          </p>
+          <p className="m-0">
+            <b style={{ color: COMPONENT_COLOR.proximity }}>Proximity (5%)</b> — closer strikes get triggered by smaller
+            moves.
+          </p>
+          <p className="m-0">
+            <b>Confidence</b> is scored separately from the ranking score: it counts how many independent signals
+            (gamma, charm, vanna, cross-expiry wall alignment, live OI build) agree the strike matters, rather than
+            trusting one blended number. Tap a row to see its breakdown.
+          </p>
+        </div>
+        <p className="m-0 mt-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
+          This is a composite ranking built from public options-chain exposure, not a literal dealer book — the sign
+          convention (dealers long calls, short puts) is the standard assumption, not observed fact.
         </p>
       </div>
 
@@ -336,10 +283,10 @@ function HedgePressureView({ data }: { data: GexResponse }) {
           <div className="partno" style={{ color: "var(--text-faint)" }}>
             RANKED BY HEDGE PRESSURE
           </div>
-          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">STRIKE · SCORE · DIST% · FLAGS</div>
+          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS COMPONENT BREAKDOWN</div>
         </div>
         {ranked.map((row, i) => (
-          <HedgePressureRow key={row.strike} rank={i + 1} row={row} maxScore={maxScore} />
+          <HedgePressureRankRow key={row.strike} rank={i + 1} row={row} maxScore={maxScore} />
         ))}
       </div>
     </div>
@@ -404,10 +351,6 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
         <>
           {view === "gex" && <GexExposureView data={data} />}
           {view === "dex" && <DexExposureView data={data} />}
-          {view === "volsurface" && <VolSurfaceView data={data} />}
-          {view === "walls" && <StrikeWallsView data={data} />}
-          {view === "expectedmove" && <ExpectedMoveView data={data} />}
-          {view === "pressure" && <PutCallPressureView data={data} />}
           {view === "hedgepressure" && <HedgePressureView data={data} />}
         </>
       )}

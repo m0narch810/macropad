@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { GexResponse, GexSymbol, HedgePressureComponent } from "@/lib/gex";
+import type { GexResponse, GexSymbol, HedgePressureRow, HedgeTaylorTerm } from "@/lib/gex";
 import { computeHedgePressure, fmtNum, fmtUsd, topStrikesByMagnitude } from "@/lib/gex";
 import ExposureBarChart, { type ExposureBarDatum } from "@/components/optionsflow/ExposureBarChart";
 import ExposureHeatmap from "@/components/optionsflow/ExposureHeatmap";
@@ -123,38 +123,34 @@ const CONFIDENCE_COLOR: Record<string, string> = {
   LOW: "var(--text-faint)",
 };
 
-const COMPONENT_COLOR: Record<HedgePressureComponent["key"], string> = {
+const TERM_COLOR: Record<HedgeTaylorTerm["key"], string> = {
   gamma: "var(--up)",
-  convexity: "var(--accent)",
   charm: "var(--down)",
   vanna: "#8b7fd6",
-  oi: "var(--text-dim)",
-  flow: "#4aa8d8",
-  proximity: "var(--text-faint)",
+  speed: "var(--accent)",
+  color: "#4aa8d8",
+  zomma: "#d9a441",
+  vomma: "var(--text-dim)",
 };
 
-/** Stacked contribution bar - shows each weighted component's share of the total score, not just the fused number. */
-function ComponentBreakdownBar({ components, total }: { components: HedgePressureComponent[]; total: number }) {
+/** Stacked contribution bar - each Taylor term's $ share of the total, signed terms shown by |dollars|. */
+function TaylorBreakdownBar({ terms }: { terms: HedgeTaylorTerm[] }) {
+  const totalAbs = terms.reduce((sum, t) => sum + Math.abs(t.dollars), 0);
   return (
     <div className="flex h-4 w-full overflow-hidden bg-[var(--panel-2)]">
-      {components.map((c) => {
-        const contribution = c.weight * c.normalized * 100;
-        const widthPct = total > 0 ? (contribution / total) * 100 : 0;
+      {terms.map((t) => {
+        const widthPct = totalAbs > 0 ? (Math.abs(t.dollars) / totalAbs) * 100 : 0;
         return widthPct > 0.5 ? (
-          <div
-            key={c.key}
-            title={`${c.label}: ${contribution.toFixed(1)} pts`}
-            style={{ width: `${widthPct}%`, background: COMPONENT_COLOR[c.key] }}
-          />
+          <div key={t.key} title={`${t.label}: ${fmtUsd(t.dollars)}`} style={{ width: `${widthPct}%`, background: TERM_COLOR[t.key] }} />
         ) : null;
       })}
     </div>
   );
 }
 
-function HedgePressureRankRow({ rank, row, maxScore }: { rank: number; row: ReturnType<typeof computeHedgePressure>[number]; maxScore: number }) {
+function HedgePressureRankRow({ rank, row, maxFlow }: { rank: number; row: HedgePressureRow; maxFlow: number }) {
   const [expanded, setExpanded] = useState(false);
-  const widthPct = maxScore > 0 ? (row.score / maxScore) * 100 : 0;
+  const widthPct = maxFlow > 0 ? (row.expectedFlow / maxFlow) * 100 : 0;
 
   return (
     <div className="border-b border-[var(--border)] last:border-0">
@@ -164,10 +160,10 @@ function HedgePressureRankRow({ rank, row, maxScore }: { rank: number; row: Retu
         <div className="relative h-6 flex-1 overflow-hidden bg-[var(--panel-2)]">
           <div
             className="h-full transition-[width] duration-300"
-            style={{ width: `${widthPct}%`, background: row.gex >= 0 ? "var(--up)" : "var(--down)" }}
+            style={{ width: `${widthPct}%`, background: row.taylorFlow >= 0 ? "var(--up)" : "var(--down)" }}
           />
           <div className="absolute inset-0 flex items-center justify-end px-2 font-mono text-[0.66rem] text-[var(--text)]">
-            {row.score.toFixed(1)}
+            {fmtUsd(row.expectedFlow)}
           </div>
         </div>
         <div
@@ -176,7 +172,10 @@ function HedgePressureRankRow({ rank, row, maxScore }: { rank: number; row: Retu
         >
           {row.confidence}
         </div>
-        <div className="flex w-32 shrink-0 flex-wrap justify-end gap-1">
+        <div className="hidden w-16 shrink-0 text-right font-mono text-[0.6rem] text-[var(--text-faint)] md:block">
+          p={row.densityWeight.toFixed(2)}
+        </div>
+        <div className="flex w-28 shrink-0 flex-wrap justify-end gap-1">
           {row.flags.slice(0, 2).map((f) => (
             <span
               key={f}
@@ -191,14 +190,17 @@ function HedgePressureRankRow({ rank, row, maxScore }: { rank: number; row: Retu
 
       {expanded && (
         <div className="mb-3 ml-9 flex flex-col gap-2 border-l border-[var(--border)] py-2 pl-4">
-          <ComponentBreakdownBar components={row.components} total={row.score} />
+          <TaylorBreakdownBar terms={row.terms} />
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 font-mono text-[0.64rem] text-[var(--text-dim)] sm:grid-cols-4">
-            {row.components.map((c) => (
-              <div key={c.key} className="flex items-center gap-1.5">
-                <span className="inline-block h-2 w-2 shrink-0" style={{ background: COMPONENT_COLOR[c.key] }} />
-                {c.label}: {(c.weight * c.normalized * 100).toFixed(1)}
+            {row.terms.map((t) => (
+              <div key={t.key} className="flex items-center gap-1.5">
+                <span className="inline-block h-2 w-2 shrink-0" style={{ background: TERM_COLOR[t.key] }} />
+                {t.label}: {fmtUsd(t.dollars)}
               </div>
             ))}
+          </div>
+          <div className="font-mono text-[0.64rem] text-[var(--text-faint)]">
+            Raw Taylor flow: {fmtUsd(row.taylorFlow)} × density weight {row.densityWeight.toFixed(2)} = expected {fmtUsd(row.expectedFlow)}
           </div>
           {row.flags.length > 0 && (
             <div className="flex flex-wrap gap-1 pt-1">
@@ -219,8 +221,8 @@ function HedgePressureRankRow({ rank, row, maxScore }: { rank: number; row: Retu
 }
 
 function HedgePressureView({ data }: { data: GexResponse }) {
-  const ranked = useMemo(() => computeHedgePressure(data, 15), [data]);
-  const maxScore = ranked[0]?.score ?? 1;
+  const { rows: ranked, context } = useMemo(() => computeHedgePressure(data, 15), [data]);
+  const maxFlow = ranked[0]?.expectedFlow ?? 1;
 
   return (
     <div className="flex flex-col gap-6">
@@ -233,60 +235,60 @@ function HedgePressureView({ data }: { data: GexResponse }) {
 
       <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
         <div className="partno mb-2" style={{ color: "var(--text-faint)" }}>
-          METHODOLOGY — SEVEN INDEPENDENT SIGNALS, NOT ONE FUSED NUMBER
+          METHODOLOGY — SECOND-ORDER TAYLOR EXPANSION, NOT A WEIGHTED GUESS
+        </div>
+        <p className="m-0 font-sans text-[0.82rem] leading-relaxed text-[var(--text-dim)]">
+          A dealer&apos;s forced rehedge <i>is</i> the change in their delta, and the change in delta is exactly a Taylor
+          expansion in the greeks — the same math risk desks use for P&amp;L-attribution, not a percentage someone
+          picked:
+        </p>
+        <div className="my-3 overflow-x-auto rounded-[2px] border border-[var(--border)] bg-[var(--panel-2)] p-3 font-mono text-[0.72rem]">
+          ΔHedge(K) = Gamma·dS + Charm·dt + Vanna·dσ + ½Speed·dS² + Color·dt·dS + Zomma·dS·dσ + ½Vomma·dσ²
         </div>
         <div className="grid grid-cols-1 gap-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)] sm:grid-cols-2">
           <p className="m-0">
-            <b style={{ color: COMPONENT_COLOR.gamma }}>Gamma (30%)</b> — |GEX| at the strike: forced hedge trade per $1
-            spot move. The standard, OI-based measure.
+            <b style={{ color: TERM_COLOR.gamma }}>Gamma·dS</b> — forced trade per $1 move, scaled by <b>dS</b>, this
+            book&apos;s own last-observed move size ({fmtNum(context.dSPct, 2)}%), not a guess.
           </p>
           <p className="m-0">
-            <b style={{ color: COMPONENT_COLOR.convexity }}>Convexity (15%)</b> — a second, independent way to measure
-            gamma: the local slope of the book-wide gamma-flip curve at that price. Where the curve is steepest, a small
-            move changes the required hedge fastest — not just &ldquo;large,&rdquo; but accelerating.
+            <b style={{ color: TERM_COLOR.charm }}>Charm·dt</b> — forced rebalancing from time decay alone, over{" "}
+            <b>dt</b> = {context.dtDays} trading day, even at a frozen price.
           </p>
           <p className="m-0">
-            <b style={{ color: COMPONENT_COLOR.charm }}>Charm (20%)</b> — forced rebalancing from time decay alone, even
-            at a frozen price. Heaviest into the close.
+            <b style={{ color: TERM_COLOR.vanna }}>Vanna·dσ</b> — forced rebalancing from IV drift alone, scaled by{" "}
+            <b>dσ</b>, this book&apos;s own realized ATM-IV change ({fmtNum(context.dSigmaPts, 2)} vol pts) — the third
+            real trigger, usually ignored by simple GEX boards.
           </p>
           <p className="m-0">
-            <b style={{ color: COMPONENT_COLOR.vanna }}>Vanna (10%)</b> — forced rebalancing from IV changes alone, even
-            at a frozen price and frozen clock. The third real trigger, usually ignored by simple GEX boards.
-          </p>
-          <p className="m-0">
-            <b style={{ color: COMPONENT_COLOR.oi }}>OI concentration (10%)</b> — a strike only matters if real size sits
-            there.
-          </p>
-          <p className="m-0">
-            <b style={{ color: COMPONENT_COLOR.flow }}>OI flow / dDOI (10%)</b> — not a greek at all: is open interest at
-            this strike building (live, growing risk) or dissolving (going stale)? Falls back to neutral until the feed
-            has enough sessions.
-          </p>
-          <p className="m-0">
-            <b style={{ color: COMPONENT_COLOR.proximity }}>Proximity (5%)</b> — closer strikes get triggered by smaller
-            moves.
-          </p>
-          <p className="m-0">
-            <b>Confidence</b> is scored separately from the ranking score: it counts how many independent signals
-            (gamma, charm, vanna, cross-expiry wall alignment, live OI build) agree the strike matters, rather than
-            trusting one blended number. Tap a row to see its breakdown.
+            <b style={{ color: TERM_COLOR.speed }}>½Speed·dS², Color·dt·dS, Zomma·dS·dσ, ½Vomma·dσ²</b> — the second-order
+            terms a first-order gamma+charm model drops entirely: how gamma itself shifts with price, time, and vol.
           </p>
         </div>
+        <p className="m-0 mt-3 font-sans text-[0.78rem] leading-relaxed text-[var(--text-dim)]">
+          The ranking metric is <b>expected</b> flow: |ΔHedge(K)| weighted by this book&apos;s own risk-neutral
+          probability density (Breeden-Litzenberger, extracted from the chain) of spot actually landing near K — a real
+          market-implied probability, not an arbitrary distance decay. <b>Confidence</b> is kept fully separate from the
+          dollar estimate: it counts how many independent signals — gamma/charm/vanna dominance, live OI build, and
+          cross-expiry wall alignment — agree the strike matters, rather than folding durability into the size.
+        </p>
         <p className="m-0 mt-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-faint)]">
-          This is a composite ranking built from public options-chain exposure, not a literal dealer book — the sign
-          convention (dealers long calls, short puts) is the standard assumption, not observed fact.
+          Why not a full stochastic-vol (Heston) model: that needs numerical calibration against a raw IV surface to
+          fit mean-reversion and vol-of-vol, and the smile it would capture is already priced into these greeks. The
+          Taylor expansion is exact at this point and uses only what the feed gives — no re-derivation of the pricing
+          model. This is a composite estimate from public options-chain exposure, not a literal dealer book — the sign
+          convention (dealers long calls, short puts) is the standard assumption, not observed fact. 0DTE book only.
         </p>
       </div>
 
       <div className="border border-[var(--border)] bg-[var(--panel)] p-5">
         <div className="mb-3 flex items-center justify-between">
           <div className="partno" style={{ color: "var(--text-faint)" }}>
-            RANKED BY HEDGE PRESSURE
+            RANKED BY EXPECTED HEDGE FLOW
           </div>
-          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS COMPONENT BREAKDOWN</div>
+          <div className="font-mono text-[0.6rem] text-[var(--text-faint)]">TAP A ROW FOR ITS TAYLOR-TERM BREAKDOWN</div>
         </div>
         {ranked.map((row, i) => (
-          <HedgePressureRankRow key={row.strike} rank={i + 1} row={row} maxScore={maxScore} />
+          <HedgePressureRankRow key={row.strike} rank={i + 1} row={row} maxFlow={maxFlow} />
         ))}
       </div>
     </div>

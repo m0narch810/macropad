@@ -8,12 +8,24 @@ const ALLOWED_SYMBOLS = new Set(["QQQ", "SPX"]);
 const CACHE_TTL_MS = 12_000;
 const cache = new Map<string, { data: unknown; expiresAt: number }>();
 
+interface UpstreamPayload {
+  ok?: boolean;
+  selection?: { book?: string };
+}
+
 async function fetchUpstream(symbol: string, base: string, key: string) {
-  const upstream = await fetch(`${base}/greeks?symbol=${symbol}&key=${key}`, {
+  // book=0dte pinned explicitly - every page (GEX, DEX, Hedge Pressure) must
+  // read the same, nearest-expiry book. Don't rely on the upstream's default.
+  const upstream = await fetch(`${base}/greeks?symbol=${symbol}&book=0dte&key=${key}`, {
     headers: { "bypass-tunnel-reminder": "true" },
     cache: "no-store",
   });
-  const data = await upstream.json().catch(() => null);
+  const data: UpstreamPayload | null = await upstream.json().catch(() => null);
+
+  if (upstream.ok && data && data.selection?.book !== "0dte") {
+    return { ok: false, status: 409, data: null };
+  }
+
   return { ok: upstream.ok, status: upstream.status, data };
 }
 

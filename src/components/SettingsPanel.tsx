@@ -143,6 +143,7 @@ export default function SettingsPanel() {
                 options={[
                   { id: "dark" as const, label: "Dark" },
                   { id: "light" as const, label: "Light" },
+                  { id: "newspaper" as const, label: "Paper" },
                 ]}
                 value={prefs.theme}
                 onChange={(theme) => update({ theme })}

@@ -1,4 +1,5 @@
-export type ThemeMode = "dark" | "light";
+export type ThemeMode = "dark" | "light" | "newspaper";
+export const THEME_MODES: readonly ThemeMode[] = ["dark", "light", "newspaper"];
 export type AccentPreset = "mono" | "green" | "blue" | "amber" | "purple" | "red";
 export type MotionPref = "on" | "off";
 export type SignalPreset = "classic" | "ocean" | "violet" | "inverted";
@@ -84,7 +85,7 @@ export const THEME_INIT_SCRIPT = `(function(){try{var g=function(k){return local
   KEYS.theme
 )})||g(${JSON.stringify(LEGACY_THEME_KEY)});var a=g(${JSON.stringify(KEYS.accent)})||g(${JSON.stringify(
   LEGACY_ACCENT_KEY
-)});if(t==="light")d.setAttribute("data-theme","light");if(a&&a!=="mono")d.setAttribute("data-accent",a);if(g(${JSON.stringify(
+)});if(t==="light"||t==="newspaper")d.setAttribute("data-theme",t);if(a&&a!=="mono")d.setAttribute("data-accent",a);if(g(${JSON.stringify(
   KEYS.motion
 )})==="off")d.setAttribute("data-motion","off");var s=g(${JSON.stringify(
   KEYS.signal
@@ -104,7 +105,7 @@ export function loadThemePrefs(): ThemePrefs {
   if (typeof window === "undefined") return DEFAULT_PREFS;
   const g = (k: string) => localStorage.getItem(k);
   return {
-    theme: (g(KEYS.theme) ?? g(LEGACY_THEME_KEY)) === "light" ? "light" : "dark",
+    theme: pick(g(KEYS.theme) ?? g(LEGACY_THEME_KEY), THEME_MODES, "dark"),
     accent: pick(g(KEYS.accent) ?? g(LEGACY_ACCENT_KEY), ACCENT_PRESETS.map((p) => p.id), "mono"),
     motion: g(KEYS.motion) === "off" ? "off" : "on",
     signal: pick(g(KEYS.signal), SIGNAL_PRESETS.map((p) => p.id), "classic"),
@@ -123,7 +124,7 @@ export function applyThemePrefs(prefs: ThemePrefs) {
     if (value === null) root.removeAttribute(attr);
     else root.setAttribute(attr, value);
   };
-  set("data-theme", prefs.theme === "light" ? "light" : null);
+  set("data-theme", prefs.theme === "dark" ? null : prefs.theme);
   set("data-accent", prefs.accent === "mono" ? null : prefs.accent);
   set("data-motion", prefs.motion === "off" ? "off" : null);
   set("data-signal", prefs.signal === "classic" ? null : prefs.signal);

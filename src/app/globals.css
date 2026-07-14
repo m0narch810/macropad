@@ -106,6 +106,63 @@
   --font-data: var(--font-fira);
 }
 
+/*
+ * Newspaper — the third theme: warm newsprint, near-black ink, printed
+ * rules instead of pale hairlines. Type is the point: Newsreader (a news
+ * text serif) carries UI + display, Courier Prime carries data so tickers
+ * and stats read like wire copy. Declared after the font presets so the
+ * paper faces win over a user font pick (same specificity, later source).
+ */
+:root[data-theme="newspaper"] {
+  color-scheme: light;
+  --bg: #efe9da;
+  --panel: #f7f2e5;
+  --panel-2: #e9e2d0;
+  --panel-3: #e1d9c4;
+  --border: #d3c9af;
+  --border-strong: #7a7059;
+  --text: #1e1810;
+  --text-dim: #5a5240;
+  --text-faint: #8c8268;
+  --up: #2f6e47;
+  --down: #9e3b32;
+  --amber: #8a6b2f;
+  --steel: #3c5f92;
+  --flat: #6e6653;
+  --globe-bg: #efe9da;
+  --font-ui: var(--font-newsreader);
+  --font-data: var(--font-courier);
+}
+
+/* Signal presets restated in printed ink so contrast holds on paper. */
+:root[data-theme="newspaper"][data-signal="ocean"] {
+  --up: #2c5f9e;
+  --down: #a05e12;
+}
+:root[data-theme="newspaper"][data-signal="violet"] {
+  --up: #6b3daf;
+  --down: #8a6b2f;
+}
+:root[data-theme="newspaper"][data-signal="inverted"] {
+  --up: #9e3b32;
+  --down: #2f6e47;
+}
+
+/* Serif display wants gentler tracking than the grotesk it replaces. */
+[data-theme="newspaper"] .font-display {
+  letter-spacing: -0.006em;
+}
+[data-theme="newspaper"] .display-hero {
+  letter-spacing: -0.014em;
+  line-height: 1.06;
+}
+/* Section labels become spaced serif caps — broadsheet section headers.
+   Part numbers stay Courier: catalog codes belong to the wire, not the page. */
+[data-theme="newspaper"] .eyebrow {
+  font-family: var(--font-ui), Georgia, serif;
+  letter-spacing: 0.22em;
+}
+
 /* Density - compact shrinks the rem base, so every rem-sized surface tightens together. */
 :root[data-density="compact"] {
   font-size: 14.5px;

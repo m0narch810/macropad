@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, JetBrains_Mono, Inter, Space_Grotesk, IBM_Plex_Mono, Fira_Code, Newsreader, Courier_Prime } from "next/font/google";
+import { Geist, JetBrains_Mono, Inter, Space_Grotesk, IBM_Plex_Mono, Fira_Code, Newsreader, Courier_Prime, Playfair_Display } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import TerrainBackdrop from "@/components/fx/TerrainBackdrop";
 import ThemeSync from "@/components/fx/ThemeSync";
@@ -39,8 +39,9 @@ const firaCode = Fira_Code({
   subsets: ["latin"],
 });
 
-// Newspaper theme faces: Newsreader (news-text serif) carries UI + display,
-// Courier Prime (typewriter) carries data so figures read like wire copy.
+// Newspaper theme faces: Playfair Display for headlines, Newsreader
+// (news-text serif) for UI text, Courier Prime for data columns so
+// figures read like wire copy.
 const newsreader = Newsreader({
   variable: "--font-newsreader",
   subsets: ["latin"],
@@ -51,6 +52,12 @@ const courierPrime = Courier_Prime({
   variable: "--font-courier",
   subsets: ["latin"],
   weight: ["400", "700"],
+});
+
+const playfair = Playfair_Display({
+  variable: "--font-playfair",
+  subsets: ["latin"],
+  style: ["normal", "italic"],
 });
 
 export const metadata: Metadata = {
@@ -71,7 +78,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${jetMono.variable} ${inter.variable} ${spaceGrotesk.variable} ${plexMono.variable} ${firaCode.variable} ${newsreader.variable} ${courierPrime.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${jetMono.variable} ${inter.variable} ${spaceGrotesk.variable} ${plexMono.variable} ${firaCode.variable} ${newsreader.variable} ${courierPrime.variable} ${playfair.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

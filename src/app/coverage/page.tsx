@@ -55,7 +55,7 @@ export default function CoveragePage() {
                     <div className="eyebrow mt-5">{panel.series.length} series</div>
                   </div>
 
-                  <div className="grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2">
+                  <div className="rulegrid grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2">
                     {panel.series.map((s) => (
                       <div key={s.id} className="bg-[var(--bg)] px-4 py-3.5 transition-colors duration-150 hover:bg-[var(--panel-2)]">
                         <div className="font-sans text-[0.85rem] font-semibold text-[var(--text)]">{s.name}</div>

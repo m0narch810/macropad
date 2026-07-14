@@ -552,7 +552,7 @@ export default function DashboardShell({
             </>
           ) : isTerminal ? (
             <>
-              <header className="mb-6">
+              <header className="page-head mb-6">
                 <div className="eyebrow mb-2">Every surface, one command line</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text="Terminal" />
@@ -562,7 +562,7 @@ export default function DashboardShell({
             </>
           ) : isNews ? (
             <>
-              <header className="mb-6">
+              <header className="page-head mb-6">
                 <div className="eyebrow mb-2">Headline sentiment</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text="News" />
@@ -596,7 +596,7 @@ export default function DashboardShell({
             </>
           ) : isMacroBias ? (
             <>
-              <header className="mb-8">
+              <header className="page-head mb-8">
                 <div className="eyebrow mb-2">Composite regime read</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text="Macro Bias" />
@@ -606,7 +606,7 @@ export default function DashboardShell({
             </>
           ) : isReplay ? (
             <>
-              <header className="mb-8">
+              <header className="page-head mb-8">
                 <div className="eyebrow mb-2">Point-in-time scrub</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text="Replay" />
@@ -616,7 +616,7 @@ export default function DashboardShell({
             </>
           ) : isFingerprint ? (
             <>
-              <header className="mb-8">
+              <header className="page-head mb-8">
                 <div className="eyebrow mb-2">Seven-pillar shape, then vs now</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text="Regime Fingerprint" />
@@ -626,7 +626,7 @@ export default function DashboardShell({
             </>
           ) : activeOptionsFlow ? (
             <>
-              <header className="mb-8">
+              <header className="page-head mb-8">
                 <div className="eyebrow mb-2">Options Flow</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text={activeOptionsFlow.label} />
@@ -636,7 +636,7 @@ export default function DashboardShell({
             </>
           ) : isCalendar ? (
             <>
-              <header className="mb-8">
+              <header className="page-head mb-8">
                 <div className="eyebrow mb-2">Real release dates</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text="Calendar" />
@@ -646,7 +646,7 @@ export default function DashboardShell({
             </>
           ) : isDocs ? (
             <>
-              <header className="mb-8">
+              <header className="page-head mb-8">
                 <div className="eyebrow mb-2">Reference</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text="Documentation" />
@@ -656,7 +656,7 @@ export default function DashboardShell({
             </>
           ) : active ? (
             <>
-              <header className="mb-8">
+              <header className="page-head mb-8">
                 <div className="partno mb-2">
                   TF-{String(visiblePanels.findIndex((p) => p.id === active.id) + 1).padStart(2, "0")}
                 </div>

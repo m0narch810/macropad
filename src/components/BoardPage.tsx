@@ -36,7 +36,7 @@ export default function BoardPage({ panels, newsSeries }: { panels: MacroPanel[]
           <div className="mb-2 flex items-baseline gap-3">
             <span className="partno">TF-00 NEWS SENTIMENT</span>
           </div>
-          <div className="grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className="rulegrid grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {newsSeries.map((s) => (
               <Tile key={s.id} name={s.name} value={s.value} score={null} color={statusColor(s.status)} title={s.note} />
             ))}
@@ -54,7 +54,7 @@ export default function BoardPage({ panels, newsSeries }: { panels: MacroPanel[]
                 TF-{String(i + 1).padStart(2, "0")} {panel.title.toUpperCase()}
               </span>
             </div>
-            <div className="grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            <div className="rulegrid grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {series.map((s) => {
                 const bias = getBias(s.id, s.zscore);
                 const tone = getSignTone(s.id, s.zscore);

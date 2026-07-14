@@ -18,7 +18,7 @@ export function Bar({ score, tone }: { score: number; tone: "up" | "down" | "fla
   const clamped = Math.max(-1, Math.min(1, score));
   const pct = ((clamped + 1) / 2) * 100;
   return (
-    <div className="relative h-2 rounded-full bg-[var(--border)]">
+    <div className="relative h-2 rounded-full bg-[var(--border)] news:bg-[var(--panel-3)]">
       <div className="absolute left-1/2 top-1/2 h-3.5 w-px -translate-x-1/2 -translate-y-1/2 bg-[var(--text-faint)]" />
       <div
         className="absolute top-1/2 h-3.5 w-3.5 -translate-y-1/2 -translate-x-1/2 rounded-full border-2 border-[var(--panel)]"

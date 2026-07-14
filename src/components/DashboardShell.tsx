@@ -44,10 +44,12 @@ const OPTIONS_FLOW_PREFIX = "options-flow";
 const OPTIONS_FLOW_PAGES = [
   { id: "options-flow:gex", label: "GEX", blurb: "Dealer gamma exposure by strike, and the levels it pulls price toward." },
   { id: "options-flow:dex", label: "DEX", blurb: "Dealer delta exposure by strike, and which way it forces hedging flow." },
-  { id: "options-flow:hedgepressure", label: "HEDGE PRESSURE", blurb: "Strikes ranked by how much dealer hedging flow they mechanically force." },
-  { id: "options-flow:tesseract", label: "TESSERACT ZONES", blurb: "QQQ/SPY/SPX/NDX option-derived levels converted to one scale and clustered by overlap." },
-  { id: "options-flow:volregime", label: "VOL REGIME", blurb: "Live CBOE volatility and tail-risk indices — VIX1D, VIX, VXN, VVIX, SKEW." },
-  { id: "options-flow:hedgeterrain", label: "HEDGE TERRAIN", blurb: "The whole book repriced across hypothetical price and time — cliffs, basins, and gamma-flip uncertainty." },
+  { id: "options-flow:theta", label: "THETA EXPOSURE", blurb: "Dollar theta decay by strike — where the book bleeds value as time passes." },
+  { id: "options-flow:vanna", label: "VANNA EXPOSURE", blurb: "Dollar vanna by strike — how dealer hedging delta shifts as implied vol moves." },
+  { id: "options-flow:charm", label: "CHARM EXPOSURE", blurb: "Dollar charm by strike — how dealer hedging delta drifts purely from time decay." },
+  { id: "options-flow:reversal", label: "REVERSAL LEVELS", blurb: "Cross-Greek dealer reversal wells — the single best zone where positioning suggests price is most likely to turn." },
+  { id: "options-flow:blindspots", label: "BLIND SPOTS", blurb: "Hidden target-price zones derived from correlated markets' own options structures — not from this symbol's own chart." },
+  { id: "options-flow:opflo", label: "OPFLO RTH BIAS", blurb: "Cumulative model-implied hedge pressure from now through the close — one direction, one strength, one bias flip." },
 ];
 
 const SHORT_LABEL: Record<string, string> = {

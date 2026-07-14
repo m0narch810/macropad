@@ -1,0 +1,402 @@
+YYY BIAS API - FULL ROUTE DEEP DIVE
+Base: https://web-production-8a6973.up.railway.app
+Auth: header "yyy-access-key: <key>" (except OAuth + root)
+Service ID string (from GET /): "yyy bias api v3"
+Framework: FastAPI (spec at /openapi.json, interactive docs at /docs, /redoc)
+
+Method used: pulled the live OpenAPI spec (41 paths total), then hit every
+safe GET route live with ticker=QQQ (or each route's own default) to see
+real response shapes, since the spec itself carries no descriptions or
+response schemas (FastAPI default - all bodies typed as {}). Skipped
+calling: OAuth redirects (discord/login, discord/callback), all POST/PUT
+routes (validate-key, admin/reset-key, admin/list-bindings, bias_log POST,
+bias_log/{id}/outcome PUT) - those mutate state or need a real OAuth
+handshake, documented from the spec's parameter list only, not exercised.
+
+This app (trifekta) currently only calls 5 of these 41 routes directly:
+/zero_dte, /probability, /option-matrix, /dealer_anomalies, /gex
+(see src/app/api/gex/route.ts). Everything else below is unused surface
+area on the upstream API - some of it looks like a natural fit for pages
+this app doesn't have yet (vanna/charm surfaces, dex ladder, theta route
+already do server-side what this app currently computes itself via
+Black-Scholes/binomial trees).
+
+=====================================================================
+CORE / MISC
+=====================================================================
+
+GET /
+  Health check. No params, no auth needed (tested without key implicitly
+  via other calls' 200s; this one returns regardless).
+  Response: {"status":"ok","service":"yyy bias api v3"}
+
+GET /bias
+  The flagship composite trading-bias signal. No params (SPX-fixed
+  internally, not ticker-parameterized).
+  Response, top-level:
+    bias: {direction ("LEAN BEAR"/etc), conviction (0-10), size_rule
+      ("FULL SIZE"/etc), size_factor, score (-1..1), votes (per-method
+      sub-scores: topology, gex, gex_skew, liquidity, entropy, oas, walcl,
+      auction), narrative (human-readable sentence), killed (bool - a
+      kill-switch flag), kill_reason, low_confidence, confidence_reason}
+    topology: {pca1, pca2, vol_z, regime ("BEAR TREND"/etc), dist,
+      aligned, size_factor, dist_factor, price, h16/h32/h64 (Hurst
+      exponents at 3 lookbacks), hurst_regime ("RANDOM"/"TRENDING"/
+      "MEAN-REVERTING"), error}
+    entropy: {entropy, threshold, rho, status ("NORMAL"/etc), size_factor,
+      pca1, pca2, trend, error}
+    gex: {spot, vol_trigger, call_wall, call_wall_2, put_wall, put_wall_2,
+      max_pain, net_gex_bn (net GEX in $ billions), above_vol_trigger,
+      positive_gamma, gamma_env ("NEGATIVE"/"POSITIVE"), pain_pts,
+      strike_data[] (strike, call_gex, put_gex, call_oi, put_oi)}
+  This is a multi-factor composite: PCA-based regime/topology detection +
+  Hurst exponent + Shannon entropy + GEX positioning + credit spread (OAS)
+  + Fed balance sheet (WALCL) + Treasury auction calendar, voted together
+  into one directional bias with a conviction score and position-size rule.
+
+GET /flux
+  A simplified/compressed cousin of /bias - same underlying factors
+  (regime, positioning, volatility, macro) reduced to a 4-factor score
+  card rather than the full vote breakdown. No params.
+  Response: {composite (0-N score), composite_label ("Low"/etc),
+    direction ("BEARISH"/etc), summary (sentence), killed,
+    factors: {regime: {score, label, color, regime, description,
+      entropy_status}, positioning: {score, label, color, description,
+      above_vol_trigger, positive_gamma}, volatility: {score, label,
+      color, description, atm_iv}, macro: {score, label, color,
+      description, macro_vote}}}
+
+GET /outlook
+  Errors live: {"text":null,"error":"HTTP Error 404: Not Found"} - looks
+  like a broken/retired route that proxies to something no longer there
+  (an outbound 404, not this API's own 404). No usable params found in spec.
+
+GET /history
+  Long time-series arrays with no ticker param - appears globally scoped
+  (likely SPX/ES topology history feeding /bias's topology block).
+  Response: {"pca1": [huge float array]} (and presumably sibling series -
+  only pca1 was visible in the 1500-char sample; response is large).
+
+=====================================================================
+SPOT / QUOTES / CHARTS
+=====================================================================
+
+GET /quote?ticker=SPX (default)
+  "Live spot price for Level Converter" (only route with a spec-level
+  description). Converts equivalent index/futures pricing.
+  Response: {ticker, index (spot), futures, ratio (futures/index), error}
+
+GET /chart?ticker=SPX&interval=5min (defaults)
+  Intraday OHLCV candles for the given ticker/interval.
+  Response: {ticker, interval, spot, candles: [{time, open, high, low,
+    close, volume}, ...]}
+
+GET /macro_chart?days=90 (default)
+  Multi-series macro time series (DXY seen; likely also yields/vix/etc
+  siblings not visible in the truncated sample) over N days.
+  Response: {days, dxy: {label, dates[], values[], pct[]}, ...other
+    macro series alongside dxy}
+
+GET /macro
+  Snapshot (not time series) of a handful of macro indicators: Fed
+  balance sheet (WALCL), bank reserves/RRP/TGA net liquidity, credit
+  spread (OAS), and upcoming Treasury auctions.
+  Response: {walcl: {direction, note, value, change_pct}, reserves_rrp:
+    {direction, strength, note, res_chg, rrp_chg, tga_chg, res_val,
+    rrp_val, tga_val, net_liquidity_chg, liquidity_regime, liquidity_note},
+    oas: {direction, note, value, stress, wk_change, avg_4wk, ytd_chg},
+    auctions: {warning, note, auctions[]}}
+
+GET /macro_extended
+  A second, broader macro snapshot: Treasury yield curve (2Y/10Y/30Y +
+  spread + inversion flag), VIX/DXY levels, Fed funds rate + next FOMC
+  meeting countdown, and an economic calendar.
+  Response: {yields: {yields: {2Y,10Y,30Y: {value,chg}}, spread_10_2,
+    inverted, error}, vix_dxy: {VIX,DXY: {value,chg,chg_pct}},
+    fed: {current_rate, next_meeting, days_to_meeting, error},
+    calendar: [], error}
+
+=====================================================================
+OPTIONS / GEX / GREEKS
+=====================================================================
+
+GET /gex?ticker=SPX (default)
+  ** Used by this app (route.ts fetchYyy /gex). ** Full-book (all
+  expiries combined, not 0DTE-only) GEX summary + per-strike ladder.
+  Response: {spot, vol_trigger, call_wall, call_wall_2, put_wall,
+    put_wall_2, max_pain, net_gex_bn, above_vol_trigger, positive_gamma,
+    gamma_env, pain_pts, strike_data: [{strike, call_gex, put_gex,
+    call_oi, put_oi}, ...]}
+  This app only reads max_pain from this route's sibling call inside
+  buildZeroDteResponse - the rest of the payload (walls, net_gex_bn,
+  gamma_env) is currently unused by trifekta despite being a close
+  match to what the GEX exposure page shows (self-computed instead).
+
+GET /zero_dte?ticker=SPX (default)
+  ** Used by this app - the main per-strike chain source for the whole
+  options-flow section. ** Only the 0DTE (or nearest-if-none-today)
+  expiry's chain, with the source's own precomputed Greeks per strike
+  (this app discards those and recomputes gex/dex/vanna/charm/theta
+  itself via Black-Scholes/binomial trees - see src/lib/gex.ts).
+  Response: {spot, expiry, dte_hours, atm_iv, expected_move_1s/2s,
+    range_1s_low/high, range_2s_low/high, pc_ratio, pc_sentiment,
+    total_call_oi, total_put_oi, gamma_wall_call, gamma_wall_put,
+    gamma_flip, charm_sum, vanna_sum, charm_direction, vanna_direction,
+    charm_note, vanna_note, strike_data: [{strike, side, oi, iv, gex,
+    charm, vanna}, ...]}
+  Note: strike_data's own gex/charm/vanna were observed as 0.0 across
+  every row sampled here - this app's decision to recompute Greeks
+  itself (rather than trust these fields) looks justified by this alone.
+
+GET /dealer_delta?ticker=SPX (default)
+  Net dealer delta positioning, full book. Distinct from /zero_dte's
+  own per-strike data - this is signed by strike relative to spot.
+  Response: {spot, net_dealer_delta, dealer_lean ("long"/"short"),
+    delta_flip, above_delta_flip, strike_data: [{strike, net_delta,
+    above_spot}, ...]}
+
+GET /dealer_anomalies?ticker=ES (default)
+  ** Used by this app. ** Time-series z-score flow-anomaly detector -
+  flags unusual dealer buy/sell imbalance over a recent intraday window.
+  Response: {ticker, times: [...], (plus per this app's route.ts
+  consumption: current_z, imbalance, buy_count, sell_count, z_threshold -
+  not all visible in the truncated sample, which cut off mid-array)}
+
+GET /option-matrix?ticker=SPX (default)
+  ** Used by this app (as a soft-timeout supplementary fetch). ** Full
+  cross-expiry table: one row per expiration out to several weeks, with
+  GEX/DEX/OI/volume normalized 0-100 plus percentile ranks, alongside a
+  totals row.
+  Response: {ticker, spot, totals: {expiration, dte, net_gex, net_dex,
+    gex_norm, dex_norm, oi_norm, vol_norm, gex_pc, dex_pc, oi_pc, vol_pc,
+    call_resistance, put_support, high_vol_level, expected_move}, rows:
+    [{expiration, dte, call_gex, put_gex, net_gex, call_dex, put_dex,
+    net_dex, call_oi, put_oi, total_oi, call_vol, put_vol, total_vol,
+    call_resistance, put_support, high_vol_level, expected_move,
+    gex_norm, dex_norm, oi_norm, vol_norm, gex_pc, dex_pc, oi_pc,
+    vol_pc}, ...one per expiry]}
+  Known slow (~14s observed in this app's own comments) - this app fetches
+  it with a 4s soft timeout and treats it as optional/supplementary.
+
+GET /probability?ticker=SPX (default)
+  ** Used by this app. ** Empirical (historical, not model-implied)
+  return-distribution stats plus a full 2D price/DTE probability heatmap.
+  Response: {spot, ticker, atm_iv, mu_daily_pct, sigma_daily_pct,
+    mu_ann_pct, sigma_ann_pct, skewness, excess_kurtosis, n_days,
+    fat_tails, days_beyond_2s, days_beyond_2s_pct, normal_expect_2s_pct,
+    bands_1d: {"68"/"90"/"95"/"99": [low,high]}, bands_1w: {same},
+    price_grid: [...], dte_grid: [...], heatmap: [[...]] (2D probability
+    surface over price_grid x dte_grid)}
+  This app currently only reads the summary stats fields (mu/sigma/
+  skewness/kurtosis/bands_1d) - price_grid/dte_grid/heatmap (a full
+  probability-cone surface) are fetched but unused.
+  Known slow (~9.6s observed in this app's own comments).
+
+GET /expected_move?ticker=SPX (default)
+  Expected-move-by-horizon (1d/1w/1m) derived from both options IV and
+  VIX, with a confidence/expansion "radar" score.
+  Response: {ticker, spot, atm_iv, iv_percentile, vix, vix_move_pts,
+    vix_upper, vix_lower, moves: {"1d"/"1w"/"1m": {iv, move_pct,
+    move_pts, upper, lower} or null}, radar: {iv_level, vix_level,
+    move_size, confidence, expansion_dw, expansion_wm}}
+
+GET /flow?ticker=SPX (default)
+  Per-expiry call/put IV skew table (skew = put_iv - call_iv, roughly),
+  across multiple upcoming expiries, indexed by moneyness bucket.
+  Response: {spot, ticker, skew_data: [{dte, expiry, moneyness, strike,
+    call_iv, put_iv, skew}, ...]}
+  Byte-for-byte identical payload shape/values to /iv_surface... actually
+  distinct: same skew_data list also appeared under /flow verbatim in
+  this sample - the two routes may share the same underlying computation
+  server-side (worth confirming with the API owner if both are meant to
+  diverge).
+
+GET /iv
+  Errors live: "Internal Server Error" (plain text, not JSON) - broken
+  route, no params in spec, unclear intended shape.
+
+GET /iv_surface?ticker=SPX (default)
+  Raw per-contract IV surface points (not smile-fit) across strikes/
+  expiries - the closest upstream equivalent to this app's own SVI-fit
+  input data.
+  Response: {points: [{strike, dte, iv, moneyness, oi, type
+    ("put"/"call")}, ...]}
+
+GET /net_iv?ticker=SPY (default)
+  A strike x expiry IV matrix ("net" IV table) - one row per strike,
+  one cell per expiry column, with moneyness.
+  Response: {status, spot, ticker, strikes: [...], expiries: [labels],
+    dte_list: [...], rows: [{strike, moneyness, cells: [iv or null per
+    expiry column]}, ...]}
+
+GET /snapshot_iv?ticker=SPY (default)
+  BROKEN server-side right now: raises NameError internally (`snapshot_iv`
+  function referenced but not defined/imported in their main.py) and
+  returns the Python traceback as JSON instead of a 500 without body:
+  {"error":"name 'snapshot_iv' is not defined","trace":"Traceback...
+  File \"/app/main.py\", line 132, in snapshot_route\n  return
+  snapshot_iv(ticker)\nNameError..."}
+  Worth flagging to whoever owns that API - this is a live bug, not a
+  documented limitation, and it leaks their internal file path/line
+  number in the response.
+
+GET /theta?ticker=SPX (default)
+  Full theta-exposure ladder across strikes and expiries, split call/put,
+  with per-cell dollar theta by (strike, expiry).
+  Response: {spot, ticker, total_tex, call_tex, put_tex, expiries:
+    [{exp, label, dte}, ...], rows: [{strike, call_cells: [$ per expiry
+    column], put_cells: [$ per expiry column], total}, ...]}
+  This is a full server-side theta-exposure computation this app
+  currently reimplements itself (src/lib/gex.ts tex field via
+  Black-Scholes/binomial) rather than consuming.
+
+=====================================================================
+SURFACES / LADDERS (single-snapshot 3D Greek views)
+=====================================================================
+All four of these share one shape: {spot, points: [{strike, dte,
+<greek>, is_put}, ...]} or a "ladder" variant - a flattened multi-expiry
+Greek-by-strike scatter, presumably meant to be rendered as a 3D surface
+or heatmap client-side.
+
+GET /gex_surface?ticker=SPX (default)
+  Response: {spot, call_wall, put_wall, points: [{strike, dte, gex,
+    is_put}, ...]}
+
+GET /dex_ladder?ticker=SPX (default)
+  Response: {spot, ladder: [{strike, call_dex, put_dex, net_dex}, ...]}
+  (single-expiry-flattened, unlike the surface routes' multi-dte points)
+
+GET /vanna_surface?ticker=SPX (default)
+  Response: {spot, points: [{strike, dte, vanna, is_put}, ...]}
+
+GET /charm_surface?ticker=SPX (default)
+  Response: {spot, points: [{strike, dte, charm, is_put}, ...]}
+
+GET /heatmap?ticker=SPX&zone=0.06 (defaults)
+  A strike x expiry heatmap of some signed quantity (values look like
+  dollar or percentage flow, not Greeks directly - includes negative
+  cells). `zone` param likely controls the % moneyness window around
+  spot included.
+  Response: {spot, strikes: [...], expiries: [{date, label, dte}, ...],
+    rows: [{strike, cells: [value per expiry column, nullable]}, ...]}
+
+=====================================================================
+LEVELS / REGIME / VOLATILITY
+=====================================================================
+
+GET /levels?ticker=SPX (default)
+  Confluence-based support/resistance level detector: several
+  independent methods (entropy bands at multiple sigma widths, OI
+  exposure, put/call skew, risk-neutral density "RND") vote on
+  high-of-day/low-of-day candidate levels; more methods agreeing =
+  higher confluence/confidence.
+  Response: {ticker, spot, hod: [{price, methods: [...], confluence,
+    confidence}, ...], lod: [same shape], asymmetry, asymmetry_label
+    ("LOD FIRST"/etc), daily_move_est, entropy_scalar, regime, atm_iv,
+    iv_source, next_reset, error}
+
+GET /hurst
+  Time series of Hurst-exponent regime inputs (feeds /bias's topology
+  block). No ticker param - appears globally scoped like /history.
+  Response: {times: [...], (presumably h16/h32/h64 or similar series
+  alongside times - only the times array was visible in the truncated
+  sample)}
+
+GET /vol_forecast
+  EWMA realized-vol forecast with a historical vol series. No ticker
+  param - appears to be index/ES-scoped globally like /hurst, /history.
+  Response: {method ("EWMA"), current_vol, realized_20, realized_60,
+    long_run_vol, persistence, forecasts: {"1"/"5"/"10"/"20": vol},
+    vol_regime ("LOW"/etc), vol_trend ("STABLE"/etc), regime_color,
+    hist_vol: [...], raw_vol: [...]}
+
+GET /atr?ticker=ES (default)
+  Simple current ATR value for a ticker.
+  Response: {atr, ticker, error}
+
+=====================================================================
+SCANNER
+=====================================================================
+
+GET /scanner
+  Cross-asset watchlist scanner: indices + mega-cap single names with
+  price/1d/5d change and volume. No params (fixed watchlist).
+  Response: {tickers: [{ticker, name, category ("Index"/"Mega Cap"),
+    price, change_1d, change_5d, volume}, ...]}
+
+GET /scanner/detail?ticker=AAPL (default)
+  Per-symbol drill-down: momentum at 3 horizons, a qualitative
+  sentiment tag, and a long daily-close history for charting.
+  Response: {ticker, name, category, price, change_1d, sentiment
+    ("BULLISH"/etc), mom_30d, mom_60d, mom_90d, chart: [{t (date), c
+    (close)}, ...] (roughly a year of daily closes observed)}
+
+=====================================================================
+BIAS LOG (read/write journal of past /bias calls)
+=====================================================================
+
+GET /bias_log
+  Journal of previously logged bias calls plus win-rate stats sliced by
+  regime/conviction/entropy bucket. Empty in this account currently.
+  Response: {entries: [], stats: {total_graded, wins, win_rate,
+    by_regime: {}, by_conviction: {"high (70+)", "mid (45-70)",
+    "low (<45)"}, by_entropy: {}}}
+
+POST /bias_log  (not exercised - would create a journal entry)
+  Body: arbitrary JSON object (spec shows `additionalProperties: true`,
+  no fixed schema) - presumably logs a snapshot of the current /bias
+  call for later grading.
+
+PUT /bias_log/{entry_id}/outcome  (not exercised - would mutate a
+  logged entry)
+  Path param: entry_id (string). Query params: outcome (string,
+  required - e.g. "win"/"loss"), notes (string, optional).
+  Grades a previously logged bias call after the fact.
+
+=====================================================================
+AUTH / ADMIN (not exercised - either OAuth-flow or account-mutating)
+=====================================================================
+
+GET /discord/login
+  Starts a Discord OAuth login flow (redirect). No params.
+
+GET /discord/callback
+  Discord OAuth callback target. Query params: code, error (both
+  optional strings) - standard OAuth2 redirect params.
+
+POST /validate-key
+  Body: arbitrary JSON object, no fixed schema in spec. Presumably
+  validates an access key (this app's own YYY_API_KEY) and returns
+  binding/entitlement info.
+
+POST /admin/reset-key
+  Body: arbitrary JSON object. Presumably rotates/resets an access key -
+  DESTRUCTIVE if it invalidates the key this app currently uses
+  (YYY_API_KEY in .env.local) - do not call without knowing exactly
+  which key it targets.
+
+POST /admin/list-bindings
+  Body: arbitrary JSON object. Presumably lists which
+  keys/accounts/Discord IDs are bound to what - an admin/introspection
+  endpoint.
+
+=====================================================================
+OBSERVED BUGS / DEAD ROUTES ON THEIR SIDE (not this app's bugs)
+=====================================================================
+- GET /iv                    -> plain-text "Internal Server Error"
+- GET /outlook                -> {"error":"HTTP Error 404: Not Found"}
+                                  (an upstream 404 being proxied through,
+                                  not this API's own routing 404)
+- GET /snapshot_iv?ticker=X    -> NameError crash, leaks Python traceback
+                                  and internal file path (/app/main.py:132)
+- /flow and /iv_surface returned what looks like the same skew_data
+  payload in this sample - worth double-checking they're meant to
+  diverge, not sharing a cached/duplicated handler by accident.
+
+=====================================================================
+CLEANUP NOTE
+=====================================================================
+Scratch files used to build this doc (raw OpenAPI spec dump + raw
+sampled responses) were left in the project root as
+.scratch_openapi.json, .scratch_openapi_pretty.json, .scratch_samples.txt
+- safe to delete, not part of the app.

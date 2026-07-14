@@ -10,7 +10,23 @@ export interface ExposureBarDatum {
   net?: number;
 }
 
-export default function ExposureBarChart({ data, mode, unitLabel }: { data: ExposureBarDatum[]; mode: "split" | "net"; unitLabel: string }) {
+export interface ExposureMarker {
+  value: number;
+  label: string;
+  color: string;
+}
+
+export default function ExposureBarChart({
+  data,
+  mode,
+  unitLabel,
+  markers,
+}: {
+  data: ExposureBarDatum[];
+  mode: "split" | "net";
+  unitLabel: string;
+  markers?: ExposureMarker[];
+}) {
   return (
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">
@@ -22,6 +38,8 @@ export default function ExposureBarChart({ data, mode, unitLabel }: { data: Expo
             tickLine={false}
             axisLine={{ stroke: "var(--border)" }}
             interval="preserveStartEnd"
+            type="number"
+            domain={["dataMin", "dataMax"]}
           />
           <YAxis
             tick={{ fill: "var(--text-faint)", fontSize: 10 }}
@@ -31,6 +49,10 @@ export default function ExposureBarChart({ data, mode, unitLabel }: { data: Expo
             tickFormatter={(v) => fmtUsd(Number(v))}
           />
           <ReferenceLine y={0} stroke="var(--border-strong)" />
+          {/* Text labels on these lines used to collide when levels sit close together (e.g. spot right next to a wall) - the legend below the chart carries the labels instead. */}
+          {markers?.map((m) => (
+            <ReferenceLine key={m.label} x={m.value} stroke={m.color} strokeWidth={1.5} strokeDasharray="4 3" />
+          ))}
           <Tooltip
             cursor={{ fill: "var(--panel-2)", opacity: 0.5 }}
             contentStyle={{ background: "var(--panel)", border: "1px solid var(--border-strong)", borderRadius: 3, fontSize: 11 }}

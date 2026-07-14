@@ -6,17 +6,29 @@ import {
   type ChainStrikeInput,
   type CrossExpiryRow,
   type DealerFlowContext,
+  type GexResponse,
   type GexSymbol,
   type ProbabilityStats,
   type ZeroDteContext,
 } from "@/lib/gex";
 import { fitSvi, sviImpliedVol, type SviPoint } from "@/lib/svi";
+import { buildArbitrageControlledSmile } from "@/lib/arbitrageSmile";
+import { computeGexPageAnalytics } from "@/lib/gexAnalytics";
+import { computeGammaEngine, computeIvSurfaceFitError } from "@/lib/gammaEngine";
+import { computeDeltaEngine } from "@/lib/deltaEngine";
+import { computeThetaEngine, parseThetaHeatmap } from "@/lib/thetaEngine";
+import { computeVannaEngine, type VannaSurfacePoint } from "@/lib/vannaEngine";
+import { computeCharmEngine, type CharmSurfacePoint } from "@/lib/charmEngine";
+import { computeReversalEngine, type Candle } from "@/lib/reversalEngine";
+import { computeBlindSpots, type BlindSpotAssetInput } from "@/lib/blindSpotsEngine";
+import { computeOpFloBias } from "@/lib/opfloEngine";
 
 // The source API silently falls back to SPX's own data for any ticker it
 // doesn't actually carry (confirmed directly: IWM/DIA/NVDA/AAPL/MSFT/TSLA/
 // META/GOOGL/AMZN all returned SPX's exact spot/strikes under their own
 // name, no error). Only these four gave genuinely distinct spot prices.
 const ALLOWED_SYMBOLS = new Set<GexSymbol>(["QQQ", "SPY", "SPX", "NDX"]);
+const ALL_SYMBOLS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
 
 // Upstream latency, measured directly against each endpoint: /zero_dte ~1.5s,
 // /gex ~2.9s, /dealer_anomalies ~0.3s, /probability ~9.6s, /option-matrix
@@ -73,6 +85,7 @@ interface ZeroDteRaw {
   spot?: number;
   expiry?: string;
   dte_hours?: number;
+  atm_iv?: number;
   expected_move_1s?: number;
   expected_move_2s?: number;
   pc_ratio?: number;
@@ -106,7 +119,18 @@ interface DealerAnomaliesRaw {
 }
 
 interface OptionMatrixRaw {
-  rows?: { expiration: string; dte: number; net_gex: number; call_resistance: number | null; put_support: number | null; total_oi: number }[];
+  rows?: {
+    expiration: string;
+    dte: number;
+    net_gex: number;
+    call_resistance: number | null;
+    put_support: number | null;
+    total_oi: number;
+    total_vol?: number;
+    call_dex?: number;
+    put_dex?: number;
+    net_dex?: number;
+  }[];
   error?: string | null;
 }
 
@@ -115,14 +139,52 @@ interface GexAggRaw {
   error?: string | null;
 }
 
-/** Fetches the four railway endpoints we actually need, builds our own per-strike Greeks via CRR on real IV instead of trusting the source's precomputed ones. */
+interface ChartRaw {
+  candles?: { time: string; open: number; high: number; low: number; close: number; volume: number }[];
+  error?: string | null;
+}
+
+interface ThetaRaw {
+  total_tex?: number;
+  call_tex?: number;
+  put_tex?: number;
+  expiries?: { exp: string; label: string; dte: number }[];
+  rows?: { strike: number; call_cells: number[]; put_cells: number[]; total: number }[];
+  error?: string | null;
+}
+
+interface VannaSurfaceRaw {
+  spot?: number;
+  points?: { strike: number; dte: number; vanna: number; is_put: boolean }[];
+  error?: string | null;
+}
+
+interface CharmSurfaceRaw {
+  spot?: number;
+  points?: { strike: number; dte: number; charm: number; is_put: boolean }[];
+  error?: string | null;
+}
+
+/** Fetches the railway endpoints we actually need, builds our own per-strike Greeks (Black-Scholes + American tree, both on real IV) instead of trusting the source's precomputed ones. */
 async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string) {
-  const [zeroDteResult, probabilityResult, matrixResult, anomaliesResult, gexResult, r] = await Promise.all([
+  const [zeroDteResult, probabilityResult, matrixResult, anomaliesResult, gexResult, chartResult, thetaResult, vannaSurfaceResult, charmSurfaceResult, r] = await Promise.all([
     fetchYyy(`/zero_dte?ticker=${symbol}`, base, key),
     fetchYyy(`/probability?ticker=${symbol}`, base, key),
-    fetchYyyWithTimeout(`/option-matrix?ticker=${symbol}`, base, key, 4000),
+    // 4s used to be the budget here, but /option-matrix's own measured
+    // latency is ~14s and /probability already blocks this response
+    // unconditionally for ~9-10s - a 4s cutoff meant this endpoint (and
+    // everything downstream of it: cross-expiry stack, 0DTE gamma control,
+    // 0DTE-next-expiry confluence) lost to its own timeout on nearly every
+    // request, confirmed directly against live traffic. Raising the budget
+    // doesn't add net latency (probability's own unconditional wait already
+    // exceeds it) and lets real data through most of the time instead.
+    fetchYyyWithTimeout(`/option-matrix?ticker=${symbol}`, base, key, 18000),
     fetchYyy(`/dealer_anomalies?ticker=${symbol}`, base, key),
     fetchYyy(`/gex?ticker=${symbol}`, base, key),
+    fetchYyyWithTimeout(`/chart?ticker=${symbol}&interval=5min`, base, key, 6000),
+    fetchYyyWithTimeout(`/theta?ticker=${symbol}`, base, key, 15000),
+    fetchYyyWithTimeout(`/vanna_surface?ticker=${symbol}`, base, key, 12000),
+    fetchYyyWithTimeout(`/charm_surface?ticker=${symbol}`, base, key, 12000),
     fetchRiskFreeRate(),
   ]);
 
@@ -151,9 +213,11 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
   }));
 
   // Single-slice SVI fit (this is one expiry, not a multi-expiry SSVI surface)
-  // smooths the raw per-contract IV before it reaches the pricer - a bad
-  // quote on one thin strike can't swing that strike's Greeks on its own.
-  // OI-weighted so liquid strikes anchor the fit more than thin ones.
+  // smooths the raw per-contract IV before it reaches the Black-Scholes
+  // engine - a bad quote on one thin strike can't swing that strike's Greeks
+  // on its own. OI-weighted so liquid strikes anchor the fit more than thin
+  // ones. The American-tree engine deliberately skips this smoothing (see
+  // rawChain below) - it's the "live strike-specific IV smile" option.
   const sviPoints: SviPoint[] = rawChain
     .filter((row) => row.iv > 0)
     .map((row) => ({ k: Math.log(row.strike / forward), w: row.iv * row.iv * T, weight: Math.max(1, row.oi) }));
@@ -163,7 +227,10 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     iv: row.iv > 0 ? sviImpliedVol(sviParams, row.strike, forward, T) : 0,
   }));
 
-  const perStrike = buildStrikeRowsFromChain(chain, spot, T, r, q);
+  const perStrike = buildStrikeRowsFromChain(chain, spot, T, r, q, "bs");
+  const perStrikeAmerican = buildStrikeRowsFromChain(rawChain, spot, T, r, q, "american");
+  const arbChain = buildArbitrageControlledSmile(rawChain, forward, T);
+  const perStrikeCrr = buildStrikeRowsFromChain(arbChain, spot, T, r, q, "crr");
 
   const probability: ProbabilityStats = {
     muDailyPct: probabilityRaw.mu_daily_pct ?? 0,
@@ -200,6 +267,10 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
         callResistance: row.call_resistance,
         putSupport: row.put_support,
         totalOi: row.total_oi,
+        totalVol: row.total_vol ?? 0,
+        callDex: row.call_dex ?? 0,
+        putDex: row.put_dex ?? 0,
+        netDex: row.net_dex ?? 0,
       }));
     }
   }
@@ -224,18 +295,225 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     if (!g.error) maxPain = g.max_pain ?? 0;
   }
 
+  // Source's atm_iv is on a 0-100 percentage-point scale (e.g. 28.3), not
+  // the fractional scale (0.283) every per-contract iv/vol figure in this
+  // app uses - confirmed directly against the same /zero_dte payload's own
+  // strike_data ivs, which ARE fractional. Divide by 100 before it reaches
+  // any vol-as-decimal function (touch probability, etc).
+  const atmIv = (zeroDteRaw.atm_iv ?? 20) / 100;
+
+  let recentVolume5m: number | null = null;
+  let recentVolume15m: number | null = null;
+  let recentVolume30m: number | null = null;
+  let recentCandles: Candle[] = [];
+  if (chartResult.ok) {
+    const c = chartResult.data as ChartRaw;
+    if (!c.error && c.candles?.length) {
+      recentVolume5m = c.candles[c.candles.length - 1].volume;
+      recentVolume15m = c.candles.slice(-3).reduce((s, candle) => s + candle.volume, 0);
+      recentVolume30m = c.candles.slice(-6).reduce((s, candle) => s + candle.volume, 0);
+      recentCandles = c.candles.slice(-24);
+    }
+  }
+
   const response = deriveGexResponse({
     symbol,
     spot,
     resolvedExpiry: zeroDteRaw.expiry ?? "",
     dteHours,
     perStrike,
+    perStrikeAmerican,
+    perStrikeCrr,
     maxPain,
     probability,
     dealerFlow,
     crossExpiry,
     zeroDte,
     pricerInputs: { r, q },
+  });
+
+  response.gexPage = computeGexPageAnalytics({
+    chain,
+    perStrike,
+    spot,
+    r,
+    q,
+    dteHours,
+    atmIv,
+    expectedMove1s: zeroDte?.expectedMove1s ?? null,
+    callWall: response.callWall,
+    putWall: response.putWall,
+    totalGex0dte: response.totalGex0dte,
+    crossExpiry,
+    recentVolume5m,
+    sviParams,
+    forward,
+  });
+
+  response.gammaEngine = computeGammaEngine({
+    symbol,
+    chain,
+    perStrike,
+    spot,
+    r,
+    q,
+    dteHours,
+    atmIv,
+    expectedMove1s: zeroDte?.expectedMove1s ?? null,
+    callWall: response.callWall,
+    putWall: response.putWall,
+    totalGex0dte: response.totalGex0dte,
+    crossExpiry,
+    recentVolume5m,
+    sviParams,
+    forward,
+    skew: response.gexPage.impliedMoments.skewness,
+    kurtExcess: response.gexPage.impliedMoments.excessKurtosis,
+    flowImbalance: dealerFlow?.imbalance ?? null,
+    validContracts: chain.filter((row) => row.oi > 0 && row.iv > 0).length,
+    ivSurfaceFitError: computeIvSurfaceFitError(rawChain, sviParams, forward, T),
+    pricerEngineLabel: "Black-Scholes bump-and-reprice gamma on SVI-smoothed 0DTE smile (American/CRR trees available via the page's engine toggle for the static table)",
+  });
+
+  response.deltaEngine = computeDeltaEngine({
+    symbol,
+    chain,
+    perStrike,
+    spot,
+    r,
+    q,
+    dteHours,
+    atmIv,
+    expectedMove1s: zeroDte?.expectedMove1s ?? null,
+    crossExpiry,
+    recentVolume5m,
+    recentVolume15m,
+    recentVolume30m,
+    sviParams,
+    forward,
+    flowImbalance: dealerFlow?.imbalance ?? null,
+    netGexSign: Math.sign(response.totalGex0dte),
+    validContracts: chain.filter((row) => row.oi > 0 && row.iv > 0).length,
+    invalidContracts: rawChain.filter((row) => !(row.oi > 0 && row.iv > 0)).length,
+  });
+
+  let thetaHeatmap = null;
+  if (thetaResult.ok) {
+    const t = thetaResult.data as ThetaRaw;
+    if (!t.error) thetaHeatmap = parseThetaHeatmap(t);
+  }
+
+  response.thetaEngine = computeThetaEngine({
+    symbol,
+    chain,
+    perStrike,
+    spot,
+    r,
+    q,
+    dteHours,
+    expectedMove1s: zeroDte?.expectedMove1s ?? null,
+    crossExpiry,
+    thetaHeatmap,
+    flowImbalance: dealerFlow?.imbalance ?? null,
+    validContracts: chain.filter((row) => row.oi > 0 && row.iv > 0).length,
+  });
+
+  let vannaSurfacePoints: VannaSurfacePoint[] = [];
+  if (vannaSurfaceResult.ok) {
+    const v = vannaSurfaceResult.data as VannaSurfaceRaw;
+    if (!v.error && v.points?.length) {
+      vannaSurfacePoints = v.points.map((p) => ({ strike: p.strike, dte: p.dte, vanna: p.vanna, isPut: p.is_put }));
+    }
+  }
+
+  response.vannaEngine = computeVannaEngine({
+    symbol,
+    chain,
+    perStrike,
+    spot,
+    r,
+    q,
+    dteHours,
+    atmIv,
+    forward,
+    sviParams,
+    vannaSurfacePoints,
+    recentVolume5m,
+    recentVolume15m,
+    flowImbalance: dealerFlow?.imbalance ?? null,
+    netGexSign: Math.sign(response.totalGex0dte),
+    validContracts: chain.filter((row) => row.oi > 0 && row.iv > 0).length,
+    invalidContracts: rawChain.filter((row) => !(row.oi > 0 && row.iv > 0)).length,
+  });
+
+  let charmSurfacePoints: CharmSurfacePoint[] = [];
+  if (charmSurfaceResult.ok) {
+    const c = charmSurfaceResult.data as CharmSurfaceRaw;
+    if (!c.error && c.points?.length) {
+      charmSurfacePoints = c.points.map((p) => ({ strike: p.strike, dte: p.dte, charm: p.charm, isPut: p.is_put }));
+    }
+  }
+
+  response.charmEngine = computeCharmEngine({
+    symbol,
+    chain,
+    perStrike,
+    spot,
+    r,
+    q,
+    dteHours,
+    forward,
+    sviParams,
+    charmSurfacePoints,
+    expectedMove1s: zeroDte?.expectedMove1s ?? null,
+    recentVolume5m,
+    recentVolume15m,
+    flowImbalance: dealerFlow?.imbalance ?? null,
+    netGexSign: Math.sign(response.totalGex0dte),
+    validContracts: chain.filter((row) => row.oi > 0 && row.iv > 0).length,
+    invalidContracts: rawChain.filter((row) => !(row.oi > 0 && row.iv > 0)).length,
+  });
+
+  response.reversalEngine = computeReversalEngine({
+    chain,
+    spot,
+    r,
+    q,
+    dteHours,
+    atmIv,
+    expectedMove1s: zeroDte?.expectedMove1s ?? null,
+    crossExpiry,
+    recentVolume5m,
+    flowImbalance: dealerFlow?.imbalance ?? null,
+    netGexSign: Math.sign(response.totalGex0dte),
+    dealerFlow,
+    candles: recentCandles,
+    gammaEngine: response.gammaEngine,
+    deltaEngine: response.deltaEngine,
+    vannaEngine: response.vannaEngine,
+    charmEngine: response.charmEngine,
+  });
+
+  response.recentCandleCloses = recentCandles.map((c) => c.close);
+
+  response.opfloBias = computeOpFloBias({
+    chain,
+    spot,
+    r,
+    q,
+    dteHours,
+    expectedMove1s: zeroDte?.expectedMove1s ?? null,
+    crossExpiry,
+    recentVolume5m,
+    recentVolume15m,
+    recentVolume30m,
+    recentCandleCloses: response.recentCandleCloses,
+    flowImbalance: dealerFlow?.imbalance ?? null,
+    netGexSign: Math.sign(response.totalGex0dte),
+    dealerFlow,
+    sviParams,
+    forward,
+    zeroDteOi: perStrike.reduce((s, row) => s + row.callOi + row.putOi, 0),
   });
 
   return { ok: true, status: 200, data: response };
@@ -278,6 +556,35 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "upstream_error", status: result.status }, { status: 502 });
   }
 
-  cache.set(symbol, { data: result.data, expiresAt: Date.now() + CACHE_TTL_MS });
-  return NextResponse.json(result.data);
+  const targetData = result.data as GexResponse;
+
+  // Blind Spots needs the other three real symbols' own engines - reuses the
+  // same fetchShared cache/dedup path every other page uses, so this doesn't
+  // add extra upstream load beyond the normal 30s-cached per-symbol fetch.
+  const otherSymbols = ALL_SYMBOLS.filter((s) => s !== symbol);
+  const otherResults = await Promise.allSettled(otherSymbols.map((s) => fetchShared(s, base, key)));
+
+  const toAssetInput = (sym: GexSymbol, data: GexResponse): BlindSpotAssetInput => ({
+    symbol: sym,
+    spot: data.spot,
+    dteHours: data.dteHours,
+    candles: (data.recentCandleCloses ?? []).map((close) => ({ close })),
+    crossExpiry: data.crossExpiry,
+    gammaEngine: data.gammaEngine,
+    deltaEngine: data.deltaEngine,
+    vannaEngine: data.vannaEngine,
+    charmEngine: data.charmEngine,
+  });
+
+  const sources: BlindSpotAssetInput[] = [];
+  otherResults.forEach((r, i) => {
+    if (r.status === "fulfilled" && r.value.ok && r.value.data) sources.push(toAssetInput(otherSymbols[i], r.value.data as GexResponse));
+  });
+
+  if (sources.length) {
+    targetData.blindSpots = computeBlindSpots(toAssetInput(symbol, targetData), sources);
+  }
+
+  cache.set(symbol, { data: targetData, expiresAt: Date.now() + CACHE_TTL_MS });
+  return NextResponse.json(targetData);
 }

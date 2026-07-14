@@ -33,7 +33,7 @@ export default function BoardPage({ panels, newsSeries }: { panels: MacroPanel[]
     <div className="flex flex-col gap-6">
       {newsSeries.length > 0 && (
         <section>
-          <div className="mb-2 flex items-baseline gap-3">
+          <div className="board-section-head mb-2 flex items-baseline gap-3">
             <span className="partno">TF-00 NEWS SENTIMENT</span>
           </div>
           <div className="rulegrid grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -49,7 +49,7 @@ export default function BoardPage({ panels, newsSeries }: { panels: MacroPanel[]
         if (series.length === 0) return null;
         return (
           <section key={panel.id}>
-            <div className="mb-2 flex items-baseline gap-3">
+            <div className="board-section-head mb-2 flex items-baseline gap-3">
               <span className="partno">
                 TF-{String(i + 1).padStart(2, "0")} {panel.title.toUpperCase()}
               </span>

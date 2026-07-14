@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, JetBrains_Mono, Inter, Space_Grotesk, IBM_Plex_Mono, Fira_Code, Newsreader, Courier_Prime, Playfair_Display } from "next/font/google";
+import { Geist, JetBrains_Mono, Inter, Space_Grotesk, IBM_Plex_Mono, Fira_Code, Newsreader, Courier_Prime, Playfair_Display, UnifrakturMaguntia } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import TerrainBackdrop from "@/components/fx/TerrainBackdrop";
 import ThemeSync from "@/components/fx/ThemeSync";
@@ -60,6 +60,14 @@ const playfair = Playfair_Display({
   style: ["normal", "italic"],
 });
 
+// Blackletter for the newspaper masthead — the gothic wordmark of a
+// broadsheet front page.
+const unifraktur = UnifrakturMaguntia({
+  variable: "--font-blackletter",
+  subsets: ["latin"],
+  weight: "400",
+});
+
 export const metadata: Metadata = {
   title: "Trifekta · The Regime Desk",
   description:
@@ -78,7 +86,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${jetMono.variable} ${inter.variable} ${spaceGrotesk.variable} ${plexMono.variable} ${firaCode.variable} ${newsreader.variable} ${courierPrime.variable} ${playfair.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${jetMono.variable} ${inter.variable} ${spaceGrotesk.variable} ${plexMono.variable} ${firaCode.variable} ${newsreader.variable} ${courierPrime.variable} ${playfair.variable} ${unifraktur.variable} h-full antialiased`}
       suppressHydrationWarning
     >
       <head>

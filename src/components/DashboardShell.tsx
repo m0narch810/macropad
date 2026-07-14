@@ -23,7 +23,7 @@ import BrandMark from "@/components/fx/BrandMark";
 import AsciiContour from "@/components/fx/AsciiContour";
 import SettingsPanel from "@/components/SettingsPanel";
 import { loadNavOrder, saveNavOrder, moveToPosition, type NavOrderState } from "@/lib/navOrder";
-import { PREFS_EVENT, loadThemePrefs, type ControlsPos, type SidebarSide, type ThemePrefs } from "@/lib/theme";
+import { PREFS_EVENT, loadThemePrefs, type ControlsPos, type SidebarSide, type ThemeMode, type ThemePrefs } from "@/lib/theme";
 
 const DEEP_PANELS = new Set(["us-macro", "yield-rates", "cot-positioning", "transmission", "geopolitics", "volatility"]);
 /** Catalogue-only panels - carry data (e.g. per-asset news) but never show up as their own nav entry. */
@@ -122,6 +122,29 @@ function Clock() {
     return () => clearInterval(id);
   }, []);
   return <span className="font-mono tabular-nums">{t}</span>;
+}
+
+/** Full date for the newspaper dateline; blank until mounted so SSR matches. */
+function DateLine() {
+  const [d, setD] = useState("");
+  useEffect(() => {
+    setD(new Date().toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" }));
+  }, []);
+  return <span className="whitespace-nowrap">{d}</span>;
+}
+
+/** Section link in the newspaper masthead's nav strip. */
+function MastheadNavButton({ label, isActive, onClick }: { label: string; isActive: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`whitespace-nowrap px-2.5 py-1.5 font-sans text-[0.64rem] font-semibold uppercase tracking-[0.16em] transition-colors duration-150 ${
+        isActive ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+      }`}
+    >
+      {label}
+    </button>
+  );
 }
 
 interface NavDrag {
@@ -254,10 +277,13 @@ export default function DashboardShell({
   // after mount (localStorage) and kept live via the prefs event.
   const [sidebarSide, setSidebarSide] = useState<SidebarSide>("left");
   const [controlsPos, setControlsPos] = useState<ControlsPos>("bottom");
+  // The newspaper theme swaps the whole chrome: sidebar out, masthead in.
+  const [theme, setTheme] = useState<ThemeMode>("dark");
   useEffect(() => {
-    const applyLayout = (p: { sidebar: SidebarSide; controls: ControlsPos }) => {
+    const applyLayout = (p: { sidebar: SidebarSide; controls: ControlsPos; theme: ThemeMode }) => {
       setSidebarSide(p.sidebar);
       setControlsPos(p.controls);
+      setTheme(p.theme);
     };
     applyLayout(loadThemePrefs());
     const onPrefs = (e: Event) => applyLayout((e as CustomEvent<ThemePrefs>).detail);
@@ -314,6 +340,7 @@ export default function DashboardShell({
       },
     };
   }
+  const isNewspaper = theme === "newspaper";
   const isBoard = activeId === BOARD_ID;
   const isTerminal = activeId === TERMINAL_ID;
   const isNews = activeId === NEWS_ID;
@@ -418,6 +445,60 @@ export default function DashboardShell({
       <MarketTicker markets={markets} />
       <IndicatorTicker series={tickerSeries} />
 
+      {isNewspaper && (
+        // Front-page masthead: dateline, blackletter title, thick-thin rule,
+        // then the section strips. Replaces the sidebar entirely.
+        <header className="border-b border-[var(--border)]">
+          <div className="mx-auto w-full max-w-[1400px] px-4 sm:px-8">
+            <div className="flex items-center justify-between gap-3 border-b border-[var(--text)] py-2 font-mono text-[0.58rem] uppercase tracking-[0.12em] text-[var(--text-dim)]">
+              <DateLine />
+              <span className="hidden md:block">
+                strong reads <span style={{ color: "var(--up)" }}>{strongReads.bull}▲</span>{" "}
+                <span style={{ color: "var(--down)" }}>{strongReads.bear}▼</span> · {indicatorCount} indicators
+              </span>
+              <span className="flex items-center gap-3">
+                <Clock />
+                <SettingsPanel />
+                <SignOutButton className="font-mono text-[0.58rem] font-semibold uppercase tracking-[0.1em] text-[var(--text-faint)] transition-colors duration-150 hover:text-[var(--text)] disabled:opacity-50" />
+              </span>
+            </div>
+
+            <div className="py-4 text-center sm:py-6">
+              <a href="/" className="masthead-title inline-block text-[2.7rem] leading-none text-[var(--text)] sm:text-[4rem]">
+                Trifekta
+              </a>
+              <div className="eyebrow mt-3">
+                {lastUpdated
+                  ? `the regime desk · synced ${new Date(lastUpdated).toLocaleDateString("en-US", { month: "long", day: "numeric" })}`
+                  : "the regime desk"}
+              </div>
+            </div>
+
+            <div className="border-t-2 border-[var(--text)] pt-[3px]">
+              <div className="border-t border-[var(--text)]">
+                <nav className="no-scrollbar flex items-stretch divide-x divide-[var(--border)] overflow-x-auto py-1 lg:justify-center">
+                  <MastheadNavButton label="BOARD" isActive={isBoard} onClick={() => pickPage(BOARD_ID)} />
+                  <MastheadNavButton label="TERMINAL" isActive={isTerminal} onClick={() => pickPage(TERMINAL_ID)} />
+                  {groupAEntries.map((entry) => (
+                    <MastheadNavButton key={entry.id} label={entry.label} isActive={entry.id === activeId} onClick={entry.onClick} />
+                  ))}
+                </nav>
+                <nav className="no-scrollbar flex items-stretch divide-x divide-[var(--border)] overflow-x-auto border-t border-[var(--border)] py-1 lg:justify-center">
+                  {groupBEntries.map((entry) => (
+                    <MastheadNavButton key={entry.id} label={entry.label} isActive={entry.id === activeId} onClick={entry.onClick} />
+                  ))}
+                  {OPTIONS_FLOW_PAGES.map((p) => (
+                    <MastheadNavButton key={p.id} label={p.label} isActive={p.id === activeId} onClick={() => pickPage(p.id)} />
+                  ))}
+                  <MastheadNavButton label="DOCS" isActive={isDocs} onClick={() => pickPage(DOCS_ID)} />
+                </nav>
+              </div>
+            </div>
+          </div>
+        </header>
+      )}
+
+      {!isNewspaper && (
       <div className="flex items-center gap-3 border-b border-[var(--border)] bg-[var(--panel)] px-4 py-3 lg:hidden">
         <button
           onClick={() => setNavOpen((v) => !v)}
@@ -434,12 +515,14 @@ export default function DashboardShell({
           <Wordmark compact />
         </a>
       </div>
+      )}
 
-      {navOpen && (
+      {!isNewspaper && navOpen && (
         <div className="fixed inset-0 z-30 bg-black/60 lg:hidden" onClick={() => setNavOpen(false)} aria-hidden="true" />
       )}
 
       <div className="flex flex-1">
+        {!isNewspaper && (
         <aside
           className={`fixed inset-y-0 z-40 flex w-[236px] shrink-0 flex-col bg-[var(--panel)] transition-transform duration-200 lg:sticky lg:top-0 lg:h-screen lg:translate-x-0 ${
             sidebarSide === "right"
@@ -520,8 +603,9 @@ export default function DashboardShell({
 
           {controlsPos === "bottom" && utilityBar}
         </aside>
+        )}
 
-        <main className="min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-12 lg:py-10">
+        <main className={`min-w-0 flex-1 px-4 py-6 sm:px-8 lg:px-12 lg:py-10 ${isNewspaper ? "mx-auto w-full max-w-[1400px]" : ""}`}>
           {isBoard ? (
             <>
               <header className="relative mb-6 overflow-hidden border border-[var(--border)] bg-[var(--panel)]">

@@ -13,7 +13,7 @@ export default function ZScoreBar({ z, tone }: { z: number; tone?: "up" | "down"
 
   return (
     <div className="flex items-center gap-2.5">
-      <div className="relative h-[5px] flex-1 rounded-[2px] bg-[var(--border)] news:bg-[var(--panel-3)]">
+      <div className="relative h-[5px] flex-1 rounded-[2px] bg-[var(--border)]">
         <div className="absolute left-1/2 top-[-3px] h-[11px] w-px bg-[var(--border-strong)]" />
         <div
           className="absolute top-0 h-full rounded-[2px]"

@@ -96,7 +96,7 @@ export default function LandingPage() {
         {/* Hero — the live board sells itself (site-wide backdrop shows through) */}
         <section className="relative border-b border-[var(--border)]">
           <div className="relative mx-auto max-w-[1120px] px-5 pt-20 sm:px-8 sm:pt-28">
-            <div className="eyebrow mb-6 flex items-center gap-2 news:justify-center">
+            <div className="eyebrow mb-6 flex items-center gap-2">
               <span className="relative flex h-1.5 w-1.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[var(--up)] opacity-60" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-[var(--up)]" />
@@ -104,17 +104,17 @@ export default function LandingPage() {
               Live macro desk
             </div>
 
-            <h1 className="display-hero m-0 max-w-3xl text-balance text-[2.9rem] sm:text-[4.6rem] news:mx-auto news:text-center">
+            <h1 className="display-hero m-0 max-w-3xl text-balance text-[2.9rem] sm:text-[4.6rem]">
               Read the regime, not the noise.
             </h1>
 
-            <p className="mt-6 max-w-xl font-sans text-[1.02rem] leading-relaxed text-[var(--text-dim)] sm:text-[1.1rem] news:mx-auto news:text-center">
+            <p className="mt-6 max-w-xl font-sans text-[1.02rem] leading-relaxed text-[var(--text-dim)] sm:text-[1.1rem]">
               Trifekta puts the whole macro picture on one screen: {TOTAL_SERIES} series across liquidity,
               rates, positioning, transmission, geopolitics, and volatility, each scored for direction and
               strength. The terminal below is the live product, not a screenshot.
             </p>
 
-            <div className="mt-9 flex flex-wrap items-center gap-3 news:justify-center">
+            <div className="mt-9 flex flex-wrap items-center gap-3">
               <Link href="/signin" className="btn btn-primary">
                 Launch the desk
               </Link>
@@ -123,7 +123,7 @@ export default function LandingPage() {
               </Link>
             </div>
 
-            <div className="partno mt-8 w-fit bg-[color-mix(in_srgb,var(--bg)_82%,transparent)] py-1 news:mx-auto" style={{ color: "var(--text-dim)" }}>
+            <div className="partno mt-8 w-fit bg-[color-mix(in_srgb,var(--bg)_82%,transparent)] py-1" style={{ color: "var(--text-dim)" }}>
               {PANELS.length} PANELS · {TOTAL_SERIES} SERIES · SYNCED DAILY
             </div>
 
@@ -156,7 +156,7 @@ export default function LandingPage() {
           <div className="mx-auto max-w-[1120px] px-5 py-20 sm:px-8">
             <Reveal>
               <div className="eyebrow mb-3">Also on the desk</div>
-              <div className="rulegrid grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-3">
+              <div className="grid grid-cols-1 gap-px overflow-hidden border border-[var(--border)] bg-[var(--border)] sm:grid-cols-3">
                 {DESK_PAGES.map((p) => (
                   <div key={p.name} className="bg-[var(--panel)] px-5 py-5">
                     <div className="font-sans text-[0.95rem] font-semibold text-[var(--text)]">{p.name}</div>

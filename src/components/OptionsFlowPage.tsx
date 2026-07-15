@@ -9,6 +9,7 @@ import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
+import { Tesseract } from "@/components/optionsflow/Tesseract";
 
 export type OptionsFlowView = "terminal";
 
@@ -268,7 +269,15 @@ function TerminalView({ data }: { data: GexResponse }) {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2">
+        <div className="hud flex flex-col items-center justify-center border border-[var(--border)] bg-[var(--panel)]">
+          <Tesseract height={220} />
+        </div>
+      </div>
+
+      {/* Key Levels strip - the dense stat mosaic that used to sit next to spot, now full-width below it */}
+      <div className="hud border border-[var(--border)] bg-[var(--panel)] p-4">
+        <div className="partno mb-3">KEY LEVELS</div>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
           <MosaicTile label="Net GEX" value={fmtUsd(data.totalGex0dte)} color={data.totalGex0dte >= 0 ? "var(--up)" : "var(--down)"} />
           <MosaicTile label="Gross GEX" value={fmtUsd(grossGex)} />
           <MosaicTile label="ATM IV" value={data.atmIv !== undefined ? `${(data.atmIv * 100).toFixed(1)}%` : "—"} />

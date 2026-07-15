@@ -10,10 +10,21 @@
  *
  * Greeks are the exact closed-form derivatives (not bump-and-reprice
  * finite differences, which quietly biased every per-strike figure by the
- * bump width, and not the former 4-hour minimum-T gamma floor, which made
- * afternoon 0DTE GEX disagree with any terminal computing raw greeks).
- * Sign/scale conventions are unchanged: per-1-vol-point vega/vanna,
- * per-calendar-day theta/charm.
+ * bump width). Sign/scale conventions are unchanged: per-1-vol-point
+ * vega/vanna, per-calendar-day theta/charm.
+ *
+ * GAMMA carries one exception: a 4-trading-hour minimum-T floor, applied
+ * only inside the gamma term (see GAMMA_MIN_T_YEARS below). Raw closed-form
+ * gamma at a 0DTE contract's real T (often under an hour late in the day)
+ * collapses toward a near-Dirac spike at the money - confirmed directly
+ * against a live vendor $-GEX-by-strike table: with the real T, dollar GEX
+ * at strikes even $10-15 from spot fell to ~1e-9 despite real, large OI
+ * sitting there, while the vendor's own table showed multi-million-dollar
+ * walls at exactly those strikes. A real dealer book can't rebalance with
+ * infinite precision in the literal final minutes, so instantaneous gamma
+ * that close to expiry isn't the tradeable/charted profile any terminal
+ * actually shows - the floor widens the peak back to a realistic
+ * multi-strike spread without touching price/delta/theta/vega/vanna/charm.
  */
 
 export interface PricerInputs {
@@ -59,17 +70,14 @@ export function bsPrice(inputs: PricerInputs): number {
   return strike * Math.exp(-r * T) * normCdf(-d2) - spot * Math.exp(-q * T) * normCdf(-d1);
 }
 
-/**
- * Closed-form gamma at the option's real T - exact, no finite-difference
- * bump size to get wrong. The former 4-trading-hour minimum-T floor here is
- * gone: it widened the late-day 0DTE gamma peak on purpose, but that made
- * every afternoon per-strike GEX bar disagree with the source terminal's
- * own raw-greek numbers. Instantaneous gamma near the close genuinely does
- * concentrate at the money - that is the real profile, charted as-is.
- */
+/** Minimum T fed to the gamma term only - see the module docstring for why. */
+const GAMMA_MIN_T_YEARS = 4 / 24 / 365;
+
+/** Closed-form gamma - exact at any T, no finite-difference bump size to get wrong - with the stated minimum-T floor applied only here. */
 export function bsGamma(inputs: PricerInputs): number {
   if (inputs.T <= 0 || inputs.vol <= 0) return 0;
-  const { spot, strike, T, vol, r, q } = inputs;
+  const { spot, strike, vol, r, q } = inputs;
+  const T = Math.max(inputs.T, GAMMA_MIN_T_YEARS);
   const sqrtT = Math.sqrt(T);
   const d1 = (Math.log(spot / strike) + (r - q + (vol * vol) / 2) * T) / (vol * sqrtT);
   return (Math.exp(-q * T) * normPdf(d1)) / (spot * vol * sqrtT);
@@ -112,7 +120,7 @@ export function bsGreeks(inputs: PricerInputs): Greeks {
   const pdf1 = normPdf(d1);
 
   const delta = isCall ? eqT * normCdf(d1) : eqT * (normCdf(d1) - 1);
-  const gamma = (eqT * pdf1) / (spot * vol * sqrtT);
+  const gamma = bsGamma(inputs); // floored T, see bsGamma
   const vega = spot * eqT * pdf1 * sqrtT * 0.01; // per 1 vol point
 
   // dV/dt (calendar time moving forward), per day - negative for a decaying long option.

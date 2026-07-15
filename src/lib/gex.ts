@@ -1,6 +1,4 @@
 import { bsGreeks, dollarCharm, dollarDex, dollarGex, dollarTheta, dollarVanna, dollarVega } from "@/lib/blackScholes";
-import { lrGreeks } from "@/lib/americanPricer";
-import { crrGreeks } from "@/lib/crrPricer";
 import type { GexPageAnalytics } from "@/lib/gexAnalytics";
 import type { GammaEngineResult } from "@/lib/gammaEngine";
 import type { DeltaEngineResult } from "@/lib/deltaEngine";
@@ -13,13 +11,6 @@ import type { TopoRow } from "@/lib/topoProfile";
 
 export type GexSymbol = "QQQ" | "SPY" | "SPX" | "NDX";
 
-/**
- * "bs" = closed-form Black-Scholes on each strike's own live quoted IV (matches how the source terminal computes its greeks).
- * "american" = Leisen-Reimer binomial tree (early exercise) on each strike's own live, unsmoothed quoted IV.
- * "crr" = Cox-Ross-Rubinstein binomial tree (early exercise) on the live, arbitrage-controlled 0DTE IV smile - see arbitrageSmile.ts.
- */
-export type PricerEngine = "bs" | "american" | "crr";
-
 // Continuous dividend-yield approximation, not discrete ex-dividend jumps -
 // a stated simplification of the pricer, not a hidden one. QQQ/NDX track the
 // Nasdaq-100 (lower yield, tech-heavy); SPY/SPX track the S&P 500.
@@ -27,7 +18,7 @@ export const DIVIDEND_YIELD: Record<GexSymbol, number> = { QQQ: 0.006, NDX: 0.00
 
 export interface StrikeRow0DTE {
   strike: number;
-  /** $, self-computed via whichever pricer engine produced this row (Black-Scholes on the SVI-smoothed smile, or the American tree on this strike's own live IV) - confirmed unit, not borrowed from any black box. */
+  /** $, self-computed via closed-form Black-Scholes on each strike's own live quoted IV - confirmed unit, not borrowed from any black box. */
   gex: number;
   /** Call-side and put-side GEX contributions, already dealer-sign-adjusted (call >= 0, put <= 0) - gex = callGex + putGex. Only the GEX page's split-mode chart uses these; other exposure types don't carry a call/put split. */
   callGex: number;
@@ -87,18 +78,6 @@ export interface ZeroDteContext {
   vannaNote: string;
 }
 
-/** Everything that's re-derived per pricer engine: the per-strike Greeks themselves plus every stat computed from them. */
-export interface EngineExposure {
-  perStrike: StrikeRow0DTE[];
-  totalGex0dte: number;
-  /** Self-derived via peak-prominence on the 0DTE gex curve, not trusted from the source API's own (multi-expiry) wall fields. */
-  callWall: number;
-  putWall: number;
-  kingNode: { strike: number; gex: number; type: "repellor" | "pin" };
-  /** Self-derived zero-crossing of the 0DTE gex-by-strike curve, nearest to spot. */
-  gammaFlip: number | null;
-}
-
 export interface GexResponse {
   ok: boolean;
   symbol: GexSymbol;
@@ -108,19 +87,16 @@ export interface GexResponse {
   resolvedExpiry: string;
   /** Hours remaining to that expiry - precision the pricer needs, not just "today". */
   dteHours: number;
-  /** Black-Scholes engine, on each strike's own live quoted IV. Kept at the top level for back-compat with callers that don't care about engine choice. */
+  /** Closed-form Black-Scholes on each strike's own live quoted IV. Self-derived walls/king-node/gamma-flip - not trusted from the source API's own (multi-expiry) wall fields. */
   perStrike: StrikeRow0DTE[];
   totalGex0dte: number;
   callWall: number;
   putWall: number;
   kingNode: { strike: number; gex: number; type: "repellor" | "pin" };
+  /** Self-derived zero-crossing of the 0DTE gex-by-strike curve, nearest to spot. */
   gammaFlip: number | null;
   /** ATM IV (fractional, e.g. 0.09 = 9%) - from /zero_dte's own atm_iv field, already converted from its 0-100 percentage-point scale. */
   atmIv?: number;
-  /** American (Leisen-Reimer) tree engine, on each strike's own live, unsmoothed quoted IV. */
-  american: EngineExposure;
-  /** CRR binomial tree engine, on the live, arbitrage-controlled 0DTE IV smile. */
-  crr: EngineExposure;
   /** From the source API directly - not confirmed 0DTE-pure, shown as-is. */
   maxPain: number;
   /** Real historical empirical stats, replacing the earlier OI-dispersion proxy. */
@@ -307,8 +283,7 @@ export interface ChainStrikeInput {
  * Delta doesn't need this: a put's delta is already negative on its own, so
  * DEX sums both sides with their natural sign, unflipped.
  */
-export function buildStrikeRowsFromChain(chain: ChainStrikeInput[], spot: number, T: number, r: number, q: number, engine: PricerEngine = "bs"): StrikeRow0DTE[] {
-  const greeksFn = engine === "american" ? lrGreeks : engine === "crr" ? crrGreeks : bsGreeks;
+export function buildStrikeRowsFromChain(chain: ChainStrikeInput[], spot: number, T: number, r: number, q: number): StrikeRow0DTE[] {
   const byStrike = new Map<number, { call?: ChainStrikeInput; put?: ChainStrikeInput }>();
   for (const row of chain) {
     const entry = byStrike.get(row.strike) ?? {};
@@ -328,7 +303,7 @@ export function buildStrikeRowsFromChain(chain: ChainStrikeInput[], spot: number
     let tex = 0;
 
     if (call && call.oi > 0 && call.iv > 0) {
-      const g = greeksFn({ spot, strike, T, vol: call.iv, r, q, isCall: true });
+      const g = bsGreeks({ spot, strike, T, vol: call.iv, r, q, isCall: true });
       callGex = dollarGex(g.gamma, call.oi, spot);
       gex += callGex;
       dex += dollarDex(g.delta, call.oi, spot);
@@ -338,7 +313,7 @@ export function buildStrikeRowsFromChain(chain: ChainStrikeInput[], spot: number
       tex += dollarTheta(g.theta, call.oi);
     }
     if (put && put.oi > 0 && put.iv > 0) {
-      const g = greeksFn({ spot, strike, T, vol: put.iv, r, q, isCall: false });
+      const g = bsGreeks({ spot, strike, T, vol: put.iv, r, q, isCall: false });
       putGex = -dollarGex(g.gamma, put.oi, spot);
       gex += putGex;
       dex += dollarDex(g.delta, put.oi, spot);
@@ -354,30 +329,12 @@ export function buildStrikeRowsFromChain(chain: ChainStrikeInput[], spot: number
   return rows.sort((a, b) => a.strike - b.strike);
 }
 
-/** Derives the walls/king-node/gamma-flip/total-gex stats from one engine's per-strike rows - shared by both the BS and American exposures in a GexResponse. */
-function deriveEngineExposure(perStrike: StrikeRow0DTE[], spot: number): EngineExposure {
-  const { callWall, putWall } = deriveWalls(perStrike, spot);
-  const kingNodeRow = [...perStrike].sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex))[0];
-  const totalGex0dte = perStrike.reduce((sum, r) => sum + r.gex, 0);
-
-  return {
-    perStrike,
-    totalGex0dte,
-    callWall,
-    putWall,
-    kingNode: kingNodeRow ? { strike: kingNodeRow.strike, gex: kingNodeRow.gex, type: kingNodeRow.gex < 0 ? "repellor" : "pin" } : { strike: spot, gex: 0, type: "pin" },
-    gammaFlip: deriveGammaFlip(perStrike, spot),
-  };
-}
-
 export function deriveGexResponse(raw: {
   symbol: GexSymbol;
   spot: number;
   resolvedExpiry: string;
   dteHours: number;
   perStrike: StrikeRow0DTE[];
-  perStrikeAmerican: StrikeRow0DTE[];
-  perStrikeCrr: StrikeRow0DTE[];
   maxPain: number;
   probability: ProbabilityStats;
   dealerFlow: DealerFlowContext | null;
@@ -386,9 +343,9 @@ export function deriveGexResponse(raw: {
   pricerInputs: { r: number; q: number };
   gexPage?: GexPageAnalytics;
 }): GexResponse {
-  const bs = deriveEngineExposure(raw.perStrike, raw.spot);
-  const american = deriveEngineExposure(raw.perStrikeAmerican, raw.spot);
-  const crr = deriveEngineExposure(raw.perStrikeCrr, raw.spot);
+  const { callWall, putWall } = deriveWalls(raw.perStrike, raw.spot);
+  const kingNodeRow = [...raw.perStrike].sort((a, b) => Math.abs(b.gex) - Math.abs(a.gex))[0];
+  const totalGex0dte = raw.perStrike.reduce((sum, r) => sum + r.gex, 0);
 
   return {
     ok: true,
@@ -397,14 +354,12 @@ export function deriveGexResponse(raw: {
     spot: raw.spot,
     resolvedExpiry: raw.resolvedExpiry,
     dteHours: raw.dteHours,
-    perStrike: bs.perStrike,
-    totalGex0dte: bs.totalGex0dte,
-    callWall: bs.callWall,
-    putWall: bs.putWall,
-    kingNode: bs.kingNode,
-    gammaFlip: bs.gammaFlip,
-    american,
-    crr,
+    perStrike: raw.perStrike,
+    totalGex0dte,
+    callWall,
+    putWall,
+    kingNode: kingNodeRow ? { strike: kingNodeRow.strike, gex: kingNodeRow.gex, type: kingNodeRow.gex < 0 ? "repellor" : "pin" } : { strike: raw.spot, gex: 0, type: "pin" },
+    gammaFlip: deriveGammaFlip(raw.perStrike, raw.spot),
     maxPain: raw.maxPain,
     probability: raw.probability,
     dealerFlow: raw.dealerFlow,

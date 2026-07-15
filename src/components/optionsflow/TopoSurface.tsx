@@ -274,7 +274,7 @@ void main() {
   gl_FragColor = vec4(c * uAlpha, uAlpha);
 }`;
 
-export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRow[]; spot: number; height?: number }) {
+export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TENOR_LABELS }: { rows: TopoRow[]; spot: number; height?: number; tenorLabels?: readonly string[] }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [modeIdx, setModeIdx] = useState(0);
@@ -611,7 +611,7 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
       ctx.textAlign = "left";
       for (const rr of [0, 5, 10, 15]) {
         const p = proj(X(CC - 1) + 0.06, floorY, Z(dispR(rr)));
-        label(TENOR_LABELS[Math.round((rr / (ROWS - 1)) * 3)], p.px, p.py, pal.ink2);
+        label(tenorLabels[Math.round((rr / (ROWS - 1)) * 3)], p.px, p.py, pal.ink2);
       }
 
       // Spot column.
@@ -747,7 +747,7 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
       }
       if (bp) {
         const val = S.raw[bp.r][bp.c];
-        setReadout(`$${S.cols[bp.c]} · ${fmtMag(val)} ${TENOR_LABELS[Math.round((bp.r / (ROWS - 1)) * 3)]}`);
+        setReadout(`$${S.cols[bp.c]} · ${fmtMag(val)} ${tenorLabels[Math.round((bp.r / (ROWS - 1)) * 3)]}`);
       } else {
         setReadout("");
       }

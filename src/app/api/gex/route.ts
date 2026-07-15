@@ -12,7 +12,6 @@ import {
   type ZeroDteContext,
 } from "@/lib/gex";
 import { fitSvi, sviImpliedVol, type SviPoint } from "@/lib/svi";
-import { buildArbitrageControlledSmile } from "@/lib/arbitrageSmile";
 import { computeGexPageAnalytics } from "@/lib/gexAnalytics";
 import { computeGammaEngine, computeIvSurfaceFitError } from "@/lib/gammaEngine";
 import { computeDeltaEngine } from "@/lib/deltaEngine";
@@ -236,10 +235,7 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     iv: row.iv > 0 ? sviImpliedVol(sviParams, row.strike, forward, T) : 0,
   }));
 
-  const perStrike = buildStrikeRowsFromChain(rawChain, spot, T, r, q, "bs");
-  const perStrikeAmerican = buildStrikeRowsFromChain(rawChain, spot, T, r, q, "american");
-  const arbChain = buildArbitrageControlledSmile(rawChain, forward, T);
-  const perStrikeCrr = buildStrikeRowsFromChain(arbChain, spot, T, r, q, "crr");
+  const perStrike = buildStrikeRowsFromChain(rawChain, spot, T, r, q);
 
   const probability: ProbabilityStats = {
     muDailyPct: probabilityRaw.mu_daily_pct ?? 0,
@@ -329,8 +325,6 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     resolvedExpiry: zeroDteRaw.expiry ?? "",
     dteHours,
     perStrike,
-    perStrikeAmerican,
-    perStrikeCrr,
     maxPain,
     probability,
     dealerFlow,
@@ -490,6 +484,16 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
   response.strikeExpiryHeatmaps = heatmapGrids;
   response.topo = buildTopoProfile(heatmapGrids, spot);
 
+  // Scenario move sized to span the same +/-15 strikes shown on the Chart/
+  // Heatmap (not a fixed 1%) - a tiny move barely reaches past the first
+  // few visible strikes, so most of the displayed window would look
+  // identical to the static snapshot. Uses this expiry's own strike
+  // spacing (median gap between consecutive strikes) x 15.
+  const sortedStrikes = [...new Set(perStrike.map((r) => r.strike))].sort((a, b) => a - b);
+  const strikeGaps = sortedStrikes.slice(1).map((s, i) => s - sortedStrikes[i]).filter((g) => g > 0).sort((a, b) => a - b);
+  const strikeInterval = strikeGaps.length ? strikeGaps[Math.floor(strikeGaps.length / 2)] : 1;
+  const scenarioMovePct = Math.min(0.5, (strikeInterval * 15) / spot);
+
   response.effectiveGex = computeEffectiveGex({
     chain,
     perStrike,
@@ -499,6 +503,8 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     q,
     sviParams,
     forward,
+    moveUpPct: scenarioMovePct,
+    moveDownPct: scenarioMovePct,
   });
 
   return { ok: true, status: 200, data: response };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import type { GexResponse, GexSymbol, PricerEngine } from "@/lib/gex";
+import type { GexResponse, GexSymbol } from "@/lib/gex";
 import { fmtNum, fmtRaw, fmtUsd } from "@/lib/gex";
 import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
 import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
@@ -12,13 +12,6 @@ import TopoSurface from "@/components/optionsflow/TopoSurface";
 export type OptionsFlowView = "terminal";
 
 const SYMBOLS: GexSymbol[] = ["QQQ", "SPY"];
-
-const ENGINE_LABEL: Record<PricerEngine, string> = {
-  bs: "BLACK-SCHOLES",
-  american: "AMERICAN TREE (LIVE SMILE)",
-  crr: "CRR BINOMIAL + ARB-CONTROLLED SMILE",
-};
-const ENGINE_ORDER: PricerEngine[] = ["bs", "american", "crr"];
 
 function SymbolToggle({ symbol, onChange }: { symbol: GexSymbol; onChange: (s: GexSymbol) => void }) {
   return (
@@ -36,40 +29,6 @@ function SymbolToggle({ symbol, onChange }: { symbol: GexSymbol; onChange: (s: G
       ))}
     </div>
   );
-}
-
-/** bs = closed-form Black-Scholes on each strike's own live quoted IV. american = Leisen-Reimer binomial tree (prices early exercise) on the same live IVs. */
-function EngineToggle({ engine, onChange }: { engine: PricerEngine; onChange: (e: PricerEngine) => void }) {
-  return (
-    <div className="inline-flex flex-wrap border border-[var(--border)]">
-      {ENGINE_ORDER.map((e) => (
-        <button
-          key={e}
-          onClick={() => onChange(e)}
-          className={`px-4 py-1.5 font-mono text-[0.68rem] font-semibold tracking-[0.06em] transition-colors duration-150 ${
-            e === engine ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-          }`}
-        >
-          {ENGINE_LABEL[e]}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/** Projects a GexResponse onto the chosen engine's per-strike rows/stats, so the chart/heatmap stay engine-agnostic. */
-function withEngine(data: GexResponse, engine: PricerEngine): GexResponse {
-  if (engine === "bs") return data;
-  const source = engine === "american" ? data.american : data.crr;
-  return {
-    ...data,
-    perStrike: source.perStrike,
-    totalGex0dte: source.totalGex0dte,
-    callWall: source.callWall,
-    putWall: source.putWall,
-    kingNode: source.kingNode,
-    gammaFlip: source.gammaFlip,
-  };
 }
 
 function MetricTile({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -107,6 +66,21 @@ function windowHeatmap(grid: { columns: { label: string; dte: number | null }[];
   return { columns: grid.columns, strikes: kept.map((k) => k.strike), values: kept.map((k) => grid.values[k.i]) };
 }
 
+/** Reshapes Effective/Shadow's per-strike up/down scenario rows into the same {columns,strikes,values} grid shape the heatmap renders, so it's just two columns ("+X%"/"-X%") instead of a DTE axis. */
+function effectiveGexAsGrid(result: GexResponse["effectiveGex"] | undefined, mode: "effective" | "shadow") {
+  if (!result || !result.rows.length) return null;
+  const columns = [
+    { label: `+${(result.moveUpPct * 100).toFixed(1)}%`, dte: null },
+    { label: `-${(result.moveDownPct * 100).toFixed(1)}%`, dte: null },
+  ];
+  const sorted = [...result.rows].sort((a, b) => a.strike - b.strike);
+  return {
+    columns,
+    strikes: sorted.map((r) => r.strike),
+    values: sorted.map((r) => (mode === "effective" ? [r.upEffective, r.downEffective] : [r.shadowGammaUp, r.shadowGammaDown])),
+  };
+}
+
 type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset";
 const SECTION_LABEL: Record<Section, string> = {
   chart: "CHART",
@@ -141,6 +115,8 @@ function TerminalView({ data }: { data: GexResponse }) {
   const [dteScope, setDteScope] = useState<"single" | "cumulative">("single");
   const [chartMode, setChartMode] = useState<ChartMode>("traditional");
   const [effectiveDir, setEffectiveDir] = useState<"up" | "down">("up");
+  const [heatmapMode, setHeatmapMode] = useState<ChartMode>("traditional");
+  const [topoMode, setTopoMode] = useState<ChartMode>("traditional");
 
   const gammaEngine = data.gammaEngine;
   const deltaEngine = data.deltaEngine;
@@ -190,6 +166,35 @@ function TerminalView({ data }: { data: GexResponse }) {
   }, [data, metric, clampedDteIndex, dteScope, chartMode, effectiveDir]);
   const walls: WallMarker[] = computeTopWalls(chartData, chartMode === "traditional" ? metric : "gex", 2);
   const chartUnitLabel = chartMode === "traditional" ? METRIC_LABEL[metric] : chartMode === "effective" ? "EFF GEX" : "SHADOW γ";
+
+  const heatmapWalls: WallMarker[] = useMemo(() => {
+    if (heatmapMode === "traditional" || !data.effectiveGex) return [];
+    const rows = data.effectiveGex.rows.map((r) => ({ strike: r.strike, value: heatmapMode === "effective" ? r.upEffective : r.shadowGammaUp }));
+    return computeTopWalls(rows, "gex", 2);
+  }, [data, heatmapMode]);
+
+  // TOPO's terrain is built around the tenor axis (0DTE/1W/2W/M+) - Effective/
+  // Shadow are single 0DTE scenarios with no tenor dimension. Repurposes the
+  // first two tenor slots as the +move/-move scenarios (relabeled below) and
+  // zeroes the other two; only the GEX surface carries real data in this
+  // mode since this app doesn't compute a per-Greek scenario delta.
+  const topoRows = useMemo(() => {
+    if (topoMode === "traditional") return data.topo ?? [];
+    const zero: [number, number, number, number] = [0, 0, 0, 0];
+    return (data.effectiveGex?.rows ?? []).map((r) => ({
+      strike: r.strike,
+      gex: [topoMode === "effective" ? r.upEffective : r.shadowGammaUp, topoMode === "effective" ? r.downEffective : r.shadowGammaDown, 0, 0] as [number, number, number, number],
+      dex: zero,
+      vanna: zero,
+      charm: zero,
+      theta: zero,
+      vega: zero,
+    }));
+  }, [data, topoMode]);
+  const topoTenorLabels =
+    topoMode === "traditional"
+      ? undefined
+      : [`+${data.effectiveGex ? (data.effectiveGex.moveUpPct * 100).toFixed(1) : "—"}%`, `-${data.effectiveGex ? (data.effectiveGex.moveDownPct * 100).toFixed(1) : "—"}%`, "", ""];
 
   const phaseColor = gammaEngine ? PHASE_COLOR[gammaEngine.phase.phase] ?? "var(--text-faint)" : "var(--text-faint)";
 
@@ -302,7 +307,9 @@ function TerminalView({ data }: { data: GexResponse }) {
                         d === effectiveDir ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
                       }`}
                     >
-                      {d === "up" ? "+1% Spot" : "-1% Spot"}
+                      {d === "up"
+                        ? `+${data.effectiveGex ? fmtNum(data.effectiveGex.moveUpPct * 100, 1) : "—"}% Spot`
+                        : `-${data.effectiveGex ? fmtNum(data.effectiveGex.moveDownPct * 100, 1) : "—"}% Spot`}
                     </button>
                   ))}
                 </div>
@@ -372,27 +379,75 @@ function TerminalView({ data }: { data: GexResponse }) {
 
       {section === "topo" && (
         <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-          <div className="mb-3">
-            <div className="font-display text-[0.95rem] text-[var(--text)]">Market Topography</div>
-            <div className="eyebrow mt-1">{data.symbol} · dealer book as 3D terrain — strike × expiry tenor, one surface per Greek</div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <div className="font-display text-[0.95rem] text-[var(--text)]">Market Topography</div>
+              <div className="eyebrow mt-1">
+                {topoMode === "traditional"
+                  ? `${data.symbol} · dealer book as 3D terrain — strike × expiry tenor, one surface per Greek`
+                  : `${data.symbol} · GEX-only, this app's own 0DTE delta reprice, real $ — other Greek surfaces are flat (no scenario data computed for them)`}
+              </div>
+            </div>
+            <div className="inline-flex border border-[var(--border)]">
+              {CHART_MODE_ORDER.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setTopoMode(m)}
+                  className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
+                    m === topoMode ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {CHART_MODE_LABEL[m]}
+                </button>
+              ))}
+            </div>
           </div>
-          <TopoSurface rows={data.topo ?? []} spot={data.spot} />
+          <TopoSurface rows={topoRows} spot={data.spot} tenorLabels={topoTenorLabels} />
         </div>
       )}
 
       {section === "heatmap" && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
           <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-            <div className="mb-4 flex items-baseline justify-between gap-2">
+            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
               <div className="partno">
-                {data.symbol} · {METRIC_LABEL[metric]} Heatmap
+                {data.symbol} · {heatmapMode === "traditional" ? METRIC_LABEL[metric] : heatmapMode === "effective" ? "Effective GEX" : "Shadow Gamma"} Heatmap
               </div>
-              {metricTabs("sm")}
+              <div className="flex items-center gap-2">
+                <div className="inline-flex border border-[var(--border)]">
+                  {CHART_MODE_ORDER.map((m) => (
+                    <button
+                      key={m}
+                      onClick={() => setHeatmapMode(m)}
+                      className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
+                        m === heatmapMode ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                      }`}
+                    >
+                      {CHART_MODE_LABEL[m]}
+                    </button>
+                  ))}
+                </div>
+                {heatmapMode === "traditional" && metricTabs("sm")}
+              </div>
             </div>
-            <div className="eyebrow mb-3">/heatmap endpoint · raw magnitude proxy, not dollarized - see cell hover</div>
-            <StrikeExpiryHeatmapChart grid={windowHeatmap(data.strikeExpiryHeatmaps?.[metric], data.spot)} spot={data.spot} walls={walls} unitLabel={METRIC_LABEL[metric]} valueFormatter={fmtRaw} />
+            <div className="eyebrow mb-3">
+              {heatmapMode === "traditional"
+                ? "/heatmap endpoint · raw magnitude proxy, not dollarized - see cell hover"
+                : "This app's own 0DTE delta reprice, real $ · +move / -move columns instead of a DTE axis"}
+            </div>
+            {heatmapMode === "traditional" ? (
+              <StrikeExpiryHeatmapChart grid={windowHeatmap(data.strikeExpiryHeatmaps?.[metric], data.spot)} spot={data.spot} walls={walls} unitLabel={METRIC_LABEL[metric]} valueFormatter={fmtRaw} />
+            ) : (
+              <StrikeExpiryHeatmapChart
+                grid={windowHeatmap(effectiveGexAsGrid(data.effectiveGex, heatmapMode), data.spot)}
+                spot={data.spot}
+                walls={heatmapWalls}
+                unitLabel={heatmapMode === "effective" ? "EFF GEX" : "SHADOW γ"}
+                valueFormatter={fmtUsd}
+              />
+            )}
           </div>
-          <MajorWallsPanel metricLabel={METRIC_LABEL[metric]} walls={walls} />
+          <MajorWallsPanel metricLabel={heatmapMode === "traditional" ? METRIC_LABEL[metric] : heatmapMode === "effective" ? "EFF GEX" : "SHADOW γ"} walls={heatmapMode === "traditional" ? walls : heatmapWalls} />
         </div>
       )}
 
@@ -429,7 +484,6 @@ function TerminalView({ data }: { data: GexResponse }) {
 
 export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [symbol, setSymbol] = useState<GexSymbol>("QQQ");
-  const [engine, setEngine] = useState<PricerEngine>("bs");
   const [data, setData] = useState<GexResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -464,7 +518,6 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <SymbolToggle symbol={symbol} onChange={setSymbol} />
-          <EngineToggle engine={engine} onChange={setEngine} />
         </div>
         {data && (
           <div className="font-mono text-[0.62rem] text-[var(--text-faint)]">
@@ -485,7 +538,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
         </div>
       )}
 
-      {!loading && !error && data && <TerminalView data={withEngine(data, engine)} />}
+      {!loading && !error && data && <TerminalView data={data} />}
     </div>
   );
 }

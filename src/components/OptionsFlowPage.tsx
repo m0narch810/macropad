@@ -269,7 +269,7 @@ function TerminalView({ data }: { data: GexResponse }) {
           </div>
         </div>
 
-        <div className="hud flex flex-col items-center justify-center border border-[var(--border)] bg-[var(--panel)]">
+        <div className="flex flex-col items-center justify-center">
           <Tesseract height={220} />
         </div>
       </div>

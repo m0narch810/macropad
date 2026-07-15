@@ -4,11 +4,14 @@
  * major Greek's exposure split into four expiry tenors
  * [0DTE, this-week (1-7 DTE), next-week (8-14 DTE), monthly+ (15+ DTE)].
  *
- * Cross-expiry fields come from the source's own surfaces (/gex_surface,
- * /vanna_surface, /charm_surface, /theta) rather than mixing in the
- * self-computed 0DTE chain: a terrain compares tenors AGAINST EACH OTHER,
- * so unit coherence across columns matters more than absolute 0DTE
- * precision (the bar chart remains the precise self-computed 0DTE view).
+ * Cross-expiry (1W/2W/M+) fields come from the source's own surfaces
+ * (/gex_surface, /vanna_surface, /charm_surface, /theta) - no self-computed
+ * alternative exists for those tenors. The 0DTE (d0) bucket is overridden
+ * with this app's own self-computed per-strike chain (real per-contract
+ * IV/OI) instead of the raw surface's 0DTE points, so the terrain's near
+ * tenor agrees with the chart/heatmap's 0DTE bars rather than showing a
+ * second, disagreeing "today" - same fix applied to the heatmap's nearest
+ * column (see withSelfComputedNearestColumn in strikeExpiryHeatmaps.ts).
  * DEX and VEGA have no cross-expiry source at all (documented in
  * strikeExpiryHeatmaps.ts) - they carry the self-computed 0DTE chain in the
  * d0 bucket only, and the topo captions say so. Values are shipped RAW, not
@@ -108,13 +111,21 @@ export function buildTopoProfile({ gexPoints, charmHm, vannaHm, thetaHm, perStri
     .sort((a, b) => a - b);
 
   const get = (m: Map<number, TenorArr>, k: number): TenorArr => m.get(k) ?? ([0, 0, 0, 0] as TenorArr);
-  return strikes.map((strike) => ({
-    strike,
-    gex: get(gexBy, strike),
-    dex: get(dexBy, strike),
-    vanna: get(vannaBy, strike),
-    charm: get(charmBy, strike),
-    theta: get(thetaBy, strike),
-    vega: get(vegaBy, strike),
-  }));
+  const selfBy = new Map(perStrike.map((r) => [r.strike, r]));
+  /** Replaces bucket 0 (0DTE) with the self-computed value when this strike is in the real chain; further-out buckets are untouched (no self-computed alternative exists). */
+  const withSelfZero = (arr: TenorArr, self: number | undefined): TenorArr =>
+    self !== undefined ? [self, arr[1], arr[2], arr[3]] : arr;
+
+  return strikes.map((strike) => {
+    const self = selfBy.get(strike);
+    return {
+      strike,
+      gex: withSelfZero(get(gexBy, strike), self?.gex),
+      dex: get(dexBy, strike),
+      vanna: withSelfZero(get(vannaBy, strike), self?.vex),
+      charm: withSelfZero(get(charmBy, strike), self?.cex),
+      theta: withSelfZero(get(thetaBy, strike), self?.tex),
+      vega: get(vegaBy, strike),
+    };
+  });
 }

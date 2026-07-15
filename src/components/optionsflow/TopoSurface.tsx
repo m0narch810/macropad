@@ -257,17 +257,19 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [modeIdx, setModeIdx] = useState(0);
-  const [palIdx, setPalIdx] = useState(0);
-  const [readout, setReadout] = useState("");
-
-  // Load the persisted palette choice once on mount.
-  useEffect(() => {
+  // Persisted palette choice - lazy initializer so there's no set-state-in-effect;
+  // SSR sees the default (the palette chip carries suppressHydrationWarning for that).
+  const [palIdx, setPalIdx] = useState(() => {
+    if (typeof window === "undefined") return 0;
     try {
       const saved = localStorage.getItem(PAL_STORAGE_KEY);
       const i = PALETTES.findIndex((p) => p.id === saved);
-      if (i >= 0) setPalIdx(i);
-    } catch { /* private mode */ }
-  }, []);
+      return i >= 0 ? i : 0;
+    } catch {
+      return 0; // private mode
+    }
+  });
+  const [readout, setReadout] = useState("");
 
   const surfaces = useMemo(() => {
     const out = new Map<TopoModeId, Surface>();
@@ -286,11 +288,10 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
   // Mutable view state shared with the imperative render loop.
   const view = useRef({ yaw: 0.62, pitch: 0.52, dragUntil: 0, fadeT: 1, lastCycle: 0, pinnedUntil: 0 });
   const stateRef = useRef({ surfaces, modeIds, modeIdx, palIdx, spot });
-  stateRef.current = { surfaces, modeIds, modeIdx: Math.min(modeIdx, Math.max(0, modeIds.length - 1)), palIdx, spot };
-  const setModeIdxRef = useRef(setModeIdx);
-  setModeIdxRef.current = setModeIdx;
-  const setReadoutRef = useRef(setReadout);
-  setReadoutRef.current = setReadout;
+  useEffect(() => {
+    // Snapshot the latest render values for the rAF loop - ref writes belong in effects, not render.
+    stateRef.current = { surfaces, modeIds, modeIdx: Math.min(modeIdx, Math.max(0, modeIds.length - 1)), palIdx, spot };
+  }, [surfaces, modeIds, modeIdx, palIdx, spot]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -679,7 +680,7 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
       if (!reduced && now - v.lastCycle > CYCLE_MS && now > v.pinnedUntil && st.modeIds.length > 1) {
         v.lastCycle = now;
         v.fadeT = 0;
-        setModeIdxRef.current((i) => (i + 1) % st.modeIds.length);
+        setModeIdx((i) => (i + 1) % st.modeIds.length);
       }
       v.fadeT = Math.min(1, v.fadeT + 0.06);
       draw();
@@ -723,12 +724,12 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
       }
       if (bp) {
         const val = S.raw[bp.r][bp.c];
-        setReadoutRef.current(`$${S.cols[bp.c]} · ${fmtMag(val)} ${TENOR_LABELS[Math.round((bp.r / (ROWS - 1)) * 3)]}`);
+        setReadout(`$${S.cols[bp.c]} · ${fmtMag(val)} ${TENOR_LABELS[Math.round((bp.r / (ROWS - 1)) * 3)]}`);
       } else {
-        setReadoutRef.current("");
+        setReadout("");
       }
     };
-    const onLeave = () => setReadoutRef.current("");
+    const onLeave = () => setReadout("");
     canvas.addEventListener("pointerdown", onDown);
     canvas.addEventListener("pointerup", onUp);
     canvas.addEventListener("pointermove", onMove);
@@ -780,6 +781,7 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
             }}
             title="cycle color scheme"
             className="border-l border-[var(--border)] px-3 py-1 font-mono text-[0.62rem] font-semibold tracking-[0.05em] text-[var(--accent)] transition-colors duration-150 hover:text-[var(--text)]"
+            suppressHydrationWarning
           >
             {PALETTES[palIdx].label}
           </button>

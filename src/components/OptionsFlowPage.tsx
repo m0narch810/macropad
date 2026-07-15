@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { GexResponse, GexSymbol, PricerEngine } from "@/lib/gex";
-import { fmtNum, fmtRaw, fmtUsd, nearStrikeWindow } from "@/lib/gex";
+import { fmtNum, fmtRaw, fmtUsd } from "@/lib/gex";
 import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
 import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
@@ -131,7 +131,6 @@ function TerminalView({ data }: { data: GexResponse }) {
   const [chartView, setChartView] = useState<"bars" | "cumulative">("bars");
   const [chartDteIndex, setChartDteIndex] = useState(0);
   const [dteScope, setDteScope] = useState<"single" | "cumulative">("single");
-  const top = useMemo(() => nearStrikeWindow(data.perStrike, data.spot, 30), [data]);
 
   const gammaEngine = data.gammaEngine;
   const deltaEngine = data.deltaEngine;
@@ -140,35 +139,34 @@ function TerminalView({ data }: { data: GexResponse }) {
   const dteColumns = data.strikeExpiryHeatmaps?.[metric]?.columns ?? [];
   const clampedDteIndex = Math.min(chartDteIndex, Math.max(0, dteColumns.length - 1));
 
-  // Column 0 is always this app's own self-computed 0DTE chain (real per-contract IV/OI) - the most
-  // precise source available. Any other column comes from the source's own cross-expiry surface
-  // (/gex_surface, /vanna_surface, /charm_surface, /theta), a documented raw-magnitude proxy since
-  // this app doesn't hold a full per-contract chain for those expirations - see the heatmap's own note.
-  // "Single" isolates the selected expiration; "cumulative" sums every real expiration up to and
-  // including it (0DTE contribution still self-computed, only dte>0 columns come from the surface).
+  // Every column, including 0DTE, comes from the /heatmap endpoint - the
+  // same real per-strike, per-expiry source the heatmap/topo views use (see
+  // strikeExpiryHeatmaps.ts). This app's own self-computed 0DTE chain is
+  // NOT used here anymore: it's ATM-dominated and doesn't reflect real OI
+  // walls away from spot, confirmed directly against a live vendor $-GEX
+  // table (walls at strikes like 725/730 collapsed to ~0 in the
+  // self-computed version despite real, large exposure sitting there).
+  // "Single" isolates the selected expiration; "cumulative" sums every
+  // expiration up to and including it.
   const chartData = useMemo(() => {
     const grid = data.strikeExpiryHeatmaps?.[metric];
+    if (!grid) return [];
     const windowNearest = (rows: { strike: number; value: number }[]) =>
       [...rows].sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot)).slice(0, 30).sort((a, b) => a.strike - b.strike);
 
     if (dteScope === "single") {
-      if (clampedDteIndex === 0) return top.map((r) => ({ strike: r.strike, value: r[metric] }));
-      if (!grid) return [];
       return windowNearest(grid.strikes.map((strike, i) => ({ strike, value: grid.values[i][clampedDteIndex] ?? 0 })));
     }
 
     const acc = new Map<number, number>();
-    for (const r of top) acc.set(r.strike, r[metric]);
-    if (grid) {
-      for (let col = 1; col <= clampedDteIndex; col++) {
-        grid.strikes.forEach((strike, i) => {
-          const v = grid.values[i][col];
-          if (v !== null) acc.set(strike, (acc.get(strike) ?? 0) + v);
-        });
-      }
+    for (let col = 0; col <= clampedDteIndex; col++) {
+      grid.strikes.forEach((strike, i) => {
+        const v = grid.values[i][col];
+        if (v !== null) acc.set(strike, (acc.get(strike) ?? 0) + v);
+      });
     }
     return windowNearest([...acc.entries()].map(([strike, value]) => ({ strike, value })));
-  }, [data, metric, clampedDteIndex, dteScope, top]);
+  }, [data, metric, clampedDteIndex, dteScope]);
   const walls: WallMarker[] = computeTopWalls(chartData, metric, 2);
 
   const phaseColor = gammaEngine ? PHASE_COLOR[gammaEngine.phase.phase] ?? "var(--text-faint)" : "var(--text-faint)";
@@ -305,18 +303,14 @@ function TerminalView({ data }: { data: GexResponse }) {
                 </div>
               </div>
               <div className="eyebrow">
-                ±15 strikes around spot
-                {dteScope === "cumulative"
-                  ? ` · 0DTE self-computed ($) + ${clampedDteIndex} further expiration${clampedDteIndex === 1 ? "" : "s"} from /heatmap (raw, not $)`
-                  : clampedDteIndex > 0
-                    ? " · /heatmap endpoint, raw magnitude proxy - not $"
-                    : " · self-computed 0DTE, real $"}
+                ±15 strikes around spot · /heatmap endpoint, raw magnitude proxy - not $
+                {dteScope === "cumulative" && clampedDteIndex > 0 ? ` · summed through ${dteColumns[clampedDteIndex]?.label ?? ""}` : ""}
               </div>
             </div>
             {chartView === "bars" ? (
-              <TerminalExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} walls={walls} valueFormatter={clampedDteIndex > 0 ? fmtRaw : fmtUsd} />
+              <TerminalExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} walls={walls} valueFormatter={fmtRaw} />
             ) : (
-              <CumulativeExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} valueFormatter={clampedDteIndex > 0 ? fmtRaw : fmtUsd} />
+              <CumulativeExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} valueFormatter={fmtRaw} />
             )}
           </div>
           <MajorWallsPanel metricLabel={METRIC_LABEL[metric]} walls={walls} />

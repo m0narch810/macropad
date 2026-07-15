@@ -188,8 +188,10 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     // call - real per-expiry granularity (0DTE through ~8 DTE, including
     // dates /gex_surface's own dte set skips) instead of the older per-Greek
     // surface endpoints, which disagreed with each other and with the
-    // source's own dashboard. See strikeExpiryHeatmaps.ts.
-    fetchYyyWithTimeout(`/heatmap?ticker=${symbol}`, base, key, 12000),
+    // source's own dashboard. See strikeExpiryHeatmaps.ts. Now the sole
+    // source for the Chart/Heatmap/Cross-Expiry/Topo sections - a longer
+    // budget than the old 12s cuts down on empty views from a slow request.
+    fetchYyyWithTimeout(`/heatmap?ticker=${symbol}`, base, key, 18000),
     fetchRiskFreeRate(),
   ]);
 

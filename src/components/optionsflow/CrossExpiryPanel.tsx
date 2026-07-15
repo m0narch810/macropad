@@ -132,8 +132,6 @@ export function CrossExpiryPanel({ defaultSymbol }: { defaultSymbol: GexSymbol }
           </div>
         )}
       </div>
-      <div className="eyebrow">{mode === "traditional" ? "/heatmap endpoint · raw magnitude proxy, not dollarized" : "This app's own 0DTE delta reprice, real $"}</div>
-
       {loading && <div className="py-16 text-center font-mono text-[0.72rem] text-[var(--text-faint)]">Loading {ticker}…</div>}
       {!loading && error && (
         <div className="py-16 text-center font-mono text-[0.72rem]" style={{ color: "var(--down)" }}>

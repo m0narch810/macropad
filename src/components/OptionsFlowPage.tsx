@@ -169,6 +169,23 @@ function TerminalView({ data }: { data: GexResponse }) {
   const walls: WallMarker[] = computeTopWalls(chartData, chartMode === "traditional" ? metric : "gex", 2);
   const chartUnitLabel = chartMode === "traditional" ? METRIC_LABEL[metric] : chartMode === "effective" ? "EFF GEX" : "SHADOW γ";
 
+  // Hero tile Call Wall/Put Wall - same computeTopWalls the Chart/Heatmap
+  // graphs use (top-magnitude GEX strikes), always the traditional 0DTE GEX
+  // column regardless of whatever metric/mode the Chart tab happens to be
+  // showing right now, so the hero stat doesn't silently change meaning
+  // when someone switches the Chart to DEX or Effective mode.
+  const heroWalls: WallMarker[] = useMemo(() => {
+    const grid = data.strikeExpiryHeatmaps?.gex;
+    if (!grid) return [];
+    const rows = grid.strikes
+      .map((strike, i) => ({ strike, value: grid.values[i][0] ?? 0 }))
+      .sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot))
+      .slice(0, 30);
+    return computeTopWalls(rows, "gex", 2);
+  }, [data]);
+  const heroCallWall = heroWalls.find((w) => w.label === "Call Wall")?.price ?? null;
+  const heroPutWall = heroWalls.find((w) => w.label === "Put Wall")?.price ?? null;
+
   const heatmapWalls: WallMarker[] = useMemo(() => {
     if (heatmapMode === "traditional" || !data.effectiveGex) return [];
     const rows = data.effectiveGex.rows.map((r) => ({ strike: r.strike, value: heatmapMode === "effective" ? r.upEffective : r.shadowGammaUp }));
@@ -244,8 +261,8 @@ function TerminalView({ data }: { data: GexResponse }) {
           </div>
           {gammaEngine && <p className="m-0 font-sans text-[0.72rem] leading-relaxed text-[var(--text-dim)]">{gammaEngine.phase.interpretation}</p>}
           <div className="mt-auto grid grid-cols-2 gap-3 border-t border-[var(--border)] pt-3 sm:grid-cols-4">
-            <MetricTile label="Call Wall" value={fmtNum(data.callWall, 2)} color="var(--up)" />
-            <MetricTile label="Put Wall" value={fmtNum(data.putWall, 2)} color="var(--down)" />
+            <MetricTile label="Call Wall" value={heroCallWall !== null ? fmtNum(heroCallWall, 2) : "—"} color="var(--up)" />
+            <MetricTile label="Put Wall" value={heroPutWall !== null ? fmtNum(heroPutWall, 2) : "—"} color="var(--down)" />
             <MetricTile label="Max Pain" value={fmtNum(data.maxPain, 2)} />
             <MetricTile label="G-Flip" value={data.gammaFlip !== null ? fmtNum(data.gammaFlip, 2) : "—"} />
           </div>
@@ -362,11 +379,7 @@ function TerminalView({ data }: { data: GexResponse }) {
               </div>
               <div className="eyebrow w-full">
                 ±15 strikes around spot
-                {chartMode === "traditional"
-                  ? ` · /heatmap endpoint, raw magnitude proxy - not $${dteScope === "cumulative" && clampedDteIndex > 0 ? ` · summed through ${dteColumns[clampedDteIndex]?.label ?? ""}` : ""}`
-                  : chartMode === "effective"
-                    ? " · full delta reprice of this app's own 0DTE chain, real $ - not the source's data"
-                    : " · vanna-driven slice of the effective reprice, isolated from pure gamma, real $"}
+                {chartMode === "traditional" && dteScope === "cumulative" && clampedDteIndex > 0 ? ` · summed through ${dteColumns[clampedDteIndex]?.label ?? ""}` : ""}
               </div>
             </div>
             {chartView === "bars" ? (
@@ -432,11 +445,7 @@ function TerminalView({ data }: { data: GexResponse }) {
                 {heatmapMode === "traditional" && metricTabs("sm")}
               </div>
             </div>
-            <div className="eyebrow mb-3">
-              {heatmapMode === "traditional"
-                ? "/heatmap endpoint · raw magnitude proxy, not dollarized - see cell hover"
-                : "This app's own 0DTE delta reprice, real $ · +move / -move columns instead of a DTE axis"}
-            </div>
+            {heatmapMode !== "traditional" && <div className="eyebrow mb-3">+move / -move columns instead of a DTE axis</div>}
             {heatmapMode === "traditional" ? (
               <StrikeExpiryHeatmapChart grid={windowHeatmap(data.strikeExpiryHeatmaps?.[metric], data.spot)} spot={data.spot} walls={walls} unitLabel={METRIC_LABEL[metric]} valueFormatter={fmtRaw} />
             ) : (

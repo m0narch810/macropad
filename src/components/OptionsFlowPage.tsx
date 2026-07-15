@@ -8,6 +8,7 @@ import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
+import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
 
 export type OptionsFlowView = "terminal";
 
@@ -81,15 +82,16 @@ function effectiveGexAsGrid(result: GexResponse["effectiveGex"] | undefined, mod
   };
 }
 
-type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset";
+type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "aiprompt";
 const SECTION_LABEL: Record<Section, string> = {
   chart: "CHART",
   topo: "TOPO",
   heatmap: "HEATMAP",
   crossexpiry: "CROSS-EXPIRY",
   crossasset: "CROSS ASSET",
+  aiprompt: "AI PROMPT",
 };
-const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset"];
+const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "aiprompt"];
 
 type ChartMode = "traditional" | "effective" | "shadow";
 const CHART_MODE_LABEL: Record<ChartMode, string> = { traditional: "TRADITIONAL", effective: "EFFECTIVE", shadow: "SHADOW" };
@@ -478,6 +480,15 @@ function TerminalView({ data }: { data: GexResponse }) {
         </div>
       )}
 
+      {section === "aiprompt" && (
+        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+          <div className="mb-4">
+            <div className="font-display text-[0.95rem] text-[var(--text)]">AI Prompt</div>
+            <div className="eyebrow mt-1">{data.symbol} · copy this request's real data into a ready-made prompt for ChatGPT or any other LLM</div>
+          </div>
+          <AiPromptPanel data={data} />
+        </div>
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import type { ThetaEngineResult } from "@/lib/thetaEngine";
 import type { VannaEngineResult } from "@/lib/vannaEngine";
 import type { CharmEngineResult } from "@/lib/charmEngine";
 import type { StrikeExpiryHeatmap } from "@/lib/strikeExpiryHeatmaps";
-import type { HedgeCliffResult } from "@/lib/hedgeCliffEngine";
+import type { EffectiveGexResult } from "@/lib/effectiveGexEngine";
 import type { TopoRow } from "@/lib/topoProfile";
 
 export type GexSymbol = "QQQ" | "SPY" | "SPX" | "NDX";
@@ -142,8 +142,8 @@ export interface GexResponse {
   vannaEngine?: VannaEngineResult;
   /** The Charm Decision Engine: finite-horizon modeled hedge flow from time passage alone, flow schedule, price x time charm field, Delta Destination Map - see charmEngine.ts. This is the Charm page's primary content. */
   charmEngine?: CharmEngineResult;
-  /** Hedge Acceleration and Cliff Map: H(S)/H'(S)/H''(S) curves from a spot-only reprice grid - see hedgeCliffEngine.ts. */
-  hedgeCliff?: HedgeCliffResult;
+  /** Effective GEX and Shadow Gamma: scenario-based per-strike hedge pressure from a full delta reprice - see effectiveGexEngine.ts. */
+  effectiveGex?: EffectiveGexResult;
   /** Strike x expiry grids for the Terminal heatmap, one per selectable Greek - see strikeExpiryHeatmaps.ts. */
   strikeExpiryHeatmaps?: Record<"gex" | "dex" | "vex" | "cex" | "tex" | "vegaex", StrikeExpiryHeatmap | null>;
   /** Strike x tenor term profile for the Terminal's 3D topography surface - see topoProfile.ts. */

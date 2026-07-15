@@ -20,7 +20,7 @@ import { computeThetaEngine, parseThetaHeatmap } from "@/lib/thetaEngine";
 import { computeVannaEngine, type VannaSurfacePoint } from "@/lib/vannaEngine";
 import { computeCharmEngine, type CharmSurfacePoint } from "@/lib/charmEngine";
 import { fromHeatmapEndpoint, type HeatmapEndpointRaw, type HeatmapMetric } from "@/lib/strikeExpiryHeatmaps";
-import { computeHedgeCliffMap } from "@/lib/hedgeCliffEngine";
+import { computeEffectiveGex } from "@/lib/effectiveGexEngine";
 import { buildTopoProfile } from "@/lib/topoProfile";
 
 // The source API silently falls back to SPX's own data for any ticker it
@@ -490,13 +490,15 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
   response.strikeExpiryHeatmaps = heatmapGrids;
   response.topo = buildTopoProfile(heatmapGrids, spot);
 
-  response.hedgeCliff = computeHedgeCliffMap({
+  response.effectiveGex = computeEffectiveGex({
     chain,
+    perStrike,
     spot,
+    T,
     r,
     q,
-    dteHours,
-    flowImbalance: dealerFlow?.imbalance ?? null,
+    sviParams,
+    forward,
   });
 
   return { ok: true, status: 200, data: response };

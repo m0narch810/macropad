@@ -7,8 +7,7 @@ import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalExposureChart, type 
 import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
-import { HedgeCliffCharts } from "@/components/optionsflow/HedgeCliffCharts";
-import { HedgeStructurePanel } from "@/components/optionsflow/HedgeStructurePanel";
+import { EffectiveGexPanel, ShadowGammaPanel } from "@/components/optionsflow/EffectiveGexPanel";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 
 export type OptionsFlowView = "terminal";
@@ -109,9 +108,17 @@ function windowHeatmap(grid: { columns: { label: string; dte: number | null }[];
   return { columns: grid.columns, strikes: kept.map((k) => k.strike), values: kept.map((k) => grid.values[k.i]) };
 }
 
-type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "cliffmap";
-const SECTION_LABEL: Record<Section, string> = { chart: "CHART", topo: "TOPO", heatmap: "HEATMAP", crossexpiry: "CROSS-EXPIRY", crossasset: "CROSS ASSET", cliffmap: "CLIFF MAP" };
-const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "cliffmap"];
+type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "effectivegex" | "shadowgamma";
+const SECTION_LABEL: Record<Section, string> = {
+  chart: "CHART",
+  topo: "TOPO",
+  heatmap: "HEATMAP",
+  crossexpiry: "CROSS-EXPIRY",
+  crossasset: "CROSS ASSET",
+  effectivegex: "EFFECTIVE GEX",
+  shadowgamma: "SHADOW GAMMA",
+};
+const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "effectivegex", "shadowgamma"];
 const CROSS_ASSET_TICKERS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
 
 function MosaicTile({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -370,27 +377,23 @@ function TerminalView({ data }: { data: GexResponse }) {
         </div>
       )}
 
-      {section === "cliffmap" && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-            <div className="mb-3">
-              <div className="font-display text-[0.95rem] text-[var(--text)]">Hedge Acceleration &amp; Cliff Map</div>
-              <div className="eyebrow mt-1">{data.symbol} · how fast the estimated dealer-hedging response changes as spot moves — not another GEX-by-strike view</div>
-            </div>
-            {data.hedgeCliff ? (
-              <HedgeCliffCharts
-                curve={data.hedgeCliff.curve}
-                spot={data.spot}
-                upsideCliff={data.hedgeCliff.upsideCliff}
-                downsideCliff={data.hedgeCliff.downsideCliff}
-                maxPinning={data.hedgeCliff.maxPinning}
-                feedbackFlip={data.hedgeCliff.feedbackFlip}
-              />
-            ) : (
-              <p className="m-0 py-16 text-center font-mono text-[0.72rem] text-[var(--text-faint)]">Unavailable this request.</p>
-            )}
+      {section === "effectivegex" && (
+        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+          <div className="mb-4">
+            <div className="font-display text-[0.95rem] text-[var(--text)]">Effective GEX</div>
+            <div className="eyebrow mt-1">{data.symbol} · static gamma-snapshot GEX vs a full delta reprice at spot ±1% — real hedge cliffs, not a linear estimate</div>
           </div>
-          <HedgeStructurePanel hedgeCliff={data.hedgeCliff ?? null} />
+          <EffectiveGexPanel result={data.effectiveGex} spot={data.spot} />
+        </div>
+      )}
+
+      {section === "shadowgamma" && (
+        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+          <div className="mb-4">
+            <div className="font-display text-[0.95rem] text-[var(--text)]">Shadow Gamma</div>
+            <div className="eyebrow mt-1">{data.symbol} · the hedge-dollar delta caused by the vol surface moving with spot (vanna), isolated from pure gamma</div>
+          </div>
+          <ShadowGammaPanel result={data.effectiveGex} spot={data.spot} />
         </div>
       )}
     </div>

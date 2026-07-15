@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { GexResponse, GexSymbol } from "@/lib/gex";
 import { fmtNum, fmtRaw, fmtUsd } from "@/lib/gex";
 import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalDualBarChart, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
@@ -9,7 +9,7 @@ import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
-import { Tesseract } from "@/components/optionsflow/Tesseract";
+import { LevelLadder } from "@/components/optionsflow/LevelLadder";
 import { IvSmileChart } from "@/components/optionsflow/IvSmileChart";
 
 export type OptionsFlowView = "terminal";
@@ -40,6 +40,59 @@ function MetricTile({ label, value, color }: { label: string; value: string; col
       <div className="eyebrow">{label}</div>
       <div className="mt-0.5 font-mono text-[0.9rem] font-semibold" style={{ color: color ?? "var(--text)" }}>
         {value}
+      </div>
+    </div>
+  );
+}
+
+export interface SpotTick {
+  dir: "up" | "down" | null;
+  /** asOf of the update that produced this tick - keys the flash animation so it re-fires per update, not per render. */
+  at: number;
+}
+
+/** Pulsing feed indicator + seconds-since-update, self-ticking so the rest of the page doesn't re-render every second. */
+function LiveStatus({ asOf, deepReady, degraded }: { asOf: number; deepReady: boolean; degraded: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const secs = Math.max(0, Math.floor((now - asOf) / 1000));
+  const age = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  const dotColor = degraded ? "var(--amber)" : "var(--up)";
+  return (
+    <div className="flex items-center gap-3 font-mono text-[0.62rem] text-[var(--text-faint)]">
+      {!deepReady && (
+        <span className="flex items-center gap-1.5 border border-[var(--border)] px-2 py-0.5 uppercase tracking-[0.1em]">
+          <span className="live-dot h-1 w-1 rounded-full" style={{ background: "var(--amber)" }} />
+          deep sync
+        </span>
+      )}
+      <span className="flex items-center gap-1.5 uppercase tracking-[0.1em]">
+        <span className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: dotColor }} />
+        {degraded ? "reconnecting" : "live"} · {age} ago
+      </span>
+    </div>
+  );
+}
+
+/** Placeholder for sections whose data rides the slow full tier - shown from first paint until the deep payload lands. */
+function DeepSyncPanel({ title, note }: { title: string; note?: string }) {
+  return (
+    <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-display text-[0.95rem] text-[var(--text)]">{title}</div>
+        <span className="eyebrow flex items-center gap-1.5">
+          <span className="live-dot h-1 w-1 rounded-full" style={{ background: "var(--amber)" }} />
+          deep sync
+        </span>
+      </div>
+      <div className="eyebrow mt-1">{note ?? "streaming the full depth computation — this view fills in as it lands"}</div>
+      <div className="mt-4 flex flex-col gap-2">
+        {[0.92, 0.64, 0.8, 0.5, 0.74, 0.6].map((w, i) => (
+          <div key={i} className="shimmer h-6" style={{ width: `${w * 100}%` }} />
+        ))}
       </div>
     </div>
   );
@@ -103,12 +156,17 @@ const CROSS_ASSET_TICKERS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
 
 function TerminalView({
   data,
+  deepReady,
+  tick,
   movePctDraft,
   onMovePctDraftChange,
   onApplyMovePct,
   onAutoMovePct,
 }: {
   data: GexResponse;
+  /** False until the slow full tier (heatmaps/topo/engines) has landed at least once. */
+  deepReady: boolean;
+  tick: SpotTick;
   movePctDraft: string;
   onMovePctDraftChange: (v: string) => void;
   onApplyMovePct: () => void;
@@ -277,18 +335,35 @@ function TerminalView({
         <div className="blueprint hud relative flex flex-col gap-4 overflow-hidden border-l-4 bg-[var(--panel)] p-5" style={{ borderColor: phaseColor }}>
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="glow-accent display-hero font-mono text-[2.4rem] text-[var(--text)]">${fmtNum(data.spot, 2)}</div>
+              <div
+                key={tick.at}
+                className={`glow-accent display-hero font-mono text-[2.4rem] text-[var(--text)] ${tick.dir === "up" ? "tick-up" : tick.dir === "down" ? "tick-down" : ""}`}
+              >
+                ${fmtNum(data.spot, 2)}
+                {tick.dir && (
+                  <span className="ml-2 align-[0.35em] font-mono text-[0.9rem]" style={{ color: tick.dir === "up" ? "var(--up)" : "var(--down)" }}>
+                    {tick.dir === "up" ? "▲" : "▼"}
+                  </span>
+                )}
+              </div>
               <div className="eyebrow mt-1.5">
                 {data.symbol} · 0DTE {data.resolvedExpiry}
               </div>
             </div>
-            {gammaEngine && (
+            {gammaEngine ? (
               <div className="inline-flex items-center gap-1.5 border px-2.5 py-1" style={{ borderColor: phaseColor, background: `color-mix(in srgb, ${phaseColor} 8%, transparent)` }}>
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: phaseColor }} />
                 <span className="font-mono text-[0.7rem] font-semibold uppercase tracking-[0.04em]" style={{ color: phaseColor }}>
                   {gammaEngine.phase.label}
                 </span>
               </div>
+            ) : (
+              !deepReady && (
+                <div className="inline-flex items-center gap-1.5 border border-[var(--border)] px-2.5 py-1">
+                  <span className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--amber)" }} />
+                  <span className="font-mono text-[0.7rem] font-semibold uppercase tracking-[0.04em] text-[var(--text-faint)]">regime syncing</span>
+                </div>
+              )
             )}
           </div>
           {gammaEngine && <p className="m-0 font-sans text-[0.72rem] leading-relaxed text-[var(--text-dim)]">{gammaEngine.phase.interpretation}</p>}
@@ -300,8 +375,23 @@ function TerminalView({
           </div>
         </div>
 
-        <div className="flex flex-col items-center justify-center">
-          <Tesseract height={220} />
+        <div className="hud flex flex-col gap-3 border border-[var(--border)] bg-[var(--panel)] p-4">
+          <div className="flex items-baseline justify-between">
+            <div className="partno">{data.symbol} · structure</div>
+            <div className="eyebrow">live levels</div>
+          </div>
+          <LevelLadder
+            spot={data.spot}
+            tickDir={tick.dir}
+            perStrike={data.perStrike}
+            callWall={heroCallWall}
+            putWall={heroPutWall}
+            gammaFlip={data.gammaFlip}
+            maxPain={data.maxPain}
+            kingNode={data.kingNode}
+            expectedMove1s={data.zeroDte?.expectedMove1s ?? null}
+            height={214}
+          />
         </div>
       </div>
 
@@ -425,6 +515,11 @@ function TerminalView({
               <div className="eyebrow w-full">
                 ±15 strikes around spot
                 {chartMode === "traditional" && dteScope === "cumulative" && clampedDteIndex > 0 ? ` · summed through ${dteColumns[clampedDteIndex]?.label ?? ""}` : ""}
+                {!deepReady && chartMode === "traditional" && !data.strikeExpiryHeatmaps?.[metric]
+                  ? metric === "gex"
+                    ? " · live self-computed 0DTE — full expiry stack syncing"
+                    : " · this metric rides the full payload — syncing"
+                  : ""}
               </div>
               {chartMode !== "traditional" && (
                 <p className="m-0 w-full font-sans text-[0.68rem] leading-relaxed text-[var(--text-dim)]">
@@ -446,7 +541,8 @@ function TerminalView({
         </div>
       )}
 
-      {section === "topo" && (
+      {section === "topo" && !deepReady && <DeepSyncPanel title="Market Topography" note="the 3D terrain is built from the full strike × expiry payload" />}
+      {section === "topo" && deepReady && (
         <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
             <div>
@@ -475,7 +571,8 @@ function TerminalView({
         </div>
       )}
 
-      {section === "heatmap" && (
+      {section === "heatmap" && !deepReady && <DeepSyncPanel title={`${data.symbol} heatmap`} note="the strike × expiry grid is part of the full payload" />}
+      {section === "heatmap" && deepReady && (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
           <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
             <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
@@ -547,17 +644,18 @@ function TerminalView({
         <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
           <div className="mb-3">
             <div className="font-display text-[0.95rem] text-[var(--text)]">IV Smile</div>
-            <div className="eyebrow mt-1">{data.symbol} · 0DTE only — each strike's real live-quoted call/put IV against this session's fitted smile curve</div>
+            <div className="eyebrow mt-1">{data.symbol} · 0DTE only — each strike&apos;s real live-quoted call/put IV against this session&apos;s fitted smile curve</div>
           </div>
           <IvSmileChart points={data.ivSmile} spot={data.spot} />
         </div>
       )}
 
-      {section === "aiprompt" && (
+      {section === "aiprompt" && !deepReady && <DeepSyncPanel title="AI Prompt" note="the prompt embeds the full analytics payload — waiting for it to land" />}
+      {section === "aiprompt" && deepReady && (
         <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
           <div className="mb-4">
             <div className="font-display text-[0.95rem] text-[var(--text)]">AI Prompt</div>
-            <div className="eyebrow mt-1">{data.symbol} · copy this request's real data into a ready-made prompt for ChatGPT or any other LLM</div>
+            <div className="eyebrow mt-1">{data.symbol} · copy this request&apos;s real data into a ready-made prompt for ChatGPT or any other LLM</div>
           </div>
           <AiPromptPanel data={data} />
         </div>
@@ -566,72 +664,149 @@ function TerminalView({
   );
 }
 
-export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
-  const [symbol, setSymbol] = useState<GexSymbol>("QQQ");
-  const [data, setData] = useState<GexResponse | null>(null);
+// Core rides /zero_dte + /gex only (~3-4s server-side) - polling it is what
+// keeps spot and every self-computed Greek live. Full is the heavy pipeline
+// (~15-20s); it hydrates the deep sections and refreshes less often.
+const CORE_POLL_MS = 10_000;
+const FULL_POLL_MS = 60_000;
+
+function FlowSession({ symbol, onSymbolChange }: { symbol: GexSymbol; onSymbolChange: (s: GexSymbol) => void }) {
+  const [core, setCore] = useState<GexResponse | null>(null);
+  const [full, setFull] = useState<GexResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  // A poll failed but older data is still on screen - degrade the status
+  // chip instead of blanking a working page over one bad request.
+  const [degraded, setDegraded] = useState(false);
+  const [tick, setTick] = useState<SpotTick>({ dir: null, at: 0 });
+  const lastSpotRef = useRef<number | null>(null);
 
   // Effective GEX/Shadow Gamma's scenario move % - null means "let the
   // server pick" (auto, spans the displayed +/-15 strikes). Only refetches
-  // on explicit Apply/Auto, not every keystroke, since this re-runs the
-  // whole 0DTE pipeline server-side (~15-20s), not just the reprice.
+  // on explicit Apply/Auto, not every keystroke.
   const [movePct, setMovePct] = useState<number | null>(null);
   const [movePctDraft, setMovePctDraft] = useState("");
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetch(`/api/gex?symbol=${symbol}${movePct !== null ? `&movePct=${movePct}` : ""}`, { cache: "no-store" })
-      .then((res) => {
+    let disposed = false;
+    const ctrl = new AbortController();
+    const busy = { core: false, full: false };
+
+    async function load(tier: "core" | "full") {
+      if (busy[tier]) return; // never stack a poll on a still-running fetch
+      busy[tier] = true;
+      try {
+        const res = await fetch(`/api/gex?symbol=${symbol}&tier=${tier}${movePct !== null ? `&movePct=${movePct}` : ""}`, { cache: "no-store", signal: ctrl.signal });
         if (!res.ok) throw new Error(`request failed (${res.status})`);
-        return res.json();
-      })
-      .then((json: GexResponse) => {
-        if (cancelled) return;
+        const json = (await res.json()) as GexResponse;
         if (!json.ok) throw new Error("upstream returned an error");
-        setData(json);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
+        if (disposed) return;
+        const prevSpot = lastSpotRef.current;
+        if (prevSpot !== null && json.spot !== prevSpot) {
+          setTick({ dir: json.spot > prevSpot ? "up" : "down", at: json.asOf });
+        }
+        lastSpotRef.current = json.spot;
+        if (tier === "core") setCore(json);
+        else setFull(json);
+        setError(null);
+        setDegraded(false);
+      } catch (err) {
+        if (disposed || ctrl.signal.aborted) return;
+        setDegraded(true);
+        setError(err instanceof Error ? err.message : "request failed");
+      } finally {
+        busy[tier] = false;
+      }
+    }
+
+    load("core");
+    load("full");
+    const coreId = setInterval(() => {
+      if (!document.hidden) load("core");
+    }, CORE_POLL_MS);
+    const fullId = setInterval(() => {
+      if (!document.hidden) load("full");
+    }, FULL_POLL_MS);
+    const onVisible = () => {
+      if (!document.hidden) {
+        load("core");
+        load("full");
+      }
     };
-  }, [symbol, view, movePct]);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      disposed = true;
+      ctrl.abort();
+      clearInterval(coreId);
+      clearInterval(fullId);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [symbol, movePct]);
+
+  // The freshest tier wins the live fields (spot, per-strike Greeks, walls,
+  // smile, effective GEX); the full tier keeps contributing the heavy
+  // payload (engines/heatmaps/topo/cross-expiry) that only it carries.
+  const data = useMemo<GexResponse | null>(() => {
+    if (!full) return core;
+    if (!core || core.asOf <= full.asOf) return full;
+    return {
+      ...full,
+      asOf: core.asOf,
+      spot: core.spot,
+      resolvedExpiry: core.resolvedExpiry,
+      dteHours: core.dteHours,
+      perStrike: core.perStrike,
+      totalGex0dte: core.totalGex0dte,
+      callWall: core.callWall,
+      putWall: core.putWall,
+      kingNode: core.kingNode,
+      gammaFlip: core.gammaFlip,
+      maxPain: core.maxPain,
+      atmIv: core.atmIv,
+      ivSmile: core.ivSmile,
+      effectiveGex: core.effectiveGex,
+      zeroDte: core.zeroDte,
+    };
+  }, [core, full]);
+  const deepReady = !!full;
+  const hardError = error !== null && !data;
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <SymbolToggle symbol={symbol} onChange={setSymbol} />
-        </div>
-        {data && (
-          <div className="font-mono text-[0.62rem] text-[var(--text-faint)]">
-            as of {new Date(data.asOf).toLocaleTimeString()} · 0DTE {data.resolvedExpiry}
-          </div>
-        )}
+        <SymbolToggle symbol={symbol} onChange={onSymbolChange} />
+        {data && <LiveStatus asOf={data.asOf} deepReady={deepReady} degraded={degraded} />}
       </div>
 
-      {loading && (
-        <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem] text-[var(--text-faint)]">
-          Loading {symbol} options flow…
+      {!data && !hardError && (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
+          <div className="hud flex flex-col gap-3 border border-[var(--border)] bg-[var(--panel)] p-5">
+            <div className="shimmer h-10 w-44" />
+            <div className="shimmer h-3 w-28" />
+            <div className="mt-6 grid grid-cols-4 gap-3">
+              {[0, 1, 2, 3].map((i) => (
+                <div key={i} className="shimmer h-8" />
+              ))}
+            </div>
+          </div>
+          <div className="hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-5">
+            {[0.85, 0.6, 0.75, 0.5, 0.7].map((w, i) => (
+              <div key={i} className="shimmer h-5" style={{ width: `${w * 100}%` }} />
+            ))}
+          </div>
         </div>
       )}
 
-      {!loading && error && (
+      {hardError && (
         <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
           ERR: {error}
         </div>
       )}
 
-      {!loading && !error && data && (
+      {data && (
         <TerminalView
           data={data}
+          deepReady={deepReady}
+          tick={tick}
           movePctDraft={movePctDraft}
           onMovePctDraftChange={setMovePctDraft}
           onApplyMovePct={() => {
@@ -644,6 +819,16 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
           }}
         />
       )}
+    </>
+  );
+}
+
+export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
+  const [symbol, setSymbol] = useState<GexSymbol>("QQQ");
+  return (
+    <div className="flex flex-col gap-6" data-view={view}>
+      {/* key={symbol} resets the whole data session on a ticker switch, so the old symbol's numbers never render under the new header */}
+      <FlowSession key={symbol} symbol={symbol} onSymbolChange={setSymbol} />
     </div>
   );
 }

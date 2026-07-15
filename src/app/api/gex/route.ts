@@ -1,4 +1,4 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { after, NextResponse, type NextRequest } from "next/server";
 import {
   buildStrikeRowsFromChain,
   deriveGexResponse,
@@ -32,12 +32,31 @@ const ALLOWED_SYMBOLS = new Set<GexSymbol>(["QQQ", "SPY", "SPX", "NDX"]);
 // Upstream latency, measured directly against each endpoint: /zero_dte ~1.5s,
 // /gex ~2.9s, /dealer_anomalies ~0.3s, /probability ~9.6s, /option-matrix
 // ~14.3s - the last two are genuinely slow server-side computations, not
-// something a shorter client-side cache or fewer tree steps fixes. Cache
-// the assembled response longer (this is 0DTE analytics, not tick data) so
-// most requests hit cache instead of re-paying that cost.
-const CACHE_TTL_MS = 30_000;
-const cache = new Map<string, { data: unknown; expiresAt: number }>();
-const inflight = new Map<string, Promise<{ ok: boolean; status: number; data: unknown }>>();
+// something a shorter client-side cache or fewer tree steps fixes.
+//
+// The response is therefore TIERED: "core" is everything computable from
+// /zero_dte + /gex alone (~3-4s upstream: live spot, per-strike Greeks on
+// live quoted IVs, walls, IV smile, effective GEX) and "full" adds the slow
+// endpoints and the decision engines built on them. The page renders on
+// core immediately and hydrates with full when it lands; polling the core
+// tier is what keeps spot/Greeks live between full refreshes.
+type Tier = "core" | "full";
+const CORE_TTL_MS = 5_000;
+const FULL_TTL_MS = 30_000;
+// Serve an expired-but-recent copy instantly and revalidate after the
+// response is sent (stale-while-revalidate) - but never one this old:
+// pre-open leftovers from the prior session shouldn't render as "data".
+const MAX_STALE_MS = 10 * 60_000;
+const cache = new Map<string, { data: GexResponse; fetchedAt: number }>();
+const inflight = new Map<string, Promise<{ ok: boolean; status: number; data: GexResponse | null }>>();
+
+function tierTtl(tier: Tier) {
+  return tier === "core" ? CORE_TTL_MS : FULL_TTL_MS;
+}
+
+function cacheKeyFor(symbol: GexSymbol, tier: Tier, movePctOverride?: number) {
+  return `${symbol}:${tier}${movePctOverride !== undefined ? `:${movePctOverride}` : ""}`;
+}
 
 /** option-matrix (cross-expiry table) is supplementary, not required to render GEX/DEX/Hedge Pressure - don't let its ~14s upstream latency hold up the whole response. */
 async function fetchYyyWithTimeout(path: string, base: string, key: string, timeoutMs: number) {
@@ -164,46 +183,28 @@ interface CharmSurfaceRaw {
   error?: string | null;
 }
 
-/** Fetches the railway endpoints we actually need, builds our own per-strike Greeks (Black-Scholes + American tree, both on real IV) instead of trusting the source's precomputed ones. */
-async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string, movePctOverride?: number) {
-  const [zeroDteResult, probabilityResult, matrixResult, anomaliesResult, gexResult, chartResult, thetaResult, vannaSurfaceResult, charmSurfaceResult, heatmapResult, r] = await Promise.all([
-    fetchYyy(`/zero_dte?ticker=${symbol}`, base, key),
-    fetchYyy(`/probability?ticker=${symbol}`, base, key),
-    // 4s used to be the budget here, but /option-matrix's own measured
-    // latency is ~14s and /probability already blocks this response
-    // unconditionally for ~9-10s - a 4s cutoff meant this endpoint (and
-    // everything downstream of it: cross-expiry stack, 0DTE gamma control,
-    // 0DTE-next-expiry confluence) lost to its own timeout on nearly every
-    // request, confirmed directly against live traffic. Raising the budget
-    // doesn't add net latency (probability's own unconditional wait already
-    // exceeds it) and lets real data through most of the time instead.
-    fetchYyyWithTimeout(`/option-matrix?ticker=${symbol}`, base, key, 18000),
-    fetchYyy(`/dealer_anomalies?ticker=${symbol}`, base, key),
-    fetchYyy(`/gex?ticker=${symbol}`, base, key),
-    fetchYyyWithTimeout(`/chart?ticker=${symbol}&interval=5min`, base, key, 6000),
-    fetchYyyWithTimeout(`/theta?ticker=${symbol}`, base, key, 15000),
-    fetchYyyWithTimeout(`/vanna_surface?ticker=${symbol}`, base, key, 12000),
-    fetchYyyWithTimeout(`/charm_surface?ticker=${symbol}`, base, key, 12000),
-    // Dedicated per-strike x per-expiry heatmap for all six Greeks in one
-    // call - real per-expiry granularity (0DTE through ~8 DTE, including
-    // dates /gex_surface's own dte set skips) instead of the older per-Greek
-    // surface endpoints, which disagreed with each other and with the
-    // source's own dashboard. See strikeExpiryHeatmaps.ts. Now the sole
-    // source for the Chart/Heatmap/Cross-Expiry/Topo sections - a longer
-    // budget than the old 12s cuts down on empty views from a slow request.
-    fetchYyyWithTimeout(`/heatmap?ticker=${symbol}`, base, key, 18000),
-    fetchRiskFreeRate(),
-  ]);
+// Placeholder for the core tier - real historical stats only ship with the
+// full tier (/probability is one of the slow endpoints core exists to skip).
+const EMPTY_PROBABILITY: ProbabilityStats = { muDailyPct: 0, sigmaDailyPct: 0, skewness: 0, excessKurtosis: 0, fatTails: false, nDays: 0, bands1d: {} };
 
-  if (!zeroDteResult.ok || !probabilityResult.ok) {
-    return { ok: false, status: Math.max(zeroDteResult.status, probabilityResult.status), data: null };
-  }
+interface CoreBuild {
+  response: GexResponse;
+  rawChain: ChainStrikeInput[];
+  chain: ChainStrikeInput[];
+  sviParams: ReturnType<typeof fitSvi>;
+  forward: number;
+  T: number;
+  spot: number;
+  perStrike: ReturnType<typeof buildStrikeRowsFromChain>;
+  atmIv: number;
+  dteHours: number;
+  zeroDte: ZeroDteContext | null;
+  q: number;
+}
 
-  const zeroDteRaw = zeroDteResult.data as ZeroDteRaw;
-  const probabilityRaw = probabilityResult.data as ProbabilityRaw;
-  if (zeroDteRaw.error || probabilityRaw.error || !zeroDteRaw.spot || !zeroDteRaw.strike_data?.length) {
-    return { ok: false, status: 502, data: null };
-  }
+/** Everything derivable from the /zero_dte chain alone: self-computed per-strike Greeks on live quoted IVs, walls, IV smile, effective GEX. Shared by both tiers so the numbers can never disagree between them. */
+function assembleCore(symbol: GexSymbol, zeroDteRaw: ZeroDteRaw, maxPain: number, r: number, movePctOverride?: number): CoreBuild | null {
+  if (zeroDteRaw.error || !zeroDteRaw.spot || !zeroDteRaw.strike_data?.length) return null;
 
   const spot = zeroDteRaw.spot;
   const dteHours = zeroDteRaw.dte_hours ?? 0;
@@ -254,6 +255,143 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     }))
     .sort((a, b) => a.strike - b.strike);
 
+  const zeroDte: ZeroDteContext | null =
+    zeroDteRaw.expected_move_1s !== undefined
+      ? {
+          expectedMove1s: zeroDteRaw.expected_move_1s,
+          expectedMove2s: zeroDteRaw.expected_move_2s ?? 0,
+          pcRatio: zeroDteRaw.pc_ratio ?? 0,
+          pcSentiment: zeroDteRaw.pc_sentiment ?? "",
+          charmDirection: zeroDteRaw.charm_direction ?? "",
+          vannaDirection: zeroDteRaw.vanna_direction ?? "",
+          charmNote: zeroDteRaw.charm_note ?? "",
+          vannaNote: zeroDteRaw.vanna_note ?? "",
+        }
+      : null;
+
+  // Source's atm_iv is on a 0-100 percentage-point scale (e.g. 28.3), not
+  // the fractional scale (0.283) every per-contract iv/vol figure in this
+  // app uses - confirmed directly against the same /zero_dte payload's own
+  // strike_data ivs, which ARE fractional. Divide by 100 before it reaches
+  // any vol-as-decimal function (touch probability, etc).
+  const atmIv = (zeroDteRaw.atm_iv ?? 20) / 100;
+
+  const response = deriveGexResponse({
+    symbol,
+    spot,
+    resolvedExpiry: zeroDteRaw.expiry ?? "",
+    dteHours,
+    perStrike,
+    maxPain,
+    probability: EMPTY_PROBABILITY,
+    dealerFlow: null,
+    crossExpiry: [],
+    zeroDte,
+    pricerInputs: { r, q },
+  });
+
+  response.atmIv = atmIv;
+  response.ivSmile = ivSmile;
+
+  // Scenario move defaults to spanning the same +/-15 strikes shown on the
+  // Chart/Heatmap (not a fixed 1%) - a tiny move barely reaches past the
+  // first few visible strikes, so most of the displayed window would look
+  // identical to the static snapshot. Uses this expiry's own strike
+  // spacing (median gap between consecutive strikes) x 15, unless the
+  // caller passed an explicit override (the Chart's own %-move input).
+  const sortedStrikes = [...new Set(perStrike.map((r2) => r2.strike))].sort((a, b) => a - b);
+  const strikeGaps = sortedStrikes.slice(1).map((s, i) => s - sortedStrikes[i]).filter((g) => g > 0).sort((a, b) => a - b);
+  const strikeInterval = strikeGaps.length ? strikeGaps[Math.floor(strikeGaps.length / 2)] : 1;
+  const autoMovePct = Math.min(0.5, (strikeInterval * 15) / spot);
+  const scenarioMovePct = movePctOverride !== undefined && movePctOverride > 0 ? Math.min(0.5, movePctOverride / 100) : autoMovePct;
+
+  response.effectiveGex = computeEffectiveGex({
+    chain,
+    perStrike,
+    spot,
+    T,
+    r,
+    q,
+    sviParams,
+    forward,
+    moveUpPct: scenarioMovePct,
+    moveDownPct: scenarioMovePct,
+  });
+
+  return { response, rawChain, chain, sviParams, forward, T, spot, perStrike, atmIv, dteHours, zeroDte, q };
+}
+
+/** The fast tier: /zero_dte + /gex only (~3-4s upstream vs ~15-20s for the full pipeline). Live spot and self-computed per-strike Greeks - what the page polls to stay live. */
+async function buildCoreResponse(symbol: GexSymbol, base: string, key: string, movePctOverride?: number): Promise<{ ok: boolean; status: number; data: GexResponse | null }> {
+  const [zeroDteResult, gexResult, r] = await Promise.all([
+    fetchYyy(`/zero_dte?ticker=${symbol}`, base, key),
+    fetchYyy(`/gex?ticker=${symbol}`, base, key),
+    fetchRiskFreeRate(),
+  ]);
+
+  if (!zeroDteResult.ok) return { ok: false, status: zeroDteResult.status, data: null };
+
+  let maxPain = 0;
+  if (gexResult.ok) {
+    const g = gexResult.data as GexAggRaw;
+    if (!g.error) maxPain = g.max_pain ?? 0;
+  }
+
+  const core = assembleCore(symbol, zeroDteResult.data as ZeroDteRaw, maxPain, r, movePctOverride);
+  if (!core) return { ok: false, status: 502, data: null };
+  return { ok: true, status: 200, data: core.response };
+}
+
+/** Fetches the railway endpoints we actually need, builds our own per-strike Greeks (Black-Scholes + American tree, both on real IV) instead of trusting the source's precomputed ones. */
+async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string, movePctOverride?: number): Promise<{ ok: boolean; status: number; data: GexResponse | null }> {
+  const [zeroDteResult, probabilityResult, matrixResult, anomaliesResult, gexResult, chartResult, thetaResult, vannaSurfaceResult, charmSurfaceResult, heatmapResult, r] = await Promise.all([
+    fetchYyy(`/zero_dte?ticker=${symbol}`, base, key),
+    fetchYyy(`/probability?ticker=${symbol}`, base, key),
+    // 4s used to be the budget here, but /option-matrix's own measured
+    // latency is ~14s and /probability already blocks this response
+    // unconditionally for ~9-10s - a 4s cutoff meant this endpoint (and
+    // everything downstream of it: cross-expiry stack, 0DTE gamma control,
+    // 0DTE-next-expiry confluence) lost to its own timeout on nearly every
+    // request, confirmed directly against live traffic. Raising the budget
+    // doesn't add net latency (probability's own unconditional wait already
+    // exceeds it) and lets real data through most of the time instead.
+    fetchYyyWithTimeout(`/option-matrix?ticker=${symbol}`, base, key, 18000),
+    fetchYyy(`/dealer_anomalies?ticker=${symbol}`, base, key),
+    fetchYyy(`/gex?ticker=${symbol}`, base, key),
+    fetchYyyWithTimeout(`/chart?ticker=${symbol}&interval=5min`, base, key, 6000),
+    fetchYyyWithTimeout(`/theta?ticker=${symbol}`, base, key, 15000),
+    fetchYyyWithTimeout(`/vanna_surface?ticker=${symbol}`, base, key, 12000),
+    fetchYyyWithTimeout(`/charm_surface?ticker=${symbol}`, base, key, 12000),
+    // Dedicated per-strike x per-expiry heatmap for all six Greeks in one
+    // call - real per-expiry granularity (0DTE through ~8 DTE, including
+    // dates /gex_surface's own dte set skips) instead of the older per-Greek
+    // surface endpoints, which disagreed with each other and with the
+    // source's own dashboard. See strikeExpiryHeatmaps.ts. Now the sole
+    // source for the Chart/Heatmap/Cross-Expiry/Topo sections - a longer
+    // budget than the old 12s cuts down on empty views from a slow request.
+    fetchYyyWithTimeout(`/heatmap?ticker=${symbol}`, base, key, 18000),
+    fetchRiskFreeRate(),
+  ]);
+
+  if (!zeroDteResult.ok || !probabilityResult.ok) {
+    return { ok: false, status: Math.max(zeroDteResult.status, probabilityResult.status), data: null };
+  }
+
+  const zeroDteRaw = zeroDteResult.data as ZeroDteRaw;
+  const probabilityRaw = probabilityResult.data as ProbabilityRaw;
+
+  let maxPain = 0;
+  if (gexResult.ok) {
+    const g = gexResult.data as GexAggRaw;
+    if (!g.error) maxPain = g.max_pain ?? 0;
+  }
+
+  const core = assembleCore(symbol, zeroDteRaw, maxPain, r, movePctOverride);
+  if (!core || probabilityRaw.error) {
+    return { ok: false, status: 502, data: null };
+  }
+  const { response, rawChain, chain, sviParams, forward, T, spot, perStrike, atmIv, dteHours, zeroDte, q } = core;
+
   const probability: ProbabilityStats = {
     muDailyPct: probabilityRaw.mu_daily_pct ?? 0,
     sigmaDailyPct: probabilityRaw.sigma_daily_pct ?? 1.5,
@@ -297,33 +435,6 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     }
   }
 
-  const zeroDte: ZeroDteContext | null =
-    zeroDteRaw.expected_move_1s !== undefined
-      ? {
-          expectedMove1s: zeroDteRaw.expected_move_1s,
-          expectedMove2s: zeroDteRaw.expected_move_2s ?? 0,
-          pcRatio: zeroDteRaw.pc_ratio ?? 0,
-          pcSentiment: zeroDteRaw.pc_sentiment ?? "",
-          charmDirection: zeroDteRaw.charm_direction ?? "",
-          vannaDirection: zeroDteRaw.vanna_direction ?? "",
-          charmNote: zeroDteRaw.charm_note ?? "",
-          vannaNote: zeroDteRaw.vanna_note ?? "",
-        }
-      : null;
-
-  let maxPain = 0;
-  if (gexResult.ok) {
-    const g = gexResult.data as GexAggRaw;
-    if (!g.error) maxPain = g.max_pain ?? 0;
-  }
-
-  // Source's atm_iv is on a 0-100 percentage-point scale (e.g. 28.3), not
-  // the fractional scale (0.283) every per-contract iv/vol figure in this
-  // app uses - confirmed directly against the same /zero_dte payload's own
-  // strike_data ivs, which ARE fractional. Divide by 100 before it reaches
-  // any vol-as-decimal function (touch probability, etc).
-  const atmIv = (zeroDteRaw.atm_iv ?? 20) / 100;
-
   let recentVolume5m: number | null = null;
   let recentVolume15m: number | null = null;
   let recentVolume30m: number | null = null;
@@ -336,22 +447,11 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     }
   }
 
-  const response = deriveGexResponse({
-    symbol,
-    spot,
-    resolvedExpiry: zeroDteRaw.expiry ?? "",
-    dteHours,
-    perStrike,
-    maxPain,
-    probability,
-    dealerFlow,
-    crossExpiry,
-    zeroDte,
-    pricerInputs: { r, q },
-  });
-
-  response.atmIv = atmIv;
-  response.ivSmile = ivSmile;
+  // assembleCore built the response with core-tier stubs for these - the
+  // slow-endpoint data replaces them now that it's actually here.
+  response.probability = probability;
+  response.dealerFlow = dealerFlow;
+  response.crossExpiry = crossExpiry;
 
   response.gexPage = computeGexPageAnalytics({
     chain,
@@ -513,39 +613,18 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
   response.strikeExpiryHeatmaps = heatmapGrids;
   response.topo = buildTopoProfile(heatmapGrids, spot);
 
-  // Scenario move defaults to spanning the same +/-15 strikes shown on the
-  // Chart/Heatmap (not a fixed 1%) - a tiny move barely reaches past the
-  // first few visible strikes, so most of the displayed window would look
-  // identical to the static snapshot. Uses this expiry's own strike
-  // spacing (median gap between consecutive strikes) x 15, unless the
-  // caller passed an explicit override (the Chart's own %-move input).
-  const sortedStrikes = [...new Set(perStrike.map((r) => r.strike))].sort((a, b) => a - b);
-  const strikeGaps = sortedStrikes.slice(1).map((s, i) => s - sortedStrikes[i]).filter((g) => g > 0).sort((a, b) => a - b);
-  const strikeInterval = strikeGaps.length ? strikeGaps[Math.floor(strikeGaps.length / 2)] : 1;
-  const autoMovePct = Math.min(0.5, (strikeInterval * 15) / spot);
-  const scenarioMovePct = movePctOverride !== undefined && movePctOverride > 0 ? Math.min(0.5, movePctOverride / 100) : autoMovePct;
-
-  response.effectiveGex = computeEffectiveGex({
-    chain,
-    perStrike,
-    spot,
-    T,
-    r,
-    q,
-    sviParams,
-    forward,
-    moveUpPct: scenarioMovePct,
-    moveDownPct: scenarioMovePct,
-  });
-
   return { ok: true, status: 200, data: response };
 }
 
-async function fetchShared(symbol: GexSymbol, base: string, key: string, movePctOverride: number | undefined, cacheKey: string) {
+/** Builds the requested tier, deduped per cacheKey so concurrent requests share one upstream trip, and writes the result into the cache. */
+async function refreshCache(tier: Tier, symbol: GexSymbol, base: string, key: string, movePctOverride: number | undefined, cacheKey: string) {
   const existing = inflight.get(cacheKey);
   if (existing) return existing;
 
-  const promise = buildZeroDteResponse(symbol, base, key, movePctOverride);
+  const promise = (tier === "core" ? buildCoreResponse(symbol, base, key, movePctOverride) : buildZeroDteResponse(symbol, base, key, movePctOverride)).then((result) => {
+    if (result.ok && result.data) cache.set(cacheKey, { data: result.data, fetchedAt: Date.now() });
+    return result;
+  });
   inflight.set(cacheKey, promise);
   try {
     return await promise;
@@ -560,12 +639,16 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "unsupported_symbol" }, { status: 400 });
   }
 
+  // tier=core -> the fast /zero_dte-only build; anything else keeps the
+  // original full pipeline, so existing callers are unaffected.
+  const tier: Tier = request.nextUrl.searchParams.get("tier") === "core" ? "core" : "full";
+
   // Optional override for the Effective GEX/Shadow Gamma scenario move size
   // (percent, e.g. "2.5") - the Chart's own %-move input. Absent or invalid
   // falls back to the auto-computed +/-15-strike default.
   const movePctRaw = request.nextUrl.searchParams.get("movePct");
   const movePctOverride = movePctRaw !== null && Number.isFinite(Number(movePctRaw)) ? Number(movePctRaw) : undefined;
-  const cacheKey = movePctOverride !== undefined ? `${symbol}:${movePctOverride}` : symbol;
+  const cacheKey = cacheKeyFor(symbol, tier, movePctOverride);
 
   const base = process.env.YYY_API_BASE;
   const key = process.env.YYY_API_KEY;
@@ -573,20 +656,35 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "gex_api_not_configured" }, { status: 500 });
   }
 
+  const now = Date.now();
   const cached = cache.get(cacheKey);
-  if (cached && cached.expiresAt > Date.now()) {
+  if (cached && now - cached.fetchedAt < tierTtl(tier)) {
     return NextResponse.json(cached.data);
   }
 
-  const result = await fetchShared(symbol, base, key, movePctOverride, cacheKey);
+  // A fresh FULL response is a strict superset of core (same assembleCore
+  // numbers) - serve it instead of paying another upstream round trip.
+  if (tier === "core") {
+    const fullCached = cache.get(cacheKeyFor(symbol, "full", movePctOverride));
+    if (fullCached && now - fullCached.fetchedAt < FULL_TTL_MS) {
+      return NextResponse.json(fullCached.data);
+    }
+  }
+
+  // Stale-while-revalidate: an expired-but-recent copy renders instantly;
+  // the refetch runs after this response is sent and warms the cache for
+  // the next poll. Bounded by MAX_STALE_MS so genuinely old data blocks.
+  if (cached && now - cached.fetchedAt < MAX_STALE_MS) {
+    after(() => refreshCache(tier, symbol, base, key, movePctOverride, cacheKey).catch(() => {}));
+    return NextResponse.json(cached.data);
+  }
+
+  const result = await refreshCache(tier, symbol, base, key, movePctOverride, cacheKey);
 
   if (!result.ok || !result.data) {
     if (cached) return NextResponse.json(cached.data);
     return NextResponse.json({ ok: false, error: "upstream_error", status: result.status }, { status: 502 });
   }
 
-  const targetData = result.data as GexResponse;
-
-  cache.set(cacheKey, { data: targetData, expiresAt: Date.now() + CACHE_TTL_MS });
-  return NextResponse.json(targetData);
+  return NextResponse.json(result.data);
 }

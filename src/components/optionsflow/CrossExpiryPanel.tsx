@@ -39,57 +39,70 @@ export function CrossExpiryPanel({ defaultSymbol }: { defaultSymbol: GexSymbol }
   const [mode, setMode] = useState<Mode>("traditional");
   const [dir, setDir] = useState<"up" | "down">("up");
   const [data, setData] = useState<GexResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ ticker: GexSymbol; message: string } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
-    fetch(`/api/gex?symbol=${ticker}`, { cache: "no-store" })
-      .then((res) => {
+    let busy = false;
+
+    async function load() {
+      if (busy) return; // never stack a poll on a still-running fetch
+      busy = true;
+      try {
+        const res = await fetch(`/api/gex?symbol=${ticker}`, { cache: "no-store" });
         if (!res.ok) throw new Error(`request failed (${res.status})`);
-        return res.json();
-      })
-      .then((json: GexResponse) => {
-        if (cancelled) return;
+        const json = (await res.json()) as GexResponse;
         if (!json.ok) throw new Error("upstream returned an error");
+        if (cancelled) return;
         setData(json);
-      })
-      .catch((err: Error) => {
-        if (!cancelled) setError(err.message);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+        setError(null);
+      } catch (err) {
+        if (!cancelled) setError({ ticker, message: err instanceof Error ? err.message : "request failed" });
+      } finally {
+        busy = false;
+      }
+    }
+
+    load();
+    // Silent refresh keeps the panel live without flashing back to a spinner.
+    const id = setInterval(() => {
+      if (!document.hidden) load();
+    }, 60_000);
     return () => {
       cancelled = true;
+      clearInterval(id);
     };
   }, [ticker]);
 
-  const grid = data?.strikeExpiryHeatmaps?.[metric] ?? null;
+  // Loading/error are derived from which ticker the on-screen payload belongs
+  // to, so a ticker switch needs no synchronous state reset in the effect.
+  const current = data && data.symbol === ticker ? data : null;
+  const errorMsg = error && error.ticker === ticker ? error.message : null;
+  const loading = !current && !errorMsg;
+
+  const grid = current?.strikeExpiryHeatmaps?.[metric] ?? null;
   const columns = grid?.columns ?? [];
   const clampedIndex = Math.min(dteIndex, Math.max(0, columns.length - 1));
 
   const chartData = useMemo(() => {
-    if (!data) return [];
+    if (!current) return [];
     if (mode !== "traditional") {
-      const rows = data.effectiveGex?.rows ?? [];
+      const rows = current.effectiveGex?.rows ?? [];
       const pick = (r: NonNullable<GexResponse["effectiveGex"]>["rows"][number]) =>
         mode === "effective" ? (dir === "up" ? r.upEffective : r.downEffective) : dir === "up" ? r.shadowGammaUp : r.shadowGammaDown;
       return [...rows.map((r) => ({ strike: r.strike, value: pick(r) }))]
-        .sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot))
+        .sort((a, b) => Math.abs(a.strike - current.spot) - Math.abs(b.strike - current.spot))
         .slice(0, STRIKE_WINDOW)
         .sort((a, b) => a.strike - b.strike);
     }
     if (!grid || !grid.strikes.length) return [];
     const all = grid.strikes.map((strike, i) => ({ strike, value: grid.values[i][clampedIndex] ?? 0 }));
-    return [...all].sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot)).slice(0, STRIKE_WINDOW).sort((a, b) => a.strike - b.strike);
-  }, [grid, clampedIndex, data, mode, dir]);
+    return [...all].sort((a, b) => Math.abs(a.strike - current.spot) - Math.abs(b.strike - current.spot)).slice(0, STRIKE_WINDOW).sort((a, b) => a.strike - b.strike);
+  }, [grid, clampedIndex, current, mode, dir]);
 
   const unitLabel = mode === "traditional" ? METRIC_LABEL[metric] : mode === "effective" ? "EFF GEX" : "SHADOW γ";
-  const walls: WallMarker[] = data
-    ? [...computeTopWalls(chartData, mode === "traditional" ? metric : "gex", 2), { label: "Max Pain", price: data.maxPain, color: "#d9a441" }, ...(data.gammaFlip !== null ? [{ label: "G-Flip", price: data.gammaFlip, color: "var(--text-faint)" }] : [])]
+  const walls: WallMarker[] = current
+    ? [...computeTopWalls(chartData, mode === "traditional" ? metric : "gex", 2), { label: "Max Pain", price: current.maxPain, color: "#d9a441" }, ...(current.gammaFlip !== null ? [{ label: "G-Flip", price: current.gammaFlip, color: "var(--text-faint)" }] : [])]
     : [];
 
   return (
@@ -125,20 +138,20 @@ export function CrossExpiryPanel({ defaultSymbol }: { defaultSymbol: GexSymbol }
                 }`}
               >
                 {d === "up"
-                  ? `+${data?.effectiveGex ? (data.effectiveGex.moveUpPct * 100).toFixed(1) : "—"}%`
-                  : `-${data?.effectiveGex ? (data.effectiveGex.moveDownPct * 100).toFixed(1) : "—"}%`}
+                  ? `+${current?.effectiveGex ? (current.effectiveGex.moveUpPct * 100).toFixed(1) : "—"}%`
+                  : `-${current?.effectiveGex ? (current.effectiveGex.moveDownPct * 100).toFixed(1) : "—"}%`}
               </button>
             ))}
           </div>
         )}
       </div>
       {loading && <div className="py-16 text-center font-mono text-[0.72rem] text-[var(--text-faint)]">Loading {ticker}…</div>}
-      {!loading && error && (
+      {!loading && errorMsg && !current && (
         <div className="py-16 text-center font-mono text-[0.72rem]" style={{ color: "var(--down)" }}>
-          ERR: {error}
+          ERR: {errorMsg}
         </div>
       )}
-      {!loading && !error && data && (chartData.length ? <TerminalExposureChart data={chartData} unitLabel={unitLabel} spot={data.spot} walls={walls} showAllTicks valueFormatter={mode === "traditional" ? fmtRaw : fmtUsd} /> : <div className="py-16 text-center font-mono text-[0.72rem] text-[var(--text-faint)]">No data for this selection.</div>)}
+      {current && (chartData.length ? <TerminalExposureChart data={chartData} unitLabel={unitLabel} spot={current.spot} walls={walls} showAllTicks valueFormatter={mode === "traditional" ? fmtRaw : fmtUsd} /> : <div className="py-16 text-center font-mono text-[0.72rem] text-[var(--text-faint)]">No data for this selection.</div>)}
     </div>
   );
 }

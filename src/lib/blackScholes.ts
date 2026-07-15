@@ -8,10 +8,12 @@
  * NDX are worth marginally more than their European value here, a known,
  * accepted simplification of this rewrite (not a hidden one).
  *
- * Greeks are still bump-and-reprice (not the closed-form derivative
- * formulas) so every downstream sign/scale convention - per-1-vol-point
- * vega/vanna, per-calendar-day theta/charm - stays identical to what the
- * rest of the app already expects.
+ * Greeks are the exact closed-form derivatives (not bump-and-reprice
+ * finite differences, which quietly biased every per-strike figure by the
+ * bump width, and not the former 4-hour minimum-T gamma floor, which made
+ * afternoon 0DTE GEX disagree with any terminal computing raw greeks).
+ * Sign/scale conventions are unchanged: per-1-vol-point vega/vanna,
+ * per-calendar-day theta/charm.
  */
 
 export interface PricerInputs {
@@ -58,29 +60,19 @@ export function bsPrice(inputs: PricerInputs): number {
 }
 
 /**
- * Minimum T fed to the gamma formula only (price/delta/theta/vega/vanna/
- * charm all keep using the option's real, unfloored T). Confirmed directly:
- * with the real T on a 0DTE contract in its final 30-60 minutes, raw BS
- * gamma is mathematically exact but converges toward a near-Dirac spike at
- * the money (peak width scales with spot*vol*sqrt(T), which shrinks toward
- * zero as T does) - a single strike absorbs almost the entire book's
- * gamma while its $1-2 neighbors collapse toward zero. Real desks don't
- * chart raw instantaneous gamma that close to expiry for exactly this
- * reason: dealers can't rebalance with infinite precision in the literal
- * final minutes, so the practical/tradeable gamma profile is wider than
- * the instant math implies. Flooring T at 4 trading hours for gamma only
- * widens that peak back to a realistic multi-strike spread without
- * touching any other Greek's real time-to-expiry.
+ * Closed-form gamma at the option's real T - exact, no finite-difference
+ * bump size to get wrong. The former 4-trading-hour minimum-T floor here is
+ * gone: it widened the late-day 0DTE gamma peak on purpose, but that made
+ * every afternoon per-strike GEX bar disagree with the source terminal's
+ * own raw-greek numbers. Instantaneous gamma near the close genuinely does
+ * concentrate at the money - that is the real profile, charted as-is.
  */
-const GAMMA_MIN_T_YEARS = 4 / 24 / 365;
-
-/** Closed-form gamma - exact at any T, no finite-difference bump size to get wrong - with the stated minimum-T floor above applied only here. */
 export function bsGamma(inputs: PricerInputs): number {
   if (inputs.T <= 0 || inputs.vol <= 0) return 0;
-  const T = Math.max(inputs.T, GAMMA_MIN_T_YEARS);
+  const { spot, strike, T, vol, r, q } = inputs;
   const sqrtT = Math.sqrt(T);
-  const d1 = (Math.log(inputs.spot / inputs.strike) + (inputs.r - inputs.q + (inputs.vol * inputs.vol) / 2) * T) / (inputs.vol * sqrtT);
-  return (Math.exp(-inputs.q * T) * normPdf(d1)) / (inputs.spot * inputs.vol * sqrtT);
+  const d1 = (Math.log(spot / strike) + (r - q + (vol * vol) / 2) * T) / (vol * sqrtT);
+  return (Math.exp(-q * T) * normPdf(d1)) / (spot * vol * sqrtT);
 }
 
 export interface Greeks {
@@ -93,56 +85,61 @@ export interface Greeks {
   charm: number; // d(delta)/dT, per calendar day
 }
 
-/** Bump-and-reprice Greeks under frozen IV, except gamma (see below). */
+/**
+ * Exact closed-form Greeks (Haug / standard generalized-BS derivatives with
+ * continuous dividend yield). The former bump-and-reprice version's fixed
+ * ~0.5%-of-spot and 1-vol-point bump widths quietly smeared every figure on
+ * short-dated contracts - a 0DTE delta kink or gamma peak can be narrower
+ * than the bump window itself. Conventions preserved exactly: theta and
+ * charm are per CALENDAR DAY (d/dt forward, so theta is negative for a
+ * decaying long option), vega and vanna are per 1 vol point (0.01).
+ */
 export function bsGreeks(inputs: PricerInputs): Greeks {
-  const hS = inputs.spot * 0.005;
-  const hVol = 0.01;
-  const hT = Math.min(inputs.T * 0.1, 1 / 365);
+  const { spot, strike, T, vol, r, q, isCall } = inputs;
+  const price = bsPrice(inputs);
 
-  const at = (over: Partial<PricerInputs>) => bsPrice({ ...inputs, ...over });
+  if (T <= 0 || vol <= 0) {
+    // Expired/degenerate: intrinsic value, step-function delta, all higher-order Greeks dead.
+    const itm = isCall ? spot > strike : spot < strike;
+    return { price, delta: itm ? (isCall ? 1 : -1) : 0, gamma: 0, theta: 0, vega: 0, vanna: 0, charm: 0 };
+  }
 
-  const v0 = at({});
-  const vUp = at({ spot: inputs.spot + hS });
-  const vDown = at({ spot: inputs.spot - hS });
-  const delta = (vUp - vDown) / (2 * hS);
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(spot / strike) + (r - q + (vol * vol) / 2) * T) / (vol * sqrtT);
+  const d2 = d1 - vol * sqrtT;
+  const eqT = Math.exp(-q * T);
+  const erT = Math.exp(-r * T);
+  const pdf1 = normPdf(d1);
 
-  // Gamma uses the closed-form formula, not finite difference: a 0DTE
-  // gamma peak can be just $1-2 wide (width scales with S*sigma*sqrt(T)),
-  // narrower than the fixed ~0.5%-of-spot bump above - finite-differencing
-  // across a window wider than the true peak systematically distorts the
-  // per-strike shape (confirmed directly: it was concentrating gamma onto
-  // whichever single strike the bump window happened to straddle, instead
-  // of the smooth, gradually-declining profile a real 0DTE book shows).
-  const gamma = bsGamma(inputs);
+  const delta = isCall ? eqT * normCdf(d1) : eqT * (normCdf(d1) - 1);
+  const gamma = (eqT * pdf1) / (spot * vol * sqrtT);
+  const vega = spot * eqT * pdf1 * sqrtT * 0.01; // per 1 vol point
 
-  const vVolUp = at({ vol: inputs.vol + hVol });
-  const vVolDown = at({ vol: Math.max(1e-4, inputs.vol - hVol) });
-  const vega = (vVolUp - vVolDown) / 2; // per 1 vol point (hVol=0.01 cancels the /0.01 scale)
+  // dV/dt (calendar time moving forward), per day - negative for a decaying long option.
+  const thetaYear = isCall
+    ? (-spot * eqT * pdf1 * vol) / (2 * sqrtT) - r * strike * erT * normCdf(d2) + q * spot * eqT * normCdf(d1)
+    : (-spot * eqT * pdf1 * vol) / (2 * sqrtT) + r * strike * erT * normCdf(-d2) - q * spot * eqT * normCdf(-d1);
+  const theta = thetaYear / 365;
 
-  const vTUp = at({ T: Math.max(1e-6, inputs.T - hT) });
-  const theta = ((vTUp - v0) / hT) * (1 / 365); // per calendar day, decay is negative of d/dT
+  const vanna = -eqT * pdf1 * (d2 / vol) * 0.01; // d(delta)/d(vol), per 1 vol point
 
-  // vanna: d(delta)/d(vol) via bumped-vol delta
-  const deltaVolUp = (at({ spot: inputs.spot + hS, vol: inputs.vol + hVol }) - at({ spot: inputs.spot - hS, vol: inputs.vol + hVol })) / (2 * hS);
-  const deltaVolDown =
-    (at({ spot: inputs.spot + hS, vol: Math.max(1e-4, inputs.vol - hVol) }) - at({ spot: inputs.spot - hS, vol: Math.max(1e-4, inputs.vol - hVol) })) /
-    (2 * hS);
-  const vanna = (deltaVolUp - deltaVolDown) / 2;
+  // d(delta)/dt (calendar time moving forward), per day.
+  const charmCommon = -eqT * pdf1 * ((2 * (r - q) * T - d2 * vol * sqrtT) / (2 * T * vol * sqrtT));
+  const charmYear = isCall ? charmCommon + q * eqT * normCdf(d1) : charmCommon - q * eqT * normCdf(-d1);
+  const charm = charmYear / 365;
 
-  // charm: d(delta)/dT via bumped-time delta
-  const tBumped = Math.max(1e-6, inputs.T - hT);
-  const deltaTBumped = (at({ spot: inputs.spot + hS, T: tBumped }) - at({ spot: inputs.spot - hS, T: tBumped })) / (2 * hS);
-  const charm = ((deltaTBumped - delta) / hT) * (1 / 365);
-
-  return { price: v0, delta, gamma, theta, vega, vanna, charm };
+  return { price, delta, gamma, theta, vega, vanna, charm };
 }
 
-/** Delta only, via 2 reprices instead of bsGreeks' ~11 - for scanning a grid of hypothetical spot/time/vol scenarios where only delta (to sum into total hedge shares) is needed, not the full Greek set. */
+/** Delta only - closed form, same value bsGreeks reports - for scanning a grid of hypothetical spot/time/vol scenarios where only delta (to sum into total hedge shares) is needed, not the full Greek set. */
 export function bsDelta(inputs: PricerInputs): number {
-  const hS = inputs.spot * 0.005;
-  const vUp = bsPrice({ ...inputs, spot: inputs.spot + hS });
-  const vDown = bsPrice({ ...inputs, spot: inputs.spot - hS });
-  return (vUp - vDown) / (2 * hS);
+  const { spot, strike, T, vol, r, q, isCall } = inputs;
+  if (T <= 0 || vol <= 0) {
+    const itm = isCall ? spot > strike : spot < strike;
+    return itm ? (isCall ? 1 : -1) : 0;
+  }
+  const d1 = (Math.log(spot / strike) + (r - q + (vol * vol) / 2) * T) / (vol * Math.sqrt(T));
+  return isCall ? Math.exp(-q * T) * normCdf(d1) : Math.exp(-q * T) * (normCdf(d1) - 1);
 }
 
 /** Standard dollar-exposure convention: Greek x OI x contract multiplier x scale. Matches the industry GEX/DEX convention (Γ·OI·M·S²·0.01, Δ·OI·M·S). */

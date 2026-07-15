@@ -21,6 +21,7 @@ import { computeVannaEngine, type VannaSurfacePoint } from "@/lib/vannaEngine";
 import { computeCharmEngine, type CharmSurfacePoint } from "@/lib/charmEngine";
 import { buildGexHeatmap, fromCharmHeatmap, fromThetaHeatmap, fromVannaHeatmap, fromZeroDteOnly, type GexSurfacePoint } from "@/lib/strikeExpiryHeatmaps";
 import { computeHedgeCliffMap } from "@/lib/hedgeCliffEngine";
+import { buildTopoProfile } from "@/lib/topoProfile";
 
 // The source API silently falls back to SPX's own data for any ticker it
 // doesn't actually carry (confirmed directly: IWM/DIA/NVDA/AAPL/MSFT/TSLA/
@@ -219,12 +220,14 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     iv: row.iv ?? 0,
   }));
 
-  // Single-slice SVI fit (this is one expiry, not a multi-expiry SSVI surface)
-  // smooths the raw per-contract IV before it reaches the Black-Scholes
-  // engine - a bad quote on one thin strike can't swing that strike's Greeks
-  // on its own. OI-weighted so liquid strikes anchor the fit more than thin
-  // ones. The American-tree engine deliberately skips this smoothing (see
-  // rawChain below) - it's the "live strike-specific IV smile" option.
+  // Single-slice SVI fit (this is one expiry, not a multi-expiry SSVI surface),
+  // OI-weighted so liquid strikes anchor the fit more than thin ones. The
+  // smoothed `chain` feeds the scenario/analytics engines (they reprice whole
+  // hypothetical grids, where one bad quote would propagate) - but the
+  // DISPLAYED per-strike rows are now built from rawChain, each contract's own
+  // live quoted IV. The SVI-fitted IVs measurably deviate from the quoted ones
+  // strike-by-strike, which is exactly why the per-strike GEX bars never quite
+  // matched the source terminal's own calculated greeks.
   const sviPoints: SviPoint[] = rawChain
     .filter((row) => row.iv > 0)
     .map((row) => ({ k: Math.log(row.strike / forward), w: row.iv * row.iv * T, weight: Math.max(1, row.oi) }));
@@ -234,7 +237,7 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     iv: row.iv > 0 ? sviImpliedVol(sviParams, row.strike, forward, T) : 0,
   }));
 
-  const perStrike = buildStrikeRowsFromChain(chain, spot, T, r, q, "bs");
+  const perStrike = buildStrikeRowsFromChain(rawChain, spot, T, r, q, "bs");
   const perStrikeAmerican = buildStrikeRowsFromChain(rawChain, spot, T, r, q, "american");
   const arbChain = buildArbitrageControlledSmile(rawChain, forward, T);
   const perStrikeCrr = buildStrikeRowsFromChain(arbChain, spot, T, r, q, "crr");
@@ -379,7 +382,7 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     flowImbalance: dealerFlow?.imbalance ?? null,
     validContracts: chain.filter((row) => row.oi > 0 && row.iv > 0).length,
     ivSurfaceFitError: computeIvSurfaceFitError(rawChain, sviParams, forward, T),
-    pricerEngineLabel: "Black-Scholes bump-and-reprice gamma on SVI-smoothed 0DTE smile (American/CRR trees available via the page's engine toggle for the static table)",
+    pricerEngineLabel: "Closed-form Black-Scholes greeks on each contract's live quoted 0DTE IV (American/CRR trees available via the page's engine toggle for the static table)",
   });
 
   response.deltaEngine = computeDeltaEngine({
@@ -497,6 +500,8 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     tex: fromThetaHeatmap(response.thetaEngine?.thetaHeatmap ?? null),
     vegaex: fromZeroDteOnly(perStrike, "vegaex", `${dteHours < 24 ? "0DTE" : response.resolvedExpiry}`),
   };
+
+  response.topo = buildTopoProfile(gexSurfacePoints, response.charmEngine?.heatmap ?? null, spot);
 
   response.hedgeCliff = computeHedgeCliffMap({
     chain,

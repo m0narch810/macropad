@@ -9,11 +9,12 @@ import type { VannaEngineResult } from "@/lib/vannaEngine";
 import type { CharmEngineResult } from "@/lib/charmEngine";
 import type { StrikeExpiryHeatmap } from "@/lib/strikeExpiryHeatmaps";
 import type { HedgeCliffResult } from "@/lib/hedgeCliffEngine";
+import type { TopoRow } from "@/lib/topoProfile";
 
 export type GexSymbol = "QQQ" | "SPY" | "SPX" | "NDX";
 
 /**
- * "bs" = Black-Scholes on the SVI-smoothed smile.
+ * "bs" = closed-form Black-Scholes on each strike's own live quoted IV (matches how the source terminal computes its greeks).
  * "american" = Leisen-Reimer binomial tree (early exercise) on each strike's own live, unsmoothed quoted IV.
  * "crr" = Cox-Ross-Rubinstein binomial tree (early exercise) on the live, arbitrage-controlled 0DTE IV smile - see arbitrageSmile.ts.
  */
@@ -107,7 +108,7 @@ export interface GexResponse {
   resolvedExpiry: string;
   /** Hours remaining to that expiry - precision the pricer needs, not just "today". */
   dteHours: number;
-  /** Black-Scholes engine, on the SVI-smoothed smile. Kept at the top level for back-compat with callers that don't care about engine choice. */
+  /** Black-Scholes engine, on each strike's own live quoted IV. Kept at the top level for back-compat with callers that don't care about engine choice. */
   perStrike: StrikeRow0DTE[];
   totalGex0dte: number;
   callWall: number;
@@ -145,6 +146,8 @@ export interface GexResponse {
   hedgeCliff?: HedgeCliffResult;
   /** Strike x expiry grids for the Terminal heatmap, one per selectable Greek - see strikeExpiryHeatmaps.ts. */
   strikeExpiryHeatmaps?: Record<"gex" | "dex" | "vex" | "cex" | "tex" | "vegaex", StrikeExpiryHeatmap | null>;
+  /** Strike x tenor term profile for the Terminal's 3D topography surface - see topoProfile.ts. */
+  topo?: TopoRow[];
 }
 
 /** Picks the N strikes with the largest |value| under `pick`, then re-sorts them ascending by strike for a coherent x-axis. */

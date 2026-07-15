@@ -9,6 +9,7 @@ import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
 import { HedgeCliffCharts } from "@/components/optionsflow/HedgeCliffCharts";
 import { HedgeStructurePanel } from "@/components/optionsflow/HedgeStructurePanel";
+import TopoSurface from "@/components/optionsflow/TopoSurface";
 
 export type OptionsFlowView = "terminal";
 
@@ -39,7 +40,7 @@ function SymbolToggle({ symbol, onChange }: { symbol: GexSymbol; onChange: (s: G
   );
 }
 
-/** bs = closed-form Black-Scholes on the SVI-smoothed smile. american = Leisen-Reimer binomial tree (prices early exercise) on each strike's own live, unsmoothed quoted IV. */
+/** bs = closed-form Black-Scholes on each strike's own live quoted IV. american = Leisen-Reimer binomial tree (prices early exercise) on the same live IVs. */
 function EngineToggle({ engine, onChange }: { engine: PricerEngine; onChange: (e: PricerEngine) => void }) {
   return (
     <div className="inline-flex flex-wrap border border-[var(--border)]">
@@ -108,9 +109,9 @@ function windowHeatmap(grid: { columns: { label: string; dte: number | null }[];
   return { columns: grid.columns, strikes: kept.map((k) => k.strike), values: kept.map((k) => grid.values[k.i]) };
 }
 
-type Section = "chart" | "heatmap" | "crossexpiry" | "crossasset" | "cliffmap";
-const SECTION_LABEL: Record<Section, string> = { chart: "CHART", heatmap: "HEATMAP", crossexpiry: "CROSS-EXPIRY", crossasset: "CROSS ASSET", cliffmap: "CLIFF MAP" };
-const SECTION_ORDER: Section[] = ["chart", "heatmap", "crossexpiry", "crossasset", "cliffmap"];
+type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "cliffmap";
+const SECTION_LABEL: Record<Section, string> = { chart: "CHART", topo: "TOPO", heatmap: "HEATMAP", crossexpiry: "CROSS-EXPIRY", crossasset: "CROSS ASSET", cliffmap: "CLIFF MAP" };
+const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "cliffmap"];
 const CROSS_ASSET_TICKERS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
 
 function MosaicTile({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -319,6 +320,16 @@ function TerminalView({ data }: { data: GexResponse }) {
             )}
           </div>
           <MajorWallsPanel metricLabel={METRIC_LABEL[metric]} walls={walls} />
+        </div>
+      )}
+
+      {section === "topo" && (
+        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+          <div className="mb-3">
+            <div className="font-display text-[0.95rem] text-[var(--text)]">Market Topography</div>
+            <div className="eyebrow mt-1">{data.symbol} · dealer book as 3D terrain — strike × expiry tenor, GEX and CHARM surfaces</div>
+          </div>
+          <TopoSurface rows={data.topo ?? []} spot={data.spot} />
         </div>
       )}
 

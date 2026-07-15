@@ -7,7 +7,6 @@ import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalExposureChart, type 
 import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
-import { EffectiveGexPanel, ShadowGammaPanel } from "@/components/optionsflow/EffectiveGexPanel";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 
 export type OptionsFlowView = "terminal";
@@ -108,17 +107,19 @@ function windowHeatmap(grid: { columns: { label: string; dte: number | null }[];
   return { columns: grid.columns, strikes: kept.map((k) => k.strike), values: kept.map((k) => grid.values[k.i]) };
 }
 
-type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "effectivegex" | "shadowgamma";
+type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset";
 const SECTION_LABEL: Record<Section, string> = {
   chart: "CHART",
   topo: "TOPO",
   heatmap: "HEATMAP",
   crossexpiry: "CROSS-EXPIRY",
   crossasset: "CROSS ASSET",
-  effectivegex: "EFFECTIVE GEX",
-  shadowgamma: "SHADOW GAMMA",
 };
-const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "effectivegex", "shadowgamma"];
+const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset"];
+
+type ChartMode = "traditional" | "effective" | "shadow";
+const CHART_MODE_LABEL: Record<ChartMode, string> = { traditional: "TRADITIONAL", effective: "EFFECTIVE", shadow: "SHADOW" };
+const CHART_MODE_ORDER: ChartMode[] = ["traditional", "effective", "shadow"];
 const CROSS_ASSET_TICKERS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
 
 function MosaicTile({ label, value, color }: { label: string; value: string; color?: string }) {
@@ -138,6 +139,8 @@ function TerminalView({ data }: { data: GexResponse }) {
   const [chartView, setChartView] = useState<"bars" | "cumulative">("bars");
   const [chartDteIndex, setChartDteIndex] = useState(0);
   const [dteScope, setDteScope] = useState<"single" | "cumulative">("single");
+  const [chartMode, setChartMode] = useState<ChartMode>("traditional");
+  const [effectiveDir, setEffectiveDir] = useState<"up" | "down">("up");
 
   const gammaEngine = data.gammaEngine;
   const deltaEngine = data.deltaEngine;
@@ -146,20 +149,31 @@ function TerminalView({ data }: { data: GexResponse }) {
   const dteColumns = data.strikeExpiryHeatmaps?.[metric]?.columns ?? [];
   const clampedDteIndex = Math.min(chartDteIndex, Math.max(0, dteColumns.length - 1));
 
-  // Every column, including 0DTE, comes from the /heatmap endpoint - the
-  // same real per-strike, per-expiry source the heatmap/topo views use (see
-  // strikeExpiryHeatmaps.ts). This app's own self-computed 0DTE chain is
-  // NOT used here anymore: it's ATM-dominated and doesn't reflect real OI
-  // walls away from spot, confirmed directly against a live vendor $-GEX
-  // table (walls at strikes like 725/730 collapsed to ~0 in the
-  // self-computed version despite real, large exposure sitting there).
-  // "Single" isolates the selected expiration; "cumulative" sums every
-  // expiration up to and including it.
+  // TRADITIONAL: every column, including 0DTE, comes from the /heatmap
+  // endpoint - the same real per-strike, per-expiry source the heatmap/topo
+  // views use (see strikeExpiryHeatmaps.ts). This app's own self-computed
+  // 0DTE chain is NOT used here: it's ATM-dominated and doesn't reflect
+  // real OI walls away from spot, confirmed directly against a live vendor
+  // $-GEX table. "Single" isolates the selected expiration; "cumulative"
+  // sums every expiration up to and including it.
+  //
+  // EFFECTIVE / SHADOW: a full delta reprice of this app's own 0DTE chain
+  // at a scenario spot (+/-1%), 0DTE-only - there's no per-contract chain
+  // for other expirations to run the same reprice on. See
+  // effectiveGexEngine.ts.
   const chartData = useMemo(() => {
-    const grid = data.strikeExpiryHeatmaps?.[metric];
-    if (!grid) return [];
     const windowNearest = (rows: { strike: number; value: number }[]) =>
       [...rows].sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot)).slice(0, 30).sort((a, b) => a.strike - b.strike);
+
+    if (chartMode !== "traditional") {
+      const rows = data.effectiveGex?.rows ?? [];
+      const pick = (r: NonNullable<GexResponse["effectiveGex"]>["rows"][number]) =>
+        chartMode === "effective" ? (effectiveDir === "up" ? r.upEffective : r.downEffective) : effectiveDir === "up" ? r.shadowGammaUp : r.shadowGammaDown;
+      return windowNearest(rows.map((r) => ({ strike: r.strike, value: pick(r) })));
+    }
+
+    const grid = data.strikeExpiryHeatmaps?.[metric];
+    if (!grid) return [];
 
     if (dteScope === "single") {
       return windowNearest(grid.strikes.map((strike, i) => ({ strike, value: grid.values[i][clampedDteIndex] ?? 0 })));
@@ -173,8 +187,9 @@ function TerminalView({ data }: { data: GexResponse }) {
       });
     }
     return windowNearest([...acc.entries()].map(([strike, value]) => ({ strike, value })));
-  }, [data, metric, clampedDteIndex, dteScope]);
-  const walls: WallMarker[] = computeTopWalls(chartData, metric, 2);
+  }, [data, metric, clampedDteIndex, dteScope, chartMode, effectiveDir]);
+  const walls: WallMarker[] = computeTopWalls(chartData, chartMode === "traditional" ? metric : "gex", 2);
+  const chartUnitLabel = chartMode === "traditional" ? METRIC_LABEL[metric] : chartMode === "effective" ? "EFF GEX" : "SHADOW γ";
 
   const phaseColor = gammaEngine ? PHASE_COLOR[gammaEngine.phase.phase] ?? "var(--text-faint)" : "var(--text-faint)";
 
@@ -264,9 +279,36 @@ function TerminalView({ data }: { data: GexResponse }) {
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
           <div className="hud flex flex-col gap-4 border border-[var(--border)] bg-[var(--panel)] p-5">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              {metricTabs("md")}
+              <div className="inline-flex border border-[var(--border)]">
+                {CHART_MODE_ORDER.map((m) => (
+                  <button
+                    key={m}
+                    onClick={() => setChartMode(m)}
+                    className={`px-3 py-1.5 font-mono text-[0.66rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
+                      m === chartMode ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {CHART_MODE_LABEL[m]}
+                  </button>
+                ))}
+              </div>
+              {chartMode === "traditional" ? metricTabs("md") : (
+                <div className="inline-flex border border-[var(--border)]">
+                  {(["up", "down"] as const).map((d) => (
+                    <button
+                      key={d}
+                      onClick={() => setEffectiveDir(d)}
+                      className={`px-2.5 py-1 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 ${
+                        d === effectiveDir ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                      }`}
+                    >
+                      {d === "up" ? "+1% Spot" : "-1% Spot"}
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex items-center gap-2">
-                {dteColumns.length > 1 && (
+                {chartMode === "traditional" && dteColumns.length > 1 && (
                   <>
                     <div className="inline-flex border border-[var(--border)]">
                       {(["single", "cumulative"] as const).map((s) => (
@@ -309,18 +351,22 @@ function TerminalView({ data }: { data: GexResponse }) {
                   ))}
                 </div>
               </div>
-              <div className="eyebrow">
-                ±15 strikes around spot · /heatmap endpoint, raw magnitude proxy - not $
-                {dteScope === "cumulative" && clampedDteIndex > 0 ? ` · summed through ${dteColumns[clampedDteIndex]?.label ?? ""}` : ""}
+              <div className="eyebrow w-full">
+                ±15 strikes around spot
+                {chartMode === "traditional"
+                  ? ` · /heatmap endpoint, raw magnitude proxy - not $${dteScope === "cumulative" && clampedDteIndex > 0 ? ` · summed through ${dteColumns[clampedDteIndex]?.label ?? ""}` : ""}`
+                  : chartMode === "effective"
+                    ? " · full delta reprice of this app's own 0DTE chain, real $ - not the source's data"
+                    : " · vanna-driven slice of the effective reprice, isolated from pure gamma, real $"}
               </div>
             </div>
             {chartView === "bars" ? (
-              <TerminalExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} walls={walls} valueFormatter={fmtRaw} />
+              <TerminalExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} walls={walls} valueFormatter={chartMode === "traditional" ? fmtRaw : fmtUsd} />
             ) : (
-              <CumulativeExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} valueFormatter={fmtRaw} />
+              <CumulativeExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} valueFormatter={chartMode === "traditional" ? fmtRaw : fmtUsd} />
             )}
           </div>
-          <MajorWallsPanel metricLabel={METRIC_LABEL[metric]} walls={walls} />
+          <MajorWallsPanel metricLabel={chartUnitLabel} walls={walls} />
         </div>
       )}
 
@@ -377,25 +423,6 @@ function TerminalView({ data }: { data: GexResponse }) {
         </div>
       )}
 
-      {section === "effectivegex" && (
-        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-          <div className="mb-4">
-            <div className="font-display text-[0.95rem] text-[var(--text)]">Effective GEX</div>
-            <div className="eyebrow mt-1">{data.symbol} · static gamma-snapshot GEX vs a full delta reprice at spot ±1% — real hedge cliffs, not a linear estimate</div>
-          </div>
-          <EffectiveGexPanel result={data.effectiveGex} spot={data.spot} />
-        </div>
-      )}
-
-      {section === "shadowgamma" && (
-        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-          <div className="mb-4">
-            <div className="font-display text-[0.95rem] text-[var(--text)]">Shadow Gamma</div>
-            <div className="eyebrow mt-1">{data.symbol} · the hedge-dollar delta caused by the vol surface moving with spot (vanna), isolated from pure gamma</div>
-          </div>
-          <ShadowGammaPanel result={data.effectiveGex} spot={data.spot} />
-        </div>
-      )}
     </div>
   );
 }

@@ -165,7 +165,7 @@ interface CharmSurfaceRaw {
 }
 
 /** Fetches the railway endpoints we actually need, builds our own per-strike Greeks (Black-Scholes + American tree, both on real IV) instead of trusting the source's precomputed ones. */
-async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string) {
+async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string, movePctOverride?: number) {
   const [zeroDteResult, probabilityResult, matrixResult, anomaliesResult, gexResult, chartResult, thetaResult, vannaSurfaceResult, charmSurfaceResult, heatmapResult, r] = await Promise.all([
     fetchYyy(`/zero_dte?ticker=${symbol}`, base, key),
     fetchYyy(`/probability?ticker=${symbol}`, base, key),
@@ -502,15 +502,17 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
   response.strikeExpiryHeatmaps = heatmapGrids;
   response.topo = buildTopoProfile(heatmapGrids, spot);
 
-  // Scenario move sized to span the same +/-15 strikes shown on the Chart/
-  // Heatmap (not a fixed 1%) - a tiny move barely reaches past the first
-  // few visible strikes, so most of the displayed window would look
+  // Scenario move defaults to spanning the same +/-15 strikes shown on the
+  // Chart/Heatmap (not a fixed 1%) - a tiny move barely reaches past the
+  // first few visible strikes, so most of the displayed window would look
   // identical to the static snapshot. Uses this expiry's own strike
-  // spacing (median gap between consecutive strikes) x 15.
+  // spacing (median gap between consecutive strikes) x 15, unless the
+  // caller passed an explicit override (the Chart's own %-move input).
   const sortedStrikes = [...new Set(perStrike.map((r) => r.strike))].sort((a, b) => a - b);
   const strikeGaps = sortedStrikes.slice(1).map((s, i) => s - sortedStrikes[i]).filter((g) => g > 0).sort((a, b) => a - b);
   const strikeInterval = strikeGaps.length ? strikeGaps[Math.floor(strikeGaps.length / 2)] : 1;
-  const scenarioMovePct = Math.min(0.5, (strikeInterval * 15) / spot);
+  const autoMovePct = Math.min(0.5, (strikeInterval * 15) / spot);
+  const scenarioMovePct = movePctOverride !== undefined && movePctOverride > 0 ? Math.min(0.5, movePctOverride / 100) : autoMovePct;
 
   response.effectiveGex = computeEffectiveGex({
     chain,
@@ -528,16 +530,16 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
   return { ok: true, status: 200, data: response };
 }
 
-async function fetchShared(symbol: GexSymbol, base: string, key: string) {
-  const existing = inflight.get(symbol);
+async function fetchShared(symbol: GexSymbol, base: string, key: string, movePctOverride: number | undefined, cacheKey: string) {
+  const existing = inflight.get(cacheKey);
   if (existing) return existing;
 
-  const promise = buildZeroDteResponse(symbol, base, key);
-  inflight.set(symbol, promise);
+  const promise = buildZeroDteResponse(symbol, base, key, movePctOverride);
+  inflight.set(cacheKey, promise);
   try {
     return await promise;
   } finally {
-    inflight.delete(symbol);
+    inflight.delete(cacheKey);
   }
 }
 
@@ -547,18 +549,25 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ ok: false, error: "unsupported_symbol" }, { status: 400 });
   }
 
+  // Optional override for the Effective GEX/Shadow Gamma scenario move size
+  // (percent, e.g. "2.5") - the Chart's own %-move input. Absent or invalid
+  // falls back to the auto-computed +/-15-strike default.
+  const movePctRaw = request.nextUrl.searchParams.get("movePct");
+  const movePctOverride = movePctRaw !== null && Number.isFinite(Number(movePctRaw)) ? Number(movePctRaw) : undefined;
+  const cacheKey = movePctOverride !== undefined ? `${symbol}:${movePctOverride}` : symbol;
+
   const base = process.env.YYY_API_BASE;
   const key = process.env.YYY_API_KEY;
   if (!base || !key) {
     return NextResponse.json({ ok: false, error: "gex_api_not_configured" }, { status: 500 });
   }
 
-  const cached = cache.get(symbol);
+  const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) {
     return NextResponse.json(cached.data);
   }
 
-  const result = await fetchShared(symbol, base, key);
+  const result = await fetchShared(symbol, base, key, movePctOverride, cacheKey);
 
   if (!result.ok || !result.data) {
     if (cached) return NextResponse.json(cached.data);
@@ -567,6 +576,6 @@ export async function GET(request: NextRequest) {
 
   const targetData = result.data as GexResponse;
 
-  cache.set(symbol, { data: targetData, expiresAt: Date.now() + CACHE_TTL_MS });
+  cache.set(cacheKey, { data: targetData, expiresAt: Date.now() + CACHE_TTL_MS });
   return NextResponse.json(targetData);
 }

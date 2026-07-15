@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { GexResponse, GexSymbol } from "@/lib/gex";
 import { fmtNum, fmtRaw, fmtUsd } from "@/lib/gex";
-import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
+import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalDualBarChart, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
 import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
@@ -101,14 +101,26 @@ const CHART_MODE_LABEL: Record<ChartMode, string> = { traditional: "TRADITIONAL"
 const CHART_MODE_ORDER: ChartMode[] = ["traditional", "effective", "shadow"];
 const CROSS_ASSET_TICKERS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
 
-function TerminalView({ data }: { data: GexResponse }) {
+function TerminalView({
+  data,
+  movePctDraft,
+  onMovePctDraftChange,
+  onApplyMovePct,
+  onAutoMovePct,
+}: {
+  data: GexResponse;
+  movePctDraft: string;
+  onMovePctDraftChange: (v: string) => void;
+  onApplyMovePct: () => void;
+  onAutoMovePct: () => void;
+}) {
   const [metric, setMetric] = useState<Metric>("gex");
   const [section, setSection] = useState<Section>("chart");
   const [chartView, setChartView] = useState<"bars" | "cumulative">("bars");
   const [chartDteIndex, setChartDteIndex] = useState(0);
   const [dteScope, setDteScope] = useState<"single" | "cumulative">("single");
   const [chartMode, setChartMode] = useState<ChartMode>("traditional");
-  const [effectiveDir, setEffectiveDir] = useState<"up" | "down">("up");
+  const [effectiveDir, setEffectiveDir] = useState<"up" | "down" | "both">("up");
   const [heatmapMode, setHeatmapMode] = useState<ChartMode>("traditional");
   const [topoMode, setTopoMode] = useState<ChartMode>("traditional");
 
@@ -129,11 +141,23 @@ function TerminalView({ data }: { data: GexResponse }) {
   // at a scenario spot (+/-1%), 0DTE-only - there's no per-contract chain
   // for other expirations to run the same reprice on. See
   // effectiveGexEngine.ts.
+  const chartDualData = useMemo(() => {
+    if (chartMode === "traditional" || effectiveDir !== "both") return [];
+    const rows = data.effectiveGex?.rows ?? [];
+    const mapped = rows.map((r) => ({
+      strike: r.strike,
+      up: chartMode === "effective" ? r.upEffective : r.shadowGammaUp,
+      down: chartMode === "effective" ? r.downEffective : r.shadowGammaDown,
+    }));
+    return [...mapped].sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot)).slice(0, 30).sort((a, b) => a.strike - b.strike);
+  }, [data, chartMode, effectiveDir]);
+
   const chartData = useMemo(() => {
     const windowNearest = (rows: { strike: number; value: number }[]) =>
       [...rows].sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot)).slice(0, 30).sort((a, b) => a.strike - b.strike);
 
     if (chartMode !== "traditional") {
+      if (effectiveDir === "both") return [];
       const rows = data.effectiveGex?.rows ?? [];
       const pick = (r: NonNullable<GexResponse["effectiveGex"]>["rows"][number]) =>
         chartMode === "effective" ? (effectiveDir === "up" ? r.upEffective : r.downEffective) : effectiveDir === "up" ? r.shadowGammaUp : r.shadowGammaDown;
@@ -156,7 +180,11 @@ function TerminalView({ data }: { data: GexResponse }) {
     }
     return windowNearest([...acc.entries()].map(([strike, value]) => ({ strike, value })));
   }, [data, metric, clampedDteIndex, dteScope, chartMode, effectiveDir]);
-  const walls: WallMarker[] = computeTopWalls(chartData, chartMode === "traditional" ? metric : "gex", 2);
+  const walls: WallMarker[] = computeTopWalls(
+    effectiveDir === "both" ? chartDualData.map((d) => ({ strike: d.strike, value: d.up })) : chartData,
+    chartMode === "traditional" ? metric : "gex",
+    2
+  );
   const chartUnitLabel = chartMode === "traditional" ? METRIC_LABEL[metric] : chartMode === "effective" ? "EFF GEX" : "SHADOW γ";
 
   // Hero tile Call Wall/Put Wall - same computeTopWalls the Chart/Heatmap
@@ -295,7 +323,7 @@ function TerminalView({ data }: { data: GexResponse }) {
               </div>
               {chartMode === "traditional" ? metricTabs("md") : (
                 <div className="inline-flex border border-[var(--border)]">
-                  {(["up", "down"] as const).map((d) => (
+                  {(["up", "down", "both"] as const).map((d) => (
                     <button
                       key={d}
                       onClick={() => setEffectiveDir(d)}
@@ -304,8 +332,10 @@ function TerminalView({ data }: { data: GexResponse }) {
                       }`}
                     >
                       {d === "up"
-                        ? `+${data.effectiveGex ? fmtNum(data.effectiveGex.moveUpPct * 100, 1) : "—"}% Spot`
-                        : `-${data.effectiveGex ? fmtNum(data.effectiveGex.moveDownPct * 100, 1) : "—"}% Spot`}
+                        ? `+${data.effectiveGex ? fmtNum(data.effectiveGex.moveUpPct * 100, 1) : "—"}%`
+                        : d === "down"
+                          ? `-${data.effectiveGex ? fmtNum(data.effectiveGex.moveDownPct * 100, 1) : "—"}%`
+                          : "+/- BOTH"}
                     </button>
                   ))}
                 </div>
@@ -340,29 +370,60 @@ function TerminalView({ data }: { data: GexResponse }) {
                     </select>
                   </>
                 )}
-                <div className="inline-flex border border-[var(--border)]">
-                  {(["bars", "cumulative"] as const).map((v) => (
-                    <button
-                      key={v}
-                      onClick={() => setChartView(v)}
-                      className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 ${
-                        v === chartView ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-                      }`}
-                    >
-                      {v}
+                {chartMode === "traditional" ? (
+                  <div className="inline-flex border border-[var(--border)]">
+                    {(["bars", "cumulative"] as const).map((v) => (
+                      <button
+                        key={v}
+                        onClick={() => setChartView(v)}
+                        className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 ${
+                          v === chartView ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                        }`}
+                      >
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="number"
+                      min={0.1}
+                      max={50}
+                      step={0.1}
+                      value={movePctDraft}
+                      onChange={(e) => onMovePctDraftChange(e.target.value)}
+                      placeholder="auto"
+                      className="w-16 border border-[var(--border)] bg-[var(--panel)] px-2 py-1 font-mono text-[0.62rem] font-semibold text-[var(--text)] outline-none"
+                    />
+                    <span className="font-mono text-[0.6rem] text-[var(--text-faint)]">%</span>
+                    <button onClick={onApplyMovePct} className="btn-primary px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em]">
+                      Apply
                     </button>
-                  ))}
-                </div>
+                    <button onClick={onAutoMovePct} className="btn-ghost px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em]">
+                      Auto
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="eyebrow w-full">
                 ±15 strikes around spot
                 {chartMode === "traditional" && dteScope === "cumulative" && clampedDteIndex > 0 ? ` · summed through ${dteColumns[clampedDteIndex]?.label ?? ""}` : ""}
               </div>
+              {chartMode !== "traditional" && (
+                <p className="m-0 w-full font-sans text-[0.68rem] leading-relaxed text-[var(--text-dim)]">
+                  {chartMode === "effective"
+                    ? "This guesses what would actually happen to dealer hedging if the price moved by the % above, instead of just assuming today's numbers stay the same. Pick a strike, pick a direction, and see how much bigger (or smaller) the reaction really looks once price gets there."
+                    : "This shows just the part of that reaction that comes from volatility shifting along with price, separated out from the plain price-move effect. Usually small, but it can matter more near the money."}
+                </p>
+              )}
             </div>
-            {chartView === "bars" ? (
-              <TerminalExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} walls={walls} valueFormatter={chartMode === "traditional" ? fmtRaw : fmtUsd} />
+            {effectiveDir === "both" && chartMode !== "traditional" ? (
+              <TerminalDualBarChart data={chartDualData} unitLabel={chartUnitLabel} spot={data.spot} walls={walls} valueFormatter={fmtUsd} />
+            ) : chartMode === "traditional" && chartView === "cumulative" ? (
+              <CumulativeExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} valueFormatter={fmtRaw} />
             ) : (
-              <CumulativeExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} valueFormatter={chartMode === "traditional" ? fmtRaw : fmtUsd} />
+              <TerminalExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} walls={walls} valueFormatter={chartMode === "traditional" ? fmtRaw : fmtUsd} />
             )}
           </div>
           <MajorWallsPanel metricLabel={chartUnitLabel} walls={walls} />
@@ -495,11 +556,18 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Effective GEX/Shadow Gamma's scenario move % - null means "let the
+  // server pick" (auto, spans the displayed +/-15 strikes). Only refetches
+  // on explicit Apply/Auto, not every keystroke, since this re-runs the
+  // whole 0DTE pipeline server-side (~15-20s), not just the reprice.
+  const [movePct, setMovePct] = useState<number | null>(null);
+  const [movePctDraft, setMovePctDraft] = useState("");
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
-    fetch(`/api/gex?symbol=${symbol}`, { cache: "no-store" })
+    fetch(`/api/gex?symbol=${symbol}${movePct !== null ? `&movePct=${movePct}` : ""}`, { cache: "no-store" })
       .then((res) => {
         if (!res.ok) throw new Error(`request failed (${res.status})`);
         return res.json();
@@ -518,7 +586,7 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
     return () => {
       cancelled = true;
     };
-  }, [symbol, view]);
+  }, [symbol, view, movePct]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -545,7 +613,21 @@ export default function OptionsFlowPage({ view }: { view: OptionsFlowView }) {
         </div>
       )}
 
-      {!loading && !error && data && <TerminalView data={data} />}
+      {!loading && !error && data && (
+        <TerminalView
+          data={data}
+          movePctDraft={movePctDraft}
+          onMovePctDraftChange={setMovePctDraft}
+          onApplyMovePct={() => {
+            const n = Number(movePctDraft);
+            if (Number.isFinite(n) && n > 0) setMovePct(n);
+          }}
+          onAutoMovePct={() => {
+            setMovePctDraft("");
+            setMovePct(null);
+          }}
+        />
+      )}
     </div>
   );
 }

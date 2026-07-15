@@ -97,6 +97,87 @@ export function TerminalExposureChart({
   );
 }
 
+export interface DualBarPoint {
+  strike: number;
+  up: number;
+  down: number;
+}
+
+/** "Both" view - up-move and down-move scenario bars side by side per strike, so the two directions can be compared at a glance instead of toggling between them. */
+export function TerminalDualBarChart({
+  data,
+  unitLabel,
+  spot,
+  walls,
+  height = 420,
+  showAllTicks = false,
+  valueFormatter = fmtUsd,
+}: {
+  data: DualBarPoint[];
+  unitLabel: string;
+  spot: number;
+  walls?: WallMarker[];
+  height?: number;
+  showAllTicks?: boolean;
+  valueFormatter?: (n: number | null | undefined) => string;
+}) {
+  const sorted = [...data].sort((a, b) => b.strike - a.strike);
+  const nearestIdx = sorted.reduce((best, d, i) => (Math.abs(d.strike - spot) < Math.abs(sorted[best].strike - spot) ? i : best), 0);
+
+  const wallLines = (walls ?? [])
+    .map((w) => {
+      const nearest = sorted.reduce((best, d) => (Math.abs(d.strike - w.price) < Math.abs(best.strike - w.price) ? d : best), sorted[0]);
+      return nearest ? { ...w, snappedStrike: nearest.strike } : null;
+    })
+    .filter((w): w is WallMarker & { snappedStrike: number } => w !== null);
+
+  return (
+    <div className="w-full" style={{ height }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 90, bottom: 4, left: 0 }} barCategoryGap="20%" barGap={1}>
+          <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
+          <XAxis type="number" tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} tickFormatter={(v) => valueFormatter(Number(v))} />
+          <YAxis
+            type="category"
+            dataKey="strike"
+            tick={{ fill: "var(--text-faint)", fontSize: 10 }}
+            tickLine={false}
+            axisLine={false}
+            width={58}
+            interval={showAllTicks ? 0 : Math.max(0, Math.floor(sorted.length / 20))}
+          />
+          <ReferenceLine x={0} stroke="var(--border-strong)" />
+          {wallLines.map((w) => (
+            <ReferenceLine
+              key={w.label}
+              y={w.snappedStrike}
+              stroke={w.color}
+              strokeDasharray="4 3"
+              label={{ value: `${w.label} ${fmtNum(w.price, 2)}`, position: "right", fill: w.color, fontSize: 10 }}
+            />
+          ))}
+          <Tooltip
+            cursor={{ fill: "var(--panel-2)", opacity: 0.5 }}
+            contentStyle={{ background: "var(--panel)", border: "1px solid var(--border-strong)", borderRadius: 3, fontSize: 11 }}
+            labelFormatter={(s) => `Strike ${s}`}
+            formatter={(v, name) => [`${valueFormatter(Number(v))} ${unitLabel}`, name === "up" ? "+move" : "-move"]}
+          />
+          <Bar dataKey="up" isAnimationActive={false} radius={[2, 2, 2, 2]}>
+            {sorted.map((d, i) => (
+              <Cell key={i} fill="var(--up)" stroke={i === nearestIdx ? "var(--text)" : undefined} strokeWidth={i === nearestIdx ? 1 : 0} />
+            ))}
+          </Bar>
+          <Bar dataKey="down" isAnimationActive={false} radius={[2, 2, 2, 2]}>
+            {sorted.map((d, i) => (
+              <Cell key={i} fill="var(--down)" stroke={i === nearestIdx ? "var(--text)" : undefined} strokeWidth={i === nearestIdx ? 1 : 0} />
+            ))}
+          </Bar>
+        </BarChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 function divergingColor(value: number, maxAbs: number): string {
   if (maxAbs <= 0) return "var(--panel-2)";
   const t = Math.max(-1, Math.min(1, value / maxAbs));

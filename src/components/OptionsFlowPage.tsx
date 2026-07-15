@@ -327,7 +327,7 @@ function TerminalView({ data }: { data: GexResponse }) {
         <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
           <div className="mb-3">
             <div className="font-display text-[0.95rem] text-[var(--text)]">Market Topography</div>
-            <div className="eyebrow mt-1">{data.symbol} · dealer book as 3D terrain — strike × expiry tenor, GEX and CHARM surfaces</div>
+            <div className="eyebrow mt-1">{data.symbol} · dealer book as 3D terrain — strike × expiry tenor, one surface per Greek</div>
           </div>
           <TopoSurface rows={data.topo ?? []} spot={data.spot} />
         </div>

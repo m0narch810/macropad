@@ -746,6 +746,8 @@ export interface ThetaHeatmapCell {
 
 export interface ThetaHeatmap {
   expirations: string[];
+  /** DTE per expiration column (aligned to `expirations`), null where the source omitted it - the topo tenor bucketing needs real DTEs, not labels. */
+  expiryDtes: (number | null)[];
   cells: ThetaHeatmapCell[];
   totalTex: number;
   callTex: number;
@@ -1070,11 +1072,12 @@ export function parseThetaHeatmap(raw: {
   total_tex?: number;
   call_tex?: number;
   put_tex?: number;
-  expiries?: { label: string }[];
+  expiries?: { label: string; dte?: number }[];
   rows?: { strike: number; call_cells: number[]; put_cells: number[] }[];
 }): ThetaHeatmap | null {
   if (!raw.expiries?.length || !raw.rows?.length) return null;
   const expirations = raw.expiries.map((e) => e.label);
+  const expiryDtes = raw.expiries.map((e) => (typeof e.dte === "number" ? e.dte : null));
   const cells: ThetaHeatmapCell[] = [];
   for (const row of raw.rows) {
     expirations.forEach((exp, i) => {
@@ -1083,5 +1086,5 @@ export function parseThetaHeatmap(raw: {
       cells.push({ strike: row.strike, expiration: exp, callTheta, putTheta, netTheta: callTheta + putTheta });
     });
   }
-  return { expirations, cells, totalTex: raw.total_tex ?? 0, callTex: raw.call_tex ?? 0, putTex: raw.put_tex ?? 0 };
+  return { expirations, expiryDtes, cells, totalTex: raw.total_tex ?? 0, callTex: raw.call_tex ?? 0, putTex: raw.put_tex ?? 0 };
 }

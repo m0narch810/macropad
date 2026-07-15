@@ -501,7 +501,14 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     vegaex: fromZeroDteOnly(perStrike, "vegaex", `${dteHours < 24 ? "0DTE" : response.resolvedExpiry}`),
   };
 
-  response.topo = buildTopoProfile(gexSurfacePoints, response.charmEngine?.heatmap ?? null, spot);
+  response.topo = buildTopoProfile({
+    gexPoints: gexSurfacePoints,
+    charmHm: response.charmEngine?.heatmap ?? null,
+    vannaHm: response.vannaEngine?.heatmap ?? null,
+    thetaHm: response.thetaEngine?.thetaHeatmap ?? null,
+    perStrike,
+    spot,
+  });
 
   response.hedgeCliff = computeHedgeCliffMap({
     chain,

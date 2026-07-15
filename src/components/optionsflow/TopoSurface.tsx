@@ -3,9 +3,9 @@
 /**
  * TOPO - market topography. A rotating 3D terrain of the dealer book viewed
  * from a 3/4 elevated camera (like a relief map on a table), ported from the
- * altaris-levels TOPO view:
- *   GEX   - dealer gamma by strike x expiry tenor: peaks = call walls, basins = put walls.
- *   CHARM - time-decay flow by strike x tenor: where charm-driven hedging pulls price.
+ * altaris-levels TOPO view - one surface per major Greek (GEX/DEX/VANNA/
+ * CHARM/THETA/VEGA) by strike x expiry tenor; peaks = call-side walls,
+ * basins = put-side walls (LONG/SHORT for DEX, burn concentration for THETA).
  * Hand-rolled projection (no libraries). The data grid is Catmull-Rom
  * upsampled to a dense display mesh; the terrain renders on a WebGL canvas
  * (raw GL - per-pixel ramp + hillshade interpolation, smooth at any angle)
@@ -25,11 +25,31 @@ const DCOLS_MAX = 132;
 const CYCLE_MS = 16_000;
 const PIN_MS = 45_000;
 
-type TopoModeId = "gex" | "charm";
+type TopoModeId = "gex" | "dex" | "vex" | "cex" | "tex" | "vegaex";
 
-const MODES: { id: TopoModeId; label: string; pick: (r: TopoRow) => readonly number[]; caption: string }[] = [
-  { id: "gex", label: "GEX", pick: (r) => r.gex, caption: "DEALER GAMMA · strike × expiry — peak = call wall · basin = put wall · dashed line = spot" },
-  { id: "charm", label: "CHARM", pick: (r) => r.charm, caption: "TIME-DECAY FLOW · strike × expiry — where charm-driven hedging pulls price into each expiry" },
+interface TopoMode {
+  id: TopoModeId;
+  label: string;
+  pick: (r: TopoRow) => readonly number[];
+  caption: string;
+  /** Summit tag suffixes for positive/negative peaks (walls read differently per Greek). */
+  posTag: string;
+  negTag: string;
+}
+
+const MODES: TopoMode[] = [
+  { id: "gex", label: "GEX", pick: (r) => r.gex, posTag: "CALL", negTag: "PUT",
+    caption: "DEALER GAMMA · strike × expiry — peak = call wall · basin = put wall · dashed line = spot" },
+  { id: "dex", label: "DEX", pick: (r) => r.dex, posTag: "LONG", negTag: "SHORT",
+    caption: "DEALER DELTA · self-computed 0DTE only (no cross-expiry source) — natural delta sign, unflipped" },
+  { id: "vex", label: "VEX", pick: (r) => r.vanna, posTag: "CALL", negTag: "PUT",
+    caption: "VANNA · strike × expiry — where a vol shock forces the biggest re-hedge" },
+  { id: "cex", label: "CHEX", pick: (r) => r.charm, posTag: "CALL", negTag: "PUT",
+    caption: "TIME-DECAY FLOW · strike × expiry — where charm-driven hedging pulls price into each expiry" },
+  { id: "tex", label: "THETA", pick: (r) => r.theta, posTag: "BURN", negTag: "BURN",
+    caption: "THETA · strike × expiry — where the book's time decay concentrates" },
+  { id: "vegaex", label: "VEGA", pick: (r) => r.vega, posTag: "CALL", negTag: "PUT",
+    caption: "VEGA · self-computed 0DTE only (no cross-expiry source) — IV sensitivity by strike" },
 ];
 
 /**
@@ -213,8 +233,9 @@ function termSurface(profile: TopoRow[], pick: (r: TopoRow) => readonly number[]
     const t = (r / (ROWS - 1)) * 3;
     const i = Math.min(2, Math.floor(t));
     const f = t - i;
-    h.push(rows.map((row) => cosMix(pick(row)[i] ?? 0, pick(row)[i + 1] ?? 0, f)));
-    raw.push(rows.map((row) => pick(row)[Math.round(t)] ?? 0));
+    // ?? [] guards a stale cached API response that predates a newly added Greek field.
+    h.push(rows.map((row) => cosMix((pick(row) ?? [])[i] ?? 0, (pick(row) ?? [])[i + 1] ?? 0, f)));
+    raw.push(rows.map((row) => (pick(row) ?? [])[Math.round(t)] ?? 0));
   }
   let maxAbs = 0;
   for (const row of h) for (const v of row) maxAbs = Math.max(maxAbs, Math.abs(v));
@@ -637,7 +658,8 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
         for (let r = 0; r < ROWS; r++) if (Math.abs(S.h[r][pk.c]) > Math.abs(S.h[bestR][pk.c])) bestR = r;
         const p = P[Math.round(dispR(bestR))][Math.round(dispC(pk.c))];
         // Ink + halo, not pole-colored: on the full-spectrum surface a colored tag gets lost.
-        label(`${S.cols[pk.c]} ${pk.v >= 0 ? "CALL" : "PUT"}`, p.px, p.py - 8, pal.ink);
+        const tags = MODES.find((m) => m.id === modeId);
+        label(`${S.cols[pk.c]} ${pk.v >= 0 ? tags?.posTag ?? "CALL" : tags?.negTag ?? "PUT"}`, p.px, p.py - 8, pal.ink);
       }
 
       // Legend: heat ramp + value scale, bottom-left (opaque backing so terrain labels can never collide with it).
@@ -656,6 +678,7 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
       ctx.strokeRect(lx - 0.5, ly - 0.5, lw + 1, lh + 1);
       ctx.fillStyle = pal.ink3;
       ctx.font = `8.5px ${monoFam}`;
+      const legendTags = MODES.find((m) => m.id === modeId);
       if (magPal) { // magnitude ramp: both poles glow - legend reads 0 → |max|
         ctx.textAlign = "left";
         ctx.fillText("0", lx, ly - 4);
@@ -663,9 +686,9 @@ export default function TopoSurface({ rows, spot, height = 480 }: { rows: TopoRo
         ctx.fillText(`±${fmtMag(S.maxAbs).slice(1)} WALL`, lx + lw, ly + lh + 11);
       } else {
         ctx.textAlign = "left";
-        ctx.fillText(`PUT −${fmtMag(S.maxAbs).slice(1)}`, lx, ly - 4);
+        ctx.fillText(`${legendTags?.negTag ?? "PUT"} −${fmtMag(S.maxAbs).slice(1)}`, lx, ly - 4);
         ctx.textAlign = "right";
-        ctx.fillText(`+${fmtMag(S.maxAbs).slice(1)} CALL`, lx + lw, ly + lh + 11);
+        ctx.fillText(`+${fmtMag(S.maxAbs).slice(1)} ${legendTags?.posTag ?? "CALL"}`, lx + lw, ly + lh + 11);
       }
       ctx.globalAlpha = 1;
     };

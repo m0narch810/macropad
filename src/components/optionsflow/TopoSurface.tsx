@@ -41,7 +41,7 @@ const MODES: TopoMode[] = [
   { id: "gex", label: "GEX", pick: (r) => r.gex, posTag: "CALL", negTag: "PUT",
     caption: "DEALER GAMMA · strike × expiry — peak = call wall · basin = put wall · dashed line = spot" },
   { id: "dex", label: "DEX", pick: (r) => r.dex, posTag: "LONG", negTag: "SHORT",
-    caption: "DEALER DELTA · self-computed 0DTE only (no cross-expiry source) — natural delta sign, unflipped" },
+    caption: "DEALER DELTA · strike × expiry — natural delta sign, unflipped" },
   { id: "vex", label: "VEX", pick: (r) => r.vanna, posTag: "CALL", negTag: "PUT",
     caption: "VANNA · strike × expiry — where a vol shock forces the biggest re-hedge" },
   { id: "cex", label: "CHEX", pick: (r) => r.charm, posTag: "CALL", negTag: "PUT",
@@ -49,7 +49,7 @@ const MODES: TopoMode[] = [
   { id: "tex", label: "THETA", pick: (r) => r.theta, posTag: "BURN", negTag: "BURN",
     caption: "THETA · strike × expiry — where the book's time decay concentrates" },
   { id: "vegaex", label: "VEGA", pick: (r) => r.vega, posTag: "CALL", negTag: "PUT",
-    caption: "VEGA · self-computed 0DTE only (no cross-expiry source) — IV sensitivity by strike" },
+    caption: "VEGA · strike × expiry — IV sensitivity by strike" },
 ];
 
 /**

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { GexResponse, GexSymbol, PricerEngine } from "@/lib/gex";
-import { fmtNum, fmtUsd, nearStrikeWindow } from "@/lib/gex";
+import { fmtNum, fmtRaw, fmtUsd, nearStrikeWindow } from "@/lib/gex";
 import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
 import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
@@ -307,16 +307,16 @@ function TerminalView({ data }: { data: GexResponse }) {
               <div className="eyebrow">
                 ±15 strikes around spot
                 {dteScope === "cumulative"
-                  ? ` · 0DTE self-computed + ${clampedDteIndex} further expiration${clampedDteIndex === 1 ? "" : "s"} from source surface`
+                  ? ` · 0DTE self-computed ($) + ${clampedDteIndex} further expiration${clampedDteIndex === 1 ? "" : "s"} from /heatmap (raw, not $)`
                   : clampedDteIndex > 0
-                    ? " · source cross-expiry surface, no OI weighting"
-                    : " · self-computed 0DTE"}
+                    ? " · /heatmap endpoint, raw magnitude proxy - not $"
+                    : " · self-computed 0DTE, real $"}
               </div>
             </div>
             {chartView === "bars" ? (
-              <TerminalExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} walls={walls} />
+              <TerminalExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} walls={walls} valueFormatter={clampedDteIndex > 0 ? fmtRaw : fmtUsd} />
             ) : (
-              <CumulativeExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} />
+              <CumulativeExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} valueFormatter={clampedDteIndex > 0 ? fmtRaw : fmtUsd} />
             )}
           </div>
           <MajorWallsPanel metricLabel={METRIC_LABEL[metric]} walls={walls} />
@@ -342,7 +342,8 @@ function TerminalView({ data }: { data: GexResponse }) {
               </div>
               {metricTabs("sm")}
             </div>
-            <StrikeExpiryHeatmapChart grid={windowHeatmap(data.strikeExpiryHeatmaps?.[metric], data.spot)} spot={data.spot} walls={walls} unitLabel={METRIC_LABEL[metric]} />
+            <div className="eyebrow mb-3">/heatmap endpoint · raw magnitude proxy, not dollarized - see cell hover</div>
+            <StrikeExpiryHeatmapChart grid={windowHeatmap(data.strikeExpiryHeatmaps?.[metric], data.spot)} spot={data.spot} walls={walls} unitLabel={METRIC_LABEL[metric]} valueFormatter={fmtRaw} />
           </div>
           <MajorWallsPanel metricLabel={METRIC_LABEL[metric]} walls={walls} />
         </div>

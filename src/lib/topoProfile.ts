@@ -1,29 +1,17 @@
 /**
  * Strike x tenor "term profile" for the Terminal's 3D topography surface -
- * the same data shape the altaris-levels TOPO view renders: per strike, each
- * major Greek's exposure split into four expiry tenors
+ * per strike, each major Greek's exposure split into four expiry tenors
  * [0DTE, this-week (1-7 DTE), next-week (8-14 DTE), monthly+ (15+ DTE)].
  *
- * Cross-expiry (1W/2W/M+) fields come from the source's own surfaces
- * (/gex_surface, /vanna_surface, /charm_surface, /theta) - no self-computed
- * alternative exists for those tenors. The 0DTE (d0) bucket is overridden
- * with this app's own self-computed per-strike chain (real per-contract
- * IV/OI) instead of the raw surface's 0DTE points, so the terrain's near
- * tenor agrees with the chart/heatmap's 0DTE bars rather than showing a
- * second, disagreeing "today" - same fix applied to the heatmap's nearest
- * column (see withSelfComputedNearestColumn in strikeExpiryHeatmaps.ts).
- * DEX and VEGA have no cross-expiry source at all (documented in
- * strikeExpiryHeatmaps.ts) - they carry the self-computed 0DTE chain in the
- * d0 bucket only, and the topo captions say so. Values are shipped RAW, not
- * scaled to $M - the surface endpoints are raw-greek-magnitude proxies whose
- * values can sit well below 1e6, and the renderer normalizes per surface.
+ * Built directly from the same six StrikeExpiryHeatmap grids the Terminal
+ * heatmap renders (see strikeExpiryHeatmaps.ts) - one real, per-expiry
+ * source for both views instead of mixing this app's self-computed 0DTE
+ * chain with a raw cross-expiry proxy, which disagreed with each other and
+ * with the source's own dashboard. Values are RAW, not scaled to $ - see
+ * strikeExpiryHeatmaps.ts for why.
  */
 
-import type { StrikeRow0DTE } from "@/lib/gex";
-import type { GexSurfacePoint } from "@/lib/strikeExpiryHeatmaps";
-import type { CharmHeatmap } from "@/lib/charmEngine";
-import type { VannaHeatmap } from "@/lib/vannaEngine";
-import type { ThetaHeatmap } from "@/lib/thetaEngine";
+import type { StrikeExpiryHeatmap, HeatmapMetric } from "@/lib/strikeExpiryHeatmaps";
 
 export type TenorArr = [number, number, number, number];
 
@@ -41,91 +29,46 @@ export const TENOR_LABELS = ["0DTE", "1W", "2W", "M+"] as const;
 
 const bucketIdx = (dte: number) => (dte <= 0 ? 0 : dte <= 7 ? 1 : dte <= 14 ? 2 : 3);
 
-/** Shared shape of the charm/vanna engine heatmaps: strike rows x expiriesDte columns. */
-function bucketDteHeatmap(hm: { expiriesDte: number[]; rows: { strike: number; cells: (number | null)[] }[] } | null): Map<number, TenorArr> {
+function bucketGrid(grid: StrikeExpiryHeatmap | null): Map<number, TenorArr> {
   const out = new Map<number, TenorArr>();
-  if (!hm) return out;
-  for (const r of hm.rows) {
+  if (!grid) return out;
+  grid.strikes.forEach((strike, i) => {
     const arr: TenorArr = [0, 0, 0, 0];
-    r.cells.forEach((c, i) => {
-      if (c !== null) arr[bucketIdx(hm.expiriesDte[i])] += c;
+    grid.values[i].forEach((v, ci) => {
+      if (v === null) return;
+      arr[bucketIdx(grid.columns[ci].dte ?? 0)] += v;
     });
-    out.set(r.strike, arr);
-  }
-  return out;
-}
-
-function bucketThetaHeatmap(th: ThetaHeatmap | null): Map<number, TenorArr> {
-  const out = new Map<number, TenorArr>();
-  if (!th || !th.expiryDtes.some((d) => d !== null)) return out;
-  const bucketByExp = new Map<string, number>();
-  th.expirations.forEach((exp, i) => {
-    const dte = th.expiryDtes[i];
-    if (dte !== null) bucketByExp.set(exp, bucketIdx(dte));
+    out.set(strike, arr);
   });
-  for (const cell of th.cells) {
-    const b = bucketByExp.get(cell.expiration);
-    if (b === undefined) continue;
-    const arr = out.get(cell.strike) ?? ([0, 0, 0, 0] as TenorArr);
-    arr[b] += cell.netTheta;
-    out.set(cell.strike, arr);
-  }
   return out;
 }
 
-/** 0DTE-only Greeks (no cross-expiry source): the self-computed chain in the d0 bucket. */
-function bucketZeroDteOnly(perStrike: StrikeRow0DTE[], pick: (r: StrikeRow0DTE) => number): Map<number, TenorArr> {
-  const out = new Map<number, TenorArr>();
-  for (const r of perStrike) out.set(r.strike, [pick(r), 0, 0, 0]);
-  return out;
-}
+export type TopoGrids = Record<HeatmapMetric, StrikeExpiryHeatmap | null>;
 
-export interface TopoProfileInputs {
-  gexPoints: GexSurfacePoint[];
-  charmHm: CharmHeatmap | null;
-  vannaHm: VannaHeatmap | null;
-  thetaHm: ThetaHeatmap | null;
-  perStrike: StrikeRow0DTE[];
-  spot: number;
-}
+/** Nearest `count` strikes to spot with any grid data, ascending. */
+export function buildTopoProfile(grids: TopoGrids, spot: number, count = 60): TopoRow[] {
+  const maps = {
+    gex: bucketGrid(grids.gex),
+    dex: bucketGrid(grids.dex),
+    vanna: bucketGrid(grids.vex),
+    charm: bucketGrid(grids.cex),
+    theta: bucketGrid(grids.tex),
+    vega: bucketGrid(grids.vegaex),
+  };
 
-/** Nearest `count` strikes to spot with any surface data, ascending. */
-export function buildTopoProfile({ gexPoints, charmHm, vannaHm, thetaHm, perStrike, spot }: TopoProfileInputs, count = 60): TopoRow[] {
-  const gexBy = new Map<number, TenorArr>();
-  for (const p of gexPoints) {
-    const arr = gexBy.get(p.strike) ?? ([0, 0, 0, 0] as TenorArr);
-    // Same dealer-sign convention as buildGexHeatmap: call-side positive, put-side negative.
-    arr[bucketIdx(p.dte)] += p.isPut ? -Math.abs(p.gex) : Math.abs(p.gex);
-    gexBy.set(p.strike, arr);
-  }
-
-  const charmBy = bucketDteHeatmap(charmHm);
-  const vannaBy = bucketDteHeatmap(vannaHm);
-  const thetaBy = bucketThetaHeatmap(thetaHm);
-  const dexBy = bucketZeroDteOnly(perStrike, (r) => r.dex);
-  const vegaBy = bucketZeroDteOnly(perStrike, (r) => r.vegaex);
-
-  const strikes = [...new Set([...gexBy.keys(), ...charmBy.keys(), ...vannaBy.keys(), ...thetaBy.keys(), ...dexBy.keys()])]
+  const strikes = [...new Set(Object.values(maps).flatMap((m) => [...m.keys()]))]
     .sort((a, b) => Math.abs(a - spot) - Math.abs(b - spot))
     .slice(0, count)
     .sort((a, b) => a - b);
 
   const get = (m: Map<number, TenorArr>, k: number): TenorArr => m.get(k) ?? ([0, 0, 0, 0] as TenorArr);
-  const selfBy = new Map(perStrike.map((r) => [r.strike, r]));
-  /** Replaces bucket 0 (0DTE) with the self-computed value when this strike is in the real chain; further-out buckets are untouched (no self-computed alternative exists). */
-  const withSelfZero = (arr: TenorArr, self: number | undefined): TenorArr =>
-    self !== undefined ? [self, arr[1], arr[2], arr[3]] : arr;
-
-  return strikes.map((strike) => {
-    const self = selfBy.get(strike);
-    return {
-      strike,
-      gex: withSelfZero(get(gexBy, strike), self?.gex),
-      dex: get(dexBy, strike),
-      vanna: withSelfZero(get(vannaBy, strike), self?.vex),
-      charm: withSelfZero(get(charmBy, strike), self?.cex),
-      theta: withSelfZero(get(thetaBy, strike), self?.tex),
-      vega: get(vegaBy, strike),
-    };
-  });
+  return strikes.map((strike) => ({
+    strike,
+    gex: get(maps.gex, strike),
+    dex: get(maps.dex, strike),
+    vanna: get(maps.vanna, strike),
+    charm: get(maps.charm, strike),
+    theta: get(maps.theta, strike),
+    vega: get(maps.vega, strike),
+  }));
 }

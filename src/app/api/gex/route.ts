@@ -19,7 +19,7 @@ import { computeDeltaEngine } from "@/lib/deltaEngine";
 import { computeThetaEngine, parseThetaHeatmap } from "@/lib/thetaEngine";
 import { computeVannaEngine, type VannaSurfacePoint } from "@/lib/vannaEngine";
 import { computeCharmEngine, type CharmSurfacePoint } from "@/lib/charmEngine";
-import { buildGexHeatmap, fromCharmHeatmap, fromThetaHeatmap, fromVannaHeatmap, fromZeroDteOnly, withSelfComputedNearestColumn, type GexSurfacePoint } from "@/lib/strikeExpiryHeatmaps";
+import { fromHeatmapEndpoint, type HeatmapEndpointRaw, type HeatmapMetric } from "@/lib/strikeExpiryHeatmaps";
 import { computeHedgeCliffMap } from "@/lib/hedgeCliffEngine";
 import { buildTopoProfile } from "@/lib/topoProfile";
 
@@ -164,17 +164,9 @@ interface CharmSurfaceRaw {
   error?: string | null;
 }
 
-interface GexSurfaceRaw {
-  spot?: number;
-  call_wall?: number;
-  put_wall?: number;
-  points?: { strike: number; dte: number; gex: number; is_put: boolean }[];
-  error?: string | null;
-}
-
 /** Fetches the railway endpoints we actually need, builds our own per-strike Greeks (Black-Scholes + American tree, both on real IV) instead of trusting the source's precomputed ones. */
 async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string) {
-  const [zeroDteResult, probabilityResult, matrixResult, anomaliesResult, gexResult, chartResult, thetaResult, vannaSurfaceResult, charmSurfaceResult, gexSurfaceResult, r] = await Promise.all([
+  const [zeroDteResult, probabilityResult, matrixResult, anomaliesResult, gexResult, chartResult, thetaResult, vannaSurfaceResult, charmSurfaceResult, heatmapResult, r] = await Promise.all([
     fetchYyy(`/zero_dte?ticker=${symbol}`, base, key),
     fetchYyy(`/probability?ticker=${symbol}`, base, key),
     // 4s used to be the budget here, but /option-matrix's own measured
@@ -192,7 +184,12 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     fetchYyyWithTimeout(`/theta?ticker=${symbol}`, base, key, 15000),
     fetchYyyWithTimeout(`/vanna_surface?ticker=${symbol}`, base, key, 12000),
     fetchYyyWithTimeout(`/charm_surface?ticker=${symbol}`, base, key, 12000),
-    fetchYyyWithTimeout(`/gex_surface?ticker=${symbol}`, base, key, 12000),
+    // Dedicated per-strike x per-expiry heatmap for all six Greeks in one
+    // call - real per-expiry granularity (0DTE through ~8 DTE, including
+    // dates /gex_surface's own dte set skips) instead of the older per-Greek
+    // surface endpoints, which disagreed with each other and with the
+    // source's own dashboard. See strikeExpiryHeatmaps.ts.
+    fetchYyyWithTimeout(`/heatmap?ticker=${symbol}`, base, key, 12000),
     fetchRiskFreeRate(),
   ]);
 
@@ -484,31 +481,12 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     invalidContracts: rawChain.filter((row) => !(row.oi > 0 && row.iv > 0)).length,
   });
 
-  let gexSurfacePoints: GexSurfacePoint[] = [];
-  if (gexSurfaceResult.ok) {
-    const g = gexSurfaceResult.data as GexSurfaceRaw;
-    if (!g.error && g.points?.length) {
-      gexSurfacePoints = g.points.map((p) => ({ strike: p.strike, dte: p.dte, gex: p.gex, isPut: p.is_put }));
-    }
-  }
+  const heatmapRaw = heatmapResult.ok ? (heatmapResult.data as HeatmapEndpointRaw) : null;
+  const metrics: HeatmapMetric[] = ["gex", "dex", "vex", "cex", "tex", "vegaex"];
+  const heatmapGrids = Object.fromEntries(metrics.map((m) => [m, fromHeatmapEndpoint(heatmapRaw, m)])) as Record<HeatmapMetric, ReturnType<typeof fromHeatmapEndpoint>>;
 
-  response.strikeExpiryHeatmaps = {
-    gex: withSelfComputedNearestColumn(buildGexHeatmap(gexSurfacePoints), perStrike, "gex"),
-    dex: fromZeroDteOnly(perStrike, "dex", `${dteHours < 24 ? "0DTE" : response.resolvedExpiry}`),
-    vex: withSelfComputedNearestColumn(fromVannaHeatmap(response.vannaEngine?.heatmap ?? null), perStrike, "vex"),
-    cex: withSelfComputedNearestColumn(fromCharmHeatmap(response.charmEngine?.heatmap ?? null), perStrike, "cex"),
-    tex: withSelfComputedNearestColumn(fromThetaHeatmap(response.thetaEngine?.thetaHeatmap ?? null), perStrike, "tex"),
-    vegaex: fromZeroDteOnly(perStrike, "vegaex", `${dteHours < 24 ? "0DTE" : response.resolvedExpiry}`),
-  };
-
-  response.topo = buildTopoProfile({
-    gexPoints: gexSurfacePoints,
-    charmHm: response.charmEngine?.heatmap ?? null,
-    vannaHm: response.vannaEngine?.heatmap ?? null,
-    thetaHm: response.thetaEngine?.thetaHeatmap ?? null,
-    perStrike,
-    spot,
-  });
+  response.strikeExpiryHeatmaps = heatmapGrids;
+  response.topo = buildTopoProfile(heatmapGrids, spot);
 
   response.hedgeCliff = computeHedgeCliffMap({
     chain,

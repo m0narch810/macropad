@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { GexResponse, GexSymbol } from "@/lib/gex";
+import { fmtRaw } from "@/lib/gex";
 import { computeTopWalls, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
 
 const STRIKE_WINDOW = 26; // ~+-13 strikes around spot
@@ -81,6 +82,7 @@ export function CrossExpiryPanel({ defaultSymbol }: { defaultSymbol: GexSymbol }
         <Dropdown value={String(clampedIndex)} options={columns.map((_, i) => String(i))} labels={Object.fromEntries(columns.map((c, i) => [String(i), c.label]))} onChange={(v) => setDteIndex(Number(v))} />
         <Dropdown value={metric} options={METRIC_ORDER} labels={METRIC_LABEL} onChange={(m) => { setMetric(m); setDteIndex(0); }} />
       </div>
+      <div className="eyebrow">/heatmap endpoint · raw magnitude proxy, not dollarized</div>
 
       {loading && <div className="py-16 text-center font-mono text-[0.72rem] text-[var(--text-faint)]">Loading {ticker}…</div>}
       {!loading && error && (
@@ -88,7 +90,7 @@ export function CrossExpiryPanel({ defaultSymbol }: { defaultSymbol: GexSymbol }
           ERR: {error}
         </div>
       )}
-      {!loading && !error && data && (chartData.length ? <TerminalExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} walls={walls} showAllTicks /> : <div className="py-16 text-center font-mono text-[0.72rem] text-[var(--text-faint)]">No data for this selection.</div>)}
+      {!loading && !error && data && (chartData.length ? <TerminalExposureChart data={chartData} unitLabel={METRIC_LABEL[metric]} spot={data.spot} walls={walls} showAllTicks valueFormatter={fmtRaw} /> : <div className="py-16 text-center font-mono text-[0.72rem] text-[var(--text-faint)]">No data for this selection.</div>)}
     </div>
   );
 }

@@ -34,6 +34,7 @@ export function TerminalExposureChart({
   walls,
   height = 420,
   showAllTicks = false,
+  valueFormatter = fmtUsd,
 }: {
   data: TerminalMetricPoint[];
   unitLabel: string;
@@ -41,6 +42,8 @@ export function TerminalExposureChart({
   walls?: WallMarker[];
   height?: number;
   showAllTicks?: boolean;
+  /** Defaults to $-formatted (this app's own self-computed exposure is real dollars); pass fmtRaw for /heatmap-sourced values, which are a raw magnitude proxy, not dollars. */
+  valueFormatter?: (n: number | null | undefined) => string;
 }) {
   const sorted = [...data].sort((a, b) => b.strike - a.strike);
   const nearestIdx = sorted.reduce((best, d, i) => (Math.abs(d.strike - spot) < Math.abs(sorted[best].strike - spot) ? i : best), 0);
@@ -57,7 +60,7 @@ export function TerminalExposureChart({
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={sorted} layout="vertical" margin={{ top: 4, right: 90, bottom: 4, left: 0 }} barCategoryGap="15%">
           <CartesianGrid strokeDasharray="2 4" stroke="var(--border)" horizontal={false} />
-          <XAxis type="number" tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} tickFormatter={(v) => fmtUsd(Number(v))} />
+          <XAxis type="number" tick={{ fill: "var(--text-faint)", fontSize: 10 }} tickLine={false} axisLine={{ stroke: "var(--border)" }} tickFormatter={(v) => valueFormatter(Number(v))} />
           <YAxis
             type="category"
             dataKey="strike"
@@ -81,7 +84,7 @@ export function TerminalExposureChart({
             cursor={{ fill: "var(--panel-2)", opacity: 0.5 }}
             contentStyle={{ background: "var(--panel)", border: "1px solid var(--border-strong)", borderRadius: 3, fontSize: 11 }}
             labelFormatter={(s) => `Strike ${s}`}
-            formatter={(v) => [`${fmtUsd(Number(v))} ${unitLabel}`, unitLabel]}
+            formatter={(v) => [`${valueFormatter(Number(v))} ${unitLabel}`, unitLabel]}
           />
           <Bar dataKey="value" isAnimationActive={false} radius={[2, 2, 2, 2]}>
             {sorted.map((d, i) => (
@@ -109,7 +112,20 @@ export interface StrikeExpiryHeatmapData {
 }
 
 /** Strike x expiry grid for one selected Greek: rows are strikes (highest at top), columns are expirations, cell color diverges call-green/put-pink by magnitude. Overlays dashed reference lines for the walls/flip passed in. */
-export function StrikeExpiryHeatmapChart({ grid, spot, walls, unitLabel }: { grid: StrikeExpiryHeatmapData | null; spot: number; walls: WallMarker[]; unitLabel: string }) {
+export function StrikeExpiryHeatmapChart({
+  grid,
+  spot,
+  walls,
+  unitLabel,
+  valueFormatter = fmtUsd,
+}: {
+  grid: StrikeExpiryHeatmapData | null;
+  spot: number;
+  walls: WallMarker[];
+  unitLabel: string;
+  /** Defaults to $-formatted; pass fmtRaw when the grid comes from /heatmap - see TerminalExposureChart. */
+  valueFormatter?: (n: number | null | undefined) => string;
+}) {
   if (!grid || !grid.strikes.length) return <p className="m-0 py-12 text-center font-mono text-[0.75rem] text-[var(--text-faint)]">No cross-expiry data this request.</p>;
 
   const rows = [...grid.strikes].map((strike, i) => ({ strike, cells: grid.values[i] })).sort((a, b) => b.strike - a.strike);
@@ -130,11 +146,11 @@ export function StrikeExpiryHeatmapChart({ grid, spot, walls, unitLabel }: { gri
                 {row.cells.map((c, colIdx) => (
                   <div
                     key={colIdx}
-                    title={c !== null ? `${row.strike} @ ${grid.columns[colIdx].label}: ${fmtUsd(c)} ${unitLabel}` : "—"}
+                    title={c !== null ? `${row.strike} @ ${grid.columns[colIdx].label}: ${valueFormatter(c)} ${unitLabel}` : "—"}
                     className="flex h-7 flex-1 items-center justify-center font-mono text-[0.6rem] font-semibold"
                     style={{ background: c !== null ? divergingColor(c, maxAbs) : "var(--panel-2)", color: "rgba(255,255,255,0.92)" }}
                   >
-                    {c !== null ? fmtUsd(c) : ""}
+                    {c !== null ? valueFormatter(c) : ""}
                   </div>
                 ))}
               </div>

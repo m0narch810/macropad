@@ -447,6 +447,17 @@ export function fmtUsd(n: number | null | undefined): string {
   return `${sign}$${abs.toFixed(0)}`;
 }
 
+/** Formats a raw magnitude proxy (no dollar sign) - for /heatmap endpoint values, which are NOT dollarized (no disclosed OI/multiplier to convert them). Same adaptive K/M/B scaling as fmtUsd, deliberately without the "$". */
+export function fmtRaw(n: number | null | undefined): string {
+  if (n === null || n === undefined || Number.isNaN(n)) return "—";
+  const abs = Math.abs(n);
+  const sign = n < 0 ? "-" : "";
+  if (abs >= 1_000_000_000) return `${sign}${(abs / 1_000_000_000).toFixed(2)}B`;
+  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(2)}M`;
+  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(1)}K`;
+  return `${sign}${abs.toFixed(2)}`;
+}
+
 export function fmtPct(n: number | null | undefined, digits = 2): string {
   if (n === null || n === undefined || Number.isNaN(n)) return "—";
   return `${n >= 0 ? "+" : ""}${n.toFixed(digits)}%`;

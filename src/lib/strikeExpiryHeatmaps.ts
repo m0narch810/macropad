@@ -2,24 +2,19 @@
  * Strike x expiry heatmap grids for the Terminal page - one shared shape so
  * the same component can render whichever Greek is selected.
  *
- * Only GEX, VANNA, CHARM, and THETA have a real cross-expiry source
- * upstream (/gex_surface, /vanna_surface, /charm_surface, /theta - the
- * same endpoints the vanna/charm/theta engines already fetch for their own
- * pages). DEX and VEGA have no cross-expiry endpoint at all (/dex_ladder
- * is single-expiry only, and there's no vega surface route) - those two
- * fall back to a single 0DTE-only column built from the chain we already
- * hold, clearly labeled rather than silently showing fake columns.
- *
- * The surface endpoints' raw values are used as-is (a documented magnitude/
- * sign proxy, same posture as vannaEngine.ts's and charmEngine.ts's own
- * cross-expiry confluence sections) since we don't have per-contract OI/IV
- * for other expirations to recompute them ourselves.
+ * Sourced entirely from the dedicated /heatmap endpoint, which returns real
+ * per-expiry strike data (0DTE through ~8 DTE) for all six Greeks in one
+ * call. Values are shipped RAW, exactly as the endpoint returns them - a
+ * documented magnitude proxy, NOT dollarized. Verified directly against a
+ * live vendor $-GEX table: this endpoint's raw numbers track the vendor's
+ * real dollar figures via a consistent ratio at every strike/expiry checked,
+ * but that ratio isn't a formula this app can derive (no OI field, no
+ * disclosed multiplier) - so it's labeled and shown as-is rather than
+ * multiplied by a guessed constant. This replaces the former per-endpoint
+ * mix (/gex_surface, /vanna_surface heatmap, /charm_surface heatmap, /theta
+ * grid) and the self-computed 0DTE chain, which don't agree with each other
+ * or with this endpoint - see git history on this file for that dead end.
  */
-
-import type { StrikeRow0DTE } from "@/lib/gex";
-import type { VannaHeatmap } from "@/lib/vannaEngine";
-import type { CharmHeatmap } from "@/lib/charmEngine";
-import type { ThetaHeatmap } from "@/lib/thetaEngine";
 
 export interface StrikeExpiryHeatmap {
   columns: { label: string; dte: number | null }[];
@@ -27,88 +22,25 @@ export interface StrikeExpiryHeatmap {
   values: (number | null)[][];
 }
 
-export interface GexSurfacePoint {
-  strike: number;
-  dte: number;
-  gex: number;
-  isPut: boolean;
+export type HeatmapMetric = "gex" | "dex" | "vex" | "cex" | "tex" | "vegaex";
+
+export interface HeatmapEndpointRaw {
+  spot?: number;
+  strikes?: number[];
+  expiries?: { date: string; label: string; dte: number }[];
+  grids?: Partial<Record<HeatmapMetric, { rows: { strike: number; cells: (number | null)[] }[]; max_abs?: number } | null>>;
+  error?: string | null;
 }
 
-/** Sums call+put per strike/dte with the app's own dealer-sign convention (call positive, put negative) applied to the raw surface value, since the source's own sign convention for this field isn't confirmed trustworthy (same caveat as the raw 0DTE fields this app already overrides everywhere else). */
-export function buildGexHeatmap(points: GexSurfacePoint[]): StrikeExpiryHeatmap | null {
-  if (!points.length) return null;
-  const dteSet = [...new Set(points.map((p) => p.dte))].sort((a, b) => a - b);
-  const byStrike = new Map<number, Map<number, number>>();
-  for (const p of points) {
-    const signed = p.isPut ? -Math.abs(p.gex) : Math.abs(p.gex);
-    const byDte = byStrike.get(p.strike) ?? new Map<number, number>();
-    byDte.set(p.dte, (byDte.get(p.dte) ?? 0) + signed);
-    byStrike.set(p.strike, byDte);
-  }
-  const strikes = [...byStrike.keys()].sort((a, b) => a - b);
-  const values = strikes.map((strike) => {
-    const byDte = byStrike.get(strike)!;
-    return dteSet.map((dte) => (byDte.has(dte) ? byDte.get(dte)! : null));
-  });
-  return { columns: dteSet.map((dte) => ({ label: `${dte}d`, dte })), strikes, values };
-}
-
-export function fromVannaHeatmap(vh: VannaHeatmap | null): StrikeExpiryHeatmap | null {
-  if (!vh) return null;
+/** Builds one metric's grid from the /heatmap endpoint's response, strikes sorted ascending. */
+export function fromHeatmapEndpoint(raw: HeatmapEndpointRaw | null, metric: HeatmapMetric): StrikeExpiryHeatmap | null {
+  if (!raw || raw.error || !raw.expiries?.length) return null;
+  const grid = raw.grids?.[metric];
+  if (!grid || !grid.rows.length) return null;
+  const sorted = [...grid.rows].sort((a, b) => a.strike - b.strike);
   return {
-    columns: vh.expiriesDte.map((dte) => ({ label: `${dte}d`, dte })),
-    strikes: vh.rows.map((r) => r.strike),
-    values: vh.rows.map((r) => r.cells),
+    columns: raw.expiries.map((e) => ({ label: e.label, dte: e.dte })),
+    strikes: sorted.map((r) => r.strike),
+    values: sorted.map((r) => r.cells),
   };
-}
-
-export function fromCharmHeatmap(ch: CharmHeatmap | null): StrikeExpiryHeatmap | null {
-  if (!ch) return null;
-  return {
-    columns: ch.expiriesDte.map((dte) => ({ label: `${dte}d`, dte })),
-    strikes: ch.rows.map((r) => r.strike),
-    values: ch.rows.map((r) => r.cells),
-  };
-}
-
-export function fromThetaHeatmap(th: ThetaHeatmap | null): StrikeExpiryHeatmap | null {
-  if (!th) return null;
-  const strikes = [...new Set(th.cells.map((c) => c.strike))].sort((a, b) => a - b);
-  const values = strikes.map((strike) => th.expirations.map((exp) => th.cells.find((c) => c.strike === strike && c.expiration === exp)?.netTheta ?? null));
-  return { columns: th.expirations.map((label) => ({ label, dte: null })), strikes, values };
-}
-
-/** Single-column fallback for Greeks with no cross-expiry source - 0DTE only, from the chain this app already holds. */
-export function fromZeroDteOnly(perStrike: StrikeRow0DTE[], metric: keyof Pick<StrikeRow0DTE, "dex" | "vegaex">, columnLabel: string): StrikeExpiryHeatmap {
-  const sorted = [...perStrike].sort((a, b) => a.strike - b.strike);
-  return { columns: [{ label: columnLabel, dte: 0 }], strikes: sorted.map((r) => r.strike), values: sorted.map((r) => [r[metric]]) };
-}
-
-/**
- * The Terminal chart's 0DTE bars come from this app's own self-computed
- * per-strike chain (real per-contract IV/OI), not the raw cross-expiry
- * surface endpoint - the surface is a documented magnitude/sign proxy since
- * we don't hold per-contract data for other expirations. Left unpatched,
- * the heatmap's nearest-expiry column (built straight from the surface)
- * disagreed with the chart's 0DTE bars for the same strike/metric even
- * though both claim to show "today". This swaps that one column (index 0,
- * grids are sorted ascending by dte) for the self-computed values so the
- * chart and heatmap agree on the expiry they share; further-out columns
- * are untouched since no self-computed alternative exists for them.
- */
-export function withSelfComputedNearestColumn(
-  grid: StrikeExpiryHeatmap | null,
-  perStrike: StrikeRow0DTE[],
-  metric: keyof Pick<StrikeRow0DTE, "gex" | "vex" | "cex" | "tex">
-): StrikeExpiryHeatmap | null {
-  if (!grid || grid.columns.length === 0) return grid;
-  const byStrike = new Map(perStrike.map((r) => [r.strike, r[metric]]));
-  const values = grid.values.map((row, i) => {
-    const self = byStrike.get(grid.strikes[i]);
-    if (self === undefined) return row;
-    const next = [...row];
-    next[0] = self;
-    return next;
-  });
-  return { ...grid, values };
 }

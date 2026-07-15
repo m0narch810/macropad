@@ -27,6 +27,10 @@ export interface PricerInputs {
   isCall: boolean;
 }
 
+function normPdf(z: number): number {
+  return Math.exp((-z * z) / 2) / Math.sqrt(2 * Math.PI);
+}
+
 function normCdf(z: number): number {
   const t = 1 / (1 + 0.2316419 * Math.abs(z));
   const d = 0.3989423 * Math.exp((-z * z) / 2);
@@ -53,6 +57,32 @@ export function bsPrice(inputs: PricerInputs): number {
   return strike * Math.exp(-r * T) * normCdf(-d2) - spot * Math.exp(-q * T) * normCdf(-d1);
 }
 
+/**
+ * Minimum T fed to the gamma formula only (price/delta/theta/vega/vanna/
+ * charm all keep using the option's real, unfloored T). Confirmed directly:
+ * with the real T on a 0DTE contract in its final 30-60 minutes, raw BS
+ * gamma is mathematically exact but converges toward a near-Dirac spike at
+ * the money (peak width scales with spot*vol*sqrt(T), which shrinks toward
+ * zero as T does) - a single strike absorbs almost the entire book's
+ * gamma while its $1-2 neighbors collapse toward zero. Real desks don't
+ * chart raw instantaneous gamma that close to expiry for exactly this
+ * reason: dealers can't rebalance with infinite precision in the literal
+ * final minutes, so the practical/tradeable gamma profile is wider than
+ * the instant math implies. Flooring T at 4 trading hours for gamma only
+ * widens that peak back to a realistic multi-strike spread without
+ * touching any other Greek's real time-to-expiry.
+ */
+const GAMMA_MIN_T_YEARS = 4 / 24 / 365;
+
+/** Closed-form gamma - exact at any T, no finite-difference bump size to get wrong - with the stated minimum-T floor above applied only here. */
+export function bsGamma(inputs: PricerInputs): number {
+  if (inputs.T <= 0 || inputs.vol <= 0) return 0;
+  const T = Math.max(inputs.T, GAMMA_MIN_T_YEARS);
+  const sqrtT = Math.sqrt(T);
+  const d1 = (Math.log(inputs.spot / inputs.strike) + (inputs.r - inputs.q + (inputs.vol * inputs.vol) / 2) * T) / (inputs.vol * sqrtT);
+  return (Math.exp(-inputs.q * T) * normPdf(d1)) / (inputs.spot * inputs.vol * sqrtT);
+}
+
 export interface Greeks {
   price: number;
   delta: number;
@@ -63,7 +93,7 @@ export interface Greeks {
   charm: number; // d(delta)/dT, per calendar day
 }
 
-/** Bump-and-reprice Greeks under frozen IV. */
+/** Bump-and-reprice Greeks under frozen IV, except gamma (see below). */
 export function bsGreeks(inputs: PricerInputs): Greeks {
   const hS = inputs.spot * 0.005;
   const hVol = 0.01;
@@ -75,7 +105,15 @@ export function bsGreeks(inputs: PricerInputs): Greeks {
   const vUp = at({ spot: inputs.spot + hS });
   const vDown = at({ spot: inputs.spot - hS });
   const delta = (vUp - vDown) / (2 * hS);
-  const gamma = (vUp - 2 * v0 + vDown) / (hS * hS);
+
+  // Gamma uses the closed-form formula, not finite difference: a 0DTE
+  // gamma peak can be just $1-2 wide (width scales with S*sigma*sqrt(T)),
+  // narrower than the fixed ~0.5%-of-spot bump above - finite-differencing
+  // across a window wider than the true peak systematically distorts the
+  // per-strike shape (confirmed directly: it was concentrating gamma onto
+  // whichever single strike the bump window happened to straddle, instead
+  // of the smooth, gradually-declining profile a real 0DTE book shows).
+  const gamma = bsGamma(inputs);
 
   const vVolUp = at({ vol: inputs.vol + hVol });
   const vVolDown = at({ vol: Math.max(1e-4, inputs.vol - hVol) });

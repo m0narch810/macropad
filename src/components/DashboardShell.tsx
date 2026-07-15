@@ -42,14 +42,7 @@ const DOCS_ID = "docs";
 // landing on a "coming soon" screen until the feature ships.
 const OPTIONS_FLOW_PREFIX = "options-flow";
 const OPTIONS_FLOW_PAGES = [
-  { id: "options-flow:gex", label: "GEX", blurb: "Dealer gamma exposure by strike, and the levels it pulls price toward." },
-  { id: "options-flow:dex", label: "DEX", blurb: "Dealer delta exposure by strike, and which way it forces hedging flow." },
-  { id: "options-flow:theta", label: "THETA EXPOSURE", blurb: "Dollar theta decay by strike — where the book bleeds value as time passes." },
-  { id: "options-flow:vanna", label: "VANNA EXPOSURE", blurb: "Dollar vanna by strike — how dealer hedging delta shifts as implied vol moves." },
-  { id: "options-flow:charm", label: "CHARM EXPOSURE", blurb: "Dollar charm by strike — how dealer hedging delta drifts purely from time decay." },
-  { id: "options-flow:reversal", label: "REVERSAL LEVELS", blurb: "Cross-Greek dealer reversal wells — the single best zone where positioning suggests price is most likely to turn." },
-  { id: "options-flow:blindspots", label: "BLIND SPOTS", blurb: "Hidden target-price zones derived from correlated markets' own options structures — not from this symbol's own chart." },
-  { id: "options-flow:opflo", label: "OPFLO RTH BIAS", blurb: "Cumulative model-implied hedge pressure from now through the close — one direction, one strength, one bias flip." },
+  { id: "options-flow:terminal", label: "TERMINAL", blurb: "Classic all-in-one view — every Greek's walls, exposure chart, and heatmap on one page." },
 ];
 
 const SHORT_LABEL: Record<string, string> = {

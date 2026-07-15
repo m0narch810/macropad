@@ -7,9 +7,8 @@ import type { DeltaEngineResult } from "@/lib/deltaEngine";
 import type { ThetaEngineResult } from "@/lib/thetaEngine";
 import type { VannaEngineResult } from "@/lib/vannaEngine";
 import type { CharmEngineResult } from "@/lib/charmEngine";
-import type { ReversalEngineResult } from "@/lib/reversalEngine";
-import type { BlindSpotsResult } from "@/lib/blindSpotsEngine";
-import type { OpFloBiasResult } from "@/lib/opfloEngine";
+import type { StrikeExpiryHeatmap } from "@/lib/strikeExpiryHeatmaps";
+import type { HedgeCliffResult } from "@/lib/hedgeCliffEngine";
 
 export type GexSymbol = "QQQ" | "SPY" | "SPX" | "NDX";
 
@@ -115,6 +114,8 @@ export interface GexResponse {
   putWall: number;
   kingNode: { strike: number; gex: number; type: "repellor" | "pin" };
   gammaFlip: number | null;
+  /** ATM IV (fractional, e.g. 0.09 = 9%) - from /zero_dte's own atm_iv field, already converted from its 0-100 percentage-point scale. */
+  atmIv?: number;
   /** American (Leisen-Reimer) tree engine, on each strike's own live, unsmoothed quoted IV. */
   american: EngineExposure;
   /** CRR binomial tree engine, on the live, arbitrage-controlled 0DTE IV smile. */
@@ -140,14 +141,10 @@ export interface GexResponse {
   vannaEngine?: VannaEngineResult;
   /** The Charm Decision Engine: finite-horizon modeled hedge flow from time passage alone, flow schedule, price x time charm field, Delta Destination Map - see charmEngine.ts. This is the Charm page's primary content. */
   charmEngine?: CharmEngineResult;
-  /** The Reversal Levels engine: cross-Greek dealer reversal wells, arrival-adjusted force, counterfactual convergence, live absorption - see reversalEngine.ts. Not another single-Greek exposure page. */
-  reversalEngine?: ReversalEngineResult;
-  /** Blind Spots: hidden target-price zones derived from related markets' own options structures, not the target's own chart - see blindSpotsEngine.ts. */
-  blindSpots?: BlindSpotsResult;
-  /** Recent 5-minute candle closes only - kept on the response so the Blind Spots engine can cross-reference another symbol's own already-fetched candles for a beta estimate without a second /chart call. Not rendered directly by any page. */
-  recentCandleCloses?: number[];
-  /** OpFlo Rest-of-RTH Bias: cumulative model-implied hedge pressure from now through the close - see opfloEngine.ts. */
-  opfloBias?: OpFloBiasResult;
+  /** Hedge Acceleration and Cliff Map: H(S)/H'(S)/H''(S) curves from a spot-only reprice grid - see hedgeCliffEngine.ts. */
+  hedgeCliff?: HedgeCliffResult;
+  /** Strike x expiry grids for the Terminal heatmap, one per selectable Greek - see strikeExpiryHeatmaps.ts. */
+  strikeExpiryHeatmaps?: Record<"gex" | "dex" | "vex" | "cex" | "tex" | "vegaex", StrikeExpiryHeatmap | null>;
 }
 
 /** Picks the N strikes with the largest |value| under `pick`, then re-sorts them ascending by strike for a coherent x-axis. */

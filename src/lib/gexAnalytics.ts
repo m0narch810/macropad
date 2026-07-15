@@ -21,7 +21,7 @@
  * still respect the engine toggle.
  */
 
-import { bsPrice, dollarGex } from "@/lib/blackScholes";
+import { bsGamma, bsPrice, dollarGex } from "@/lib/blackScholes";
 import { topStrikesByMagnitude, type ChainStrikeInput, type CrossExpiryRow, type StrikeRow0DTE } from "@/lib/gex";
 import { sviImpliedVol, type SviParams } from "@/lib/svi";
 
@@ -30,12 +30,7 @@ import { sviImpliedVol, type SviParams } from "@/lib/svi";
 // ---------------------------------------------------------------------------
 
 export function bsGammaAt(spot: number, strike: number, T: number, vol: number, r: number, q: number, isCall: boolean): number {
-  if (T <= 0 || vol <= 0) return 0;
-  const h = spot * 0.005;
-  const v0 = bsPrice({ spot, strike, T, vol, r, q, isCall });
-  const up = bsPrice({ spot: spot + h, strike, T, vol, r, q, isCall });
-  const down = bsPrice({ spot: spot - h, strike, T, vol, r, q, isCall });
-  return (up - 2 * v0 + down) / (h * h);
+  return bsGamma({ spot, strike, T, vol, r, q, isCall });
 }
 
 /** d(Gamma)/dS via the standard 5-point third-derivative finite-difference stencil. */

@@ -3,13 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GexResponse, GexSymbol } from "@/lib/gex";
 import { fmtNum, fmtRaw, fmtUsd } from "@/lib/gex";
-import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalDualBarChart, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
+import { computeTopWalls, StrikeExpiryHeatmapChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
 import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
-import { LevelLadder } from "@/components/optionsflow/LevelLadder";
+import { SpineProfile, type SpineAnnotation, type SpinePoint } from "@/components/optionsflow/SpineProfile";
 import { IvSmileChart } from "@/components/optionsflow/IvSmileChart";
 
 export type OptionsFlowView = "terminal";
@@ -34,12 +34,74 @@ function SymbolToggle({ symbol, onChange }: { symbol: GexSymbol; onChange: (s: G
   );
 }
 
-function MetricTile({ label, value, color }: { label: string; value: string; color?: string }) {
+function StripCell({ label, value, color }: { label: string; value: string; color?: string }) {
   return (
-    <div>
-      <div className="eyebrow">{label}</div>
-      <div className="mt-0.5 font-mono text-[0.9rem] font-semibold" style={{ color: color ?? "var(--text)" }}>
+    <div className="flex flex-col justify-center gap-0.5 border-l border-[var(--border)] px-4 py-2">
+      <span className="eyebrow">{label}</span>
+      <span className="font-mono text-[0.82rem] font-semibold leading-none" style={{ color: color ?? "var(--text)" }}>
         {value}
+      </span>
+    </div>
+  );
+}
+
+/** The chyron: every headline number in one hairline-divided broadcast strip - replaces the big-spot-hero + stat-card grid this product used to share with every other exposure dashboard. */
+function InstrumentStrip({
+  data,
+  tick,
+  callWall,
+  putWall,
+  phaseColor,
+  deepReady,
+}: {
+  data: GexResponse;
+  tick: SpotTick;
+  callWall: number | null;
+  putWall: number | null;
+  phaseColor: string;
+  deepReady: boolean;
+}) {
+  const gammaEngine = data.gammaEngine;
+  return (
+    <div className="hud flex flex-wrap items-stretch border border-[var(--border)] bg-[var(--panel)] px-4 py-1.5">
+      <div className="flex flex-col justify-center gap-0.5 py-2 pr-4">
+        <span className="eyebrow">
+          {data.symbol} · 0DTE {data.resolvedExpiry}
+        </span>
+        <span
+          key={tick.at}
+          className={`font-mono text-[1.2rem] font-bold leading-none text-[var(--text)] ${tick.dir === "up" ? "tick-up" : tick.dir === "down" ? "tick-down" : ""}`}
+        >
+          {fmtNum(data.spot, 2)}
+          {tick.dir && (
+            <span className="ml-1.5 text-[0.7rem]" style={{ color: tick.dir === "up" ? "var(--up)" : "var(--down)" }}>
+              {tick.dir === "up" ? "▲" : "▼"}
+            </span>
+          )}
+        </span>
+      </div>
+      <StripCell label="Call Wall" value={callWall !== null ? fmtNum(callWall, 2) : "—"} color="var(--up)" />
+      <StripCell label="Put Wall" value={putWall !== null ? fmtNum(putWall, 2) : "—"} color="var(--down)" />
+      <StripCell label="Max Pain" value={fmtNum(data.maxPain, 2)} />
+      <StripCell label="G-Flip" value={data.gammaFlip !== null ? fmtNum(data.gammaFlip, 2) : "—"} />
+      <StripCell label="Σ GEX" value={fmtUsd(data.totalGex0dte)} />
+      <StripCell label="±1σ" value={data.zeroDte ? fmtNum(data.zeroDte.expectedMove1s, 2) : "—"} />
+      <StripCell label="P/C" value={data.zeroDte ? fmtNum(data.zeroDte.pcRatio, 2) : "—"} />
+      <StripCell label="ATM IV" value={data.atmIv !== undefined ? `${fmtNum(data.atmIv * 100, 1)}%` : "—"} />
+      <div className="ml-auto flex items-center pl-4">
+        {gammaEngine ? (
+          <span className="flex items-center gap-1.5 font-mono text-[0.66rem] font-semibold uppercase tracking-[0.06em]" style={{ color: phaseColor }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: phaseColor }} />
+            {gammaEngine.phase.label}
+          </span>
+        ) : (
+          !deepReady && (
+            <span className="flex items-center gap-1.5 font-mono text-[0.66rem] uppercase tracking-[0.06em] text-[var(--text-faint)]">
+              <span className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--amber)" }} />
+              regime syncing
+            </span>
+          )
+        )}
       </div>
     </div>
   );
@@ -137,15 +199,17 @@ function effectiveGexAsGrid(result: GexResponse["effectiveGex"] | undefined, mod
   };
 }
 
+// Workbench modules - short single-word callsigns for the numbered rail,
+// not the generic CHART/HEATMAP tab names every exposure dashboard uses.
 type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "ivsmile" | "aiprompt";
 const SECTION_LABEL: Record<Section, string> = {
-  chart: "CHART",
-  topo: "TOPO",
-  heatmap: "HEATMAP",
-  crossexpiry: "CROSS-EXPIRY",
-  crossasset: "CROSS ASSET",
-  ivsmile: "IV SMILE",
-  aiprompt: "AI PROMPT",
+  chart: "PROFILE",
+  topo: "TERRAIN",
+  heatmap: "GRID",
+  crossexpiry: "STACK",
+  crossasset: "ASSETS",
+  ivsmile: "SMILE",
+  aiprompt: "PROMPT",
 };
 const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "ivsmile", "aiprompt"];
 
@@ -309,6 +373,29 @@ function TerminalView({
 
   const phaseColor = gammaEngine ? PHASE_COLOR[gammaEngine.phase.phase] ?? "var(--text-faint)" : "var(--text-faint)";
 
+  // The spine consumes whatever the PROFILE controls select: signed mode
+  // splits one series into call-side (right) / put-side (left) lobes;
+  // scenario "both" puts the +move reprice on the right and -move on the
+  // left so the asymmetry is the shape itself.
+  const scenarioBoth = chartMode !== "traditional" && effectiveDir === "both";
+  const spinePoints: SpinePoint[] = useMemo(() => {
+    if (scenarioBoth) {
+      return chartDualData.map((d) => ({ strike: d.strike, right: Math.abs(d.up), left: Math.abs(d.down), readout: `↑${fmtUsd(d.up)} ↓${fmtUsd(d.down)}` }));
+    }
+    const fmt = chartMode === "traditional" ? fmtRaw : fmtUsd;
+    return chartData.map((d) => ({ strike: d.strike, right: Math.max(0, d.value), left: Math.max(0, -d.value), readout: fmt(d.value) }));
+  }, [scenarioBoth, chartDualData, chartData, chartMode]);
+  const spineAnnotations: SpineAnnotation[] = [
+    ...walls.map((w) => ({ label: w.label, price: w.price, color: w.color })),
+    ...(data.maxPain > 0 ? [{ label: "Max Pain", price: data.maxPain, color: "var(--text-dim)" }] : []),
+    ...(data.gammaFlip !== null ? [{ label: "G-Flip", price: data.gammaFlip, color: "var(--text-dim)" }] : []),
+    { label: data.kingNode.type === "pin" ? "King·Pin" : "King·Repel", price: data.kingNode.strike, color: "var(--text-faint)" },
+  ];
+  const spineBand = data.zeroDte && data.zeroDte.expectedMove1s > 0 ? { lo: data.spot - data.zeroDte.expectedMove1s, hi: data.spot + data.zeroDte.expectedMove1s } : null;
+  const spineLobeLabels: [string, string] = scenarioBoth
+    ? [`−${data.effectiveGex ? fmtNum(data.effectiveGex.moveDownPct * 100, 1) : "—"}% move`, `+${data.effectiveGex ? fmtNum(data.effectiveGex.moveUpPct * 100, 1) : "—"}% move`]
+    : [`− ${chartUnitLabel}`, `+ ${chartUnitLabel}`];
+
   const metricTabs = (size: "sm" | "md") => (
     <div className="inline-flex flex-wrap border border-[var(--border)]">
       {METRIC_ORDER.map((m) => (
@@ -330,89 +417,51 @@ function TerminalView({
 
   return (
     <div className="flex flex-col gap-4">
-      {/* Bento hero: big regime tile + dense stat mosaic, replacing four equal-width cards */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
-        <div className="blueprint hud relative flex flex-col gap-4 overflow-hidden border-l-4 bg-[var(--panel)] p-5" style={{ borderColor: phaseColor }}>
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <div
-                key={tick.at}
-                className={`glow-accent display-hero font-mono text-[2.4rem] text-[var(--text)] ${tick.dir === "up" ? "tick-up" : tick.dir === "down" ? "tick-down" : ""}`}
-              >
-                ${fmtNum(data.spot, 2)}
-                {tick.dir && (
-                  <span className="ml-2 align-[0.35em] font-mono text-[0.9rem]" style={{ color: tick.dir === "up" ? "var(--up)" : "var(--down)" }}>
-                    {tick.dir === "up" ? "▲" : "▼"}
-                  </span>
-                )}
-              </div>
-              <div className="eyebrow mt-1.5">
-                {data.symbol} · 0DTE {data.resolvedExpiry}
-              </div>
-            </div>
-            {gammaEngine ? (
-              <div className="inline-flex items-center gap-1.5 border px-2.5 py-1" style={{ borderColor: phaseColor, background: `color-mix(in srgb, ${phaseColor} 8%, transparent)` }}>
-                <span className="h-1.5 w-1.5 rounded-full" style={{ background: phaseColor }} />
-                <span className="font-mono text-[0.7rem] font-semibold uppercase tracking-[0.04em]" style={{ color: phaseColor }}>
-                  {gammaEngine.phase.label}
-                </span>
-              </div>
-            ) : (
-              !deepReady && (
-                <div className="inline-flex items-center gap-1.5 border border-[var(--border)] px-2.5 py-1">
-                  <span className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: "var(--amber)" }} />
-                  <span className="font-mono text-[0.7rem] font-semibold uppercase tracking-[0.04em] text-[var(--text-faint)]">regime syncing</span>
-                </div>
-              )
-            )}
-          </div>
-          {gammaEngine && <p className="m-0 font-sans text-[0.72rem] leading-relaxed text-[var(--text-dim)]">{gammaEngine.phase.interpretation}</p>}
-          <div className="mt-auto grid grid-cols-2 gap-3 border-t border-[var(--border)] pt-3 sm:grid-cols-4">
-            <MetricTile label="Call Wall" value={heroCallWall !== null ? fmtNum(heroCallWall, 2) : "—"} color="var(--up)" />
-            <MetricTile label="Put Wall" value={heroPutWall !== null ? fmtNum(heroPutWall, 2) : "—"} color="var(--down)" />
-            <MetricTile label="Max Pain" value={fmtNum(data.maxPain, 2)} />
-            <MetricTile label="G-Flip" value={data.gammaFlip !== null ? fmtNum(data.gammaFlip, 2) : "—"} />
-          </div>
-        </div>
+      <InstrumentStrip data={data} tick={tick} callWall={heroCallWall} putWall={heroPutWall} phaseColor={phaseColor} deepReady={deepReady} />
 
-        <div className="hud flex flex-col gap-3 border border-[var(--border)] bg-[var(--panel)] p-4">
+      {gammaEngine && (
+        <p className="m-0 border-l-2 pl-3 font-sans text-[0.72rem] leading-relaxed text-[var(--text-dim)]" style={{ borderColor: phaseColor }}>
+          {gammaEngine.phase.interpretation}
+        </p>
+      )}
+
+      {/* The chart room: the spine (persistent full-height exposure terrain)
+          on the left, the numbered workbench of modules on the right. The
+          spine never leaves the screen - whatever module is open, the live
+          price structure stays in view. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,340px)_1fr] lg:items-start">
+        <aside className="hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-4 lg:sticky lg:top-4">
           <div className="flex items-baseline justify-between">
-            <div className="partno">{data.symbol} · structure</div>
-            <div className="eyebrow">live levels</div>
+            <span className="partno">00 · spine</span>
+            <span className="eyebrow">
+              {chartUnitLabel}
+              {chartMode === "traditional" && dteColumns.length ? ` · ${dteColumns[clampedDteIndex]?.label ?? "0DTE"}${dteScope === "cumulative" && clampedDteIndex > 0 ? " ∑" : ""}` : ""}
+            </span>
           </div>
-          <LevelLadder
-            spot={data.spot}
-            tickDir={tick.dir}
-            perStrike={data.perStrike}
-            callWall={heroCallWall}
-            putWall={heroPutWall}
-            gammaFlip={data.gammaFlip}
-            maxPain={data.maxPain}
-            kingNode={data.kingNode}
-            expectedMove1s={data.zeroDte?.expectedMove1s ?? null}
-            height={214}
-          />
-        </div>
-      </div>
+          <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={560} />
+        </aside>
 
-      {/* Segmented view switcher - one heavy visual on screen at a time instead of an ever-growing scroll */}
-      <div className="inline-flex w-fit border border-[var(--border)]">
-        {SECTION_ORDER.map((s) => (
-          <button
-            key={s}
-            onClick={() => setSection(s)}
-            className={`px-4 py-1.5 font-mono text-[0.7rem] font-semibold tracking-[0.06em] transition-colors duration-150 ${
-              s === section ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-            }`}
-          >
-            {SECTION_LABEL[s]}
-          </button>
-        ))}
-      </div>
+        <div className="flex min-w-0 flex-col overflow-hidden border border-[var(--border)] bg-[var(--panel)] sm:flex-row">
+          <nav className="flex shrink-0 flex-row overflow-x-auto border-b border-[var(--border)] sm:w-[6.8rem] sm:flex-col sm:border-b-0 sm:border-r">
+            {SECTION_ORDER.map((s, i) => (
+              <button
+                key={s}
+                onClick={() => setSection(s)}
+                className={`flex items-baseline gap-1.5 whitespace-nowrap px-3 py-3 text-left font-mono text-[0.62rem] font-semibold tracking-[0.06em] transition-colors duration-150 sm:border-l-2 ${
+                  s === section ? "bg-[var(--panel-2)] text-[var(--text)] sm:border-[var(--accent)]" : "text-[var(--text-faint)] hover:text-[var(--text)] sm:border-transparent"
+                }`}
+              >
+                <span className="text-[0.52rem] opacity-60">{String(i + 1).padStart(2, "0")}</span>
+                {SECTION_LABEL[s]}
+              </button>
+            ))}
+          </nav>
+          <div className="min-w-0 flex-1 p-4">
 
       {section === "chart" && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
+        <div className="flex flex-col gap-4">
           <div className="hud flex flex-col gap-4 border border-[var(--border)] bg-[var(--panel)] p-5">
+            <div className="eyebrow">profile console — these controls drive the spine</div>
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="inline-flex border border-[var(--border)]">
                 {CHART_MODE_ORDER.map((m) => (
@@ -486,7 +535,7 @@ function TerminalView({
                           v === chartView ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
                         }`}
                       >
-                        {v}
+                        {v === "bars" ? "spine" : v}
                       </button>
                     ))}
                   </div>
@@ -529,12 +578,8 @@ function TerminalView({
                 </p>
               )}
             </div>
-            {effectiveDir === "both" && chartMode !== "traditional" ? (
-              <TerminalDualBarChart data={chartDualData} unitLabel={chartUnitLabel} spot={data.spot} walls={walls} valueFormatter={fmtUsd} />
-            ) : chartMode === "traditional" && chartView === "cumulative" ? (
+            {chartMode === "traditional" && chartView === "cumulative" && (
               <CumulativeExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} valueFormatter={fmtRaw} />
-            ) : (
-              <TerminalExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} walls={walls} valueFormatter={chartMode === "traditional" ? fmtRaw : fmtUsd} />
             )}
           </div>
           <MajorWallsPanel metricLabel={chartUnitLabel} walls={walls} />
@@ -660,6 +705,9 @@ function TerminalView({
           <AiPromptPanel data={data} />
         </div>
       )}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }

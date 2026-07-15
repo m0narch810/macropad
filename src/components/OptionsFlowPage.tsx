@@ -10,6 +10,7 @@ import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExpo
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
 import { Tesseract } from "@/components/optionsflow/Tesseract";
+import { IvSmileChart } from "@/components/optionsflow/IvSmileChart";
 
 export type OptionsFlowView = "terminal";
 
@@ -83,32 +84,22 @@ function effectiveGexAsGrid(result: GexResponse["effectiveGex"] | undefined, mod
   };
 }
 
-type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "aiprompt";
+type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "ivsmile" | "aiprompt";
 const SECTION_LABEL: Record<Section, string> = {
   chart: "CHART",
   topo: "TOPO",
   heatmap: "HEATMAP",
   crossexpiry: "CROSS-EXPIRY",
   crossasset: "CROSS ASSET",
+  ivsmile: "IV SMILE",
   aiprompt: "AI PROMPT",
 };
-const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "aiprompt"];
+const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "ivsmile", "aiprompt"];
 
 type ChartMode = "traditional" | "effective" | "shadow";
 const CHART_MODE_LABEL: Record<ChartMode, string> = { traditional: "TRADITIONAL", effective: "EFFECTIVE", shadow: "SHADOW" };
 const CHART_MODE_ORDER: ChartMode[] = ["traditional", "effective", "shadow"];
 const CROSS_ASSET_TICKERS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
-
-function MosaicTile({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div className="hud flex flex-col justify-center gap-1 border border-[var(--border)] bg-[var(--panel)] px-3 py-2.5 transition-colors duration-150 hover:border-[var(--border-strong)]">
-      <div className="eyebrow" style={{ fontSize: "0.56rem" }}>{label}</div>
-      <div className="font-mono text-[0.85rem] font-semibold" style={{ color: color ?? "var(--text)" }}>
-        {value}
-      </div>
-    </div>
-  );
-}
 
 function TerminalView({ data }: { data: GexResponse }) {
   const [metric, setMetric] = useState<Metric>("gex");
@@ -122,8 +113,6 @@ function TerminalView({ data }: { data: GexResponse }) {
   const [topoMode, setTopoMode] = useState<ChartMode>("traditional");
 
   const gammaEngine = data.gammaEngine;
-  const deltaEngine = data.deltaEngine;
-  const vannaEngine = data.vannaEngine;
 
   const dteColumns = data.strikeExpiryHeatmaps?.[metric]?.columns ?? [];
   const clampedDteIndex = Math.min(chartDteIndex, Math.max(0, dteColumns.length - 1));
@@ -237,8 +226,6 @@ function TerminalView({ data }: { data: GexResponse }) {
     </div>
   );
 
-  const grossGex = data.perStrike.reduce((s, r) => s + Math.abs(r.gex), 0);
-
   return (
     <div className="flex flex-col gap-4">
       {/* Bento hero: big regime tile + dense stat mosaic, replacing four equal-width cards */}
@@ -271,25 +258,6 @@ function TerminalView({ data }: { data: GexResponse }) {
 
         <div className="flex flex-col items-center justify-center">
           <Tesseract height={220} />
-        </div>
-      </div>
-
-      {/* Key Levels strip - the dense stat mosaic that used to sit next to spot, now full-width below it */}
-      <div className="hud border border-[var(--border)] bg-[var(--panel)] p-4">
-        <div className="partno mb-3">KEY LEVELS</div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-8">
-          <MosaicTile label="Net GEX" value={fmtUsd(data.totalGex0dte)} color={data.totalGex0dte >= 0 ? "var(--up)" : "var(--down)"} />
-          <MosaicTile label="Gross GEX" value={fmtUsd(grossGex)} />
-          <MosaicTile label="ATM IV" value={data.atmIv !== undefined ? `${(data.atmIv * 100).toFixed(1)}%` : "—"} />
-          <MosaicTile label="Expected Move" value={data.zeroDte ? `±${fmtNum(data.zeroDte.expectedMove1s, 2)}` : "—"} />
-          <MosaicTile
-            label="Net DEX"
-            value={deltaEngine ? fmtNum(deltaEngine.balanceSheet.netDex / 1000, 0) + "K sh" : "—"}
-            color={deltaEngine && deltaEngine.balanceSheet.netDex >= 0 ? "var(--up)" : "var(--down)"}
-          />
-          <MosaicTile label="P/C Ratio" value={data.zeroDte ? data.zeroDte.pcRatio.toFixed(2) : "—"} />
-          <MosaicTile label="Vol Trigger" value={vannaEngine?.flipBand.center !== null && vannaEngine ? fmtNum(vannaEngine.flipBand.center as number, 2) : "—"} />
-          <MosaicTile label="Dealer Z" value={data.dealerFlow ? data.dealerFlow.currentZ.toFixed(2) : "—"} color={data.dealerFlow && Math.abs(data.dealerFlow.currentZ) >= data.dealerFlow.zThreshold ? "#d9a441" : undefined} />
         </div>
       </div>
 
@@ -495,6 +463,16 @@ function TerminalView({ data }: { data: GexResponse }) {
               <CrossExpiryPanel key={sym} defaultSymbol={sym} />
             ))}
           </div>
+        </div>
+      )}
+
+      {section === "ivsmile" && (
+        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+          <div className="mb-3">
+            <div className="font-display text-[0.95rem] text-[var(--text)]">IV Smile</div>
+            <div className="eyebrow mt-1">{data.symbol} · 0DTE only — each strike's real live-quoted call/put IV against this session's fitted smile curve</div>
+          </div>
+          <IvSmileChart points={data.ivSmile} spot={data.spot} />
         </div>
       )}
 

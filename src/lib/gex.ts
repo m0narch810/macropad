@@ -124,6 +124,17 @@ export interface GexResponse {
   strikeExpiryHeatmaps?: Record<"gex" | "dex" | "vex" | "cex" | "tex" | "vegaex", StrikeExpiryHeatmap | null>;
   /** Strike x tenor term profile for the Terminal's 3D topography surface - see topoProfile.ts. */
   topo?: TopoRow[];
+  /** 0DTE IV smile: each strike's real quoted call/put IV plus the session's fitted SVI curve at that strike, for the IV Smile tab. */
+  ivSmile?: IvSmilePoint[];
+}
+
+export interface IvSmilePoint {
+  strike: number;
+  /** Real quoted IV from the live chain (not SVI-smoothed) - null when this side has no live quote (no OI/IV). */
+  callIv: number | null;
+  putIv: number | null;
+  /** The session's fitted SVI smile at this strike - what the curve says IV "should" be, for comparing against the raw quotes. */
+  fittedIv: number;
 }
 
 /** Picks the N strikes with the largest |value| under `pick`, then re-sorts them ascending by strike for a coherent x-axis. */

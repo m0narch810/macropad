@@ -8,6 +8,7 @@ import {
   type DealerFlowContext,
   type GexResponse,
   type GexSymbol,
+  type IvSmilePoint,
   type ProbabilityStats,
   type ZeroDteContext,
 } from "@/lib/gex";
@@ -237,6 +238,22 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
 
   const perStrike = buildStrikeRowsFromChain(rawChain, spot, T, r, q);
 
+  const ivSmileByStrike = new Map<number, { call?: number; put?: number }>();
+  for (const row of rawChain) {
+    if (row.oi <= 0 || row.iv <= 0) continue;
+    const entry = ivSmileByStrike.get(row.strike) ?? {};
+    entry[row.side] = row.iv;
+    ivSmileByStrike.set(row.strike, entry);
+  }
+  const ivSmile: IvSmilePoint[] = [...ivSmileByStrike.entries()]
+    .map(([strike, { call, put }]) => ({
+      strike,
+      callIv: call ?? null,
+      putIv: put ?? null,
+      fittedIv: sviImpliedVol(sviParams, strike, forward, T),
+    }))
+    .sort((a, b) => a.strike - b.strike);
+
   const probability: ProbabilityStats = {
     muDailyPct: probabilityRaw.mu_daily_pct ?? 0,
     sigmaDailyPct: probabilityRaw.sigma_daily_pct ?? 1.5,
@@ -334,6 +351,7 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
   });
 
   response.atmIv = atmIv;
+  response.ivSmile = ivSmile;
 
   response.gexPage = computeGexPageAnalytics({
     chain,

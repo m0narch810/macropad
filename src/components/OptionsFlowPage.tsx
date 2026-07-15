@@ -165,7 +165,15 @@ function TerminalView({
     }
 
     const grid = data.strikeExpiryHeatmaps?.[metric];
-    if (!grid) return [];
+    if (!grid) {
+      // /heatmap occasionally fails the request entirely (upstream timeout)
+      // even after the server's own retry - fall back to this app's
+      // self-computed static GEX (always available, no external dependency)
+      // rather than showing an empty chart/no walls. GEX-only: there's no
+      // fallback source for the other five metrics.
+      if (metric !== "gex" || !data.effectiveGex) return [];
+      return windowNearest(data.effectiveGex.rows.map((r) => ({ strike: r.strike, value: r.staticGex })));
+    }
 
     if (dteScope === "single") {
       return windowNearest(grid.strikes.map((strike, i) => ({ strike, value: grid.values[i][clampedDteIndex] ?? 0 })));
@@ -194,7 +202,15 @@ function TerminalView({
   // when someone switches the Chart to DEX or Effective mode.
   const heroWalls: WallMarker[] = useMemo(() => {
     const grid = data.strikeExpiryHeatmaps?.gex;
-    if (!grid) return [];
+    if (!grid) {
+      // Same /heatmap-unavailable fallback as the Chart section below.
+      if (!data.effectiveGex) return [];
+      const rows = data.effectiveGex.rows
+        .map((r) => ({ strike: r.strike, value: r.staticGex }))
+        .sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot))
+        .slice(0, 30);
+      return computeTopWalls(rows, "gex", 2);
+    }
     const rows = grid.strikes
       .map((strike, i) => ({ strike, value: grid.values[i][0] ?? 0 }))
       .sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot))

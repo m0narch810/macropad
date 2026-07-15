@@ -495,7 +495,18 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
     invalidContracts: rawChain.filter((row) => !(row.oi > 0 && row.iv > 0)).length,
   });
 
-  const heatmapRaw = heatmapResult.ok ? (heatmapResult.data as HeatmapEndpointRaw) : null;
+  // /heatmap now backs almost the entire Terminal page (Chart/Heatmap/
+  // Topo/Cross-Expiry all read from it) - it's also the one endpoint that's
+  // intermittently timed out under its original budget, confirmed directly
+  // (same symbol, back-to-back requests, one clean 200 then one timeout).
+  // A single retry here costs one extra round trip only on that failure
+  // path, instead of leaving the whole page's walls/charts empty for this
+  // request and the next 30s of cache.
+  let finalHeatmapResult = heatmapResult;
+  if (!finalHeatmapResult.ok) {
+    finalHeatmapResult = await fetchYyyWithTimeout(`/heatmap?ticker=${symbol}`, base, key, 18000);
+  }
+  const heatmapRaw = finalHeatmapResult.ok ? (finalHeatmapResult.data as HeatmapEndpointRaw) : null;
   const metrics: HeatmapMetric[] = ["gex", "dex", "vex", "cex", "tex", "vegaex"];
   const heatmapGrids = Object.fromEntries(metrics.map((m) => [m, fromHeatmapEndpoint(heatmapRaw, m)])) as Record<HeatmapMetric, ReturnType<typeof fromHeatmapEndpoint>>;
 

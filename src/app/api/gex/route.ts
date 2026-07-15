@@ -19,7 +19,7 @@ import { computeDeltaEngine } from "@/lib/deltaEngine";
 import { computeThetaEngine, parseThetaHeatmap } from "@/lib/thetaEngine";
 import { computeVannaEngine, type VannaSurfacePoint } from "@/lib/vannaEngine";
 import { computeCharmEngine, type CharmSurfacePoint } from "@/lib/charmEngine";
-import { buildGexHeatmap, fromCharmHeatmap, fromThetaHeatmap, fromVannaHeatmap, fromZeroDteOnly, type GexSurfacePoint } from "@/lib/strikeExpiryHeatmaps";
+import { buildGexHeatmap, fromCharmHeatmap, fromThetaHeatmap, fromVannaHeatmap, fromZeroDteOnly, withSelfComputedNearestColumn, type GexSurfacePoint } from "@/lib/strikeExpiryHeatmaps";
 import { computeHedgeCliffMap } from "@/lib/hedgeCliffEngine";
 import { buildTopoProfile } from "@/lib/topoProfile";
 
@@ -493,11 +493,11 @@ async function buildZeroDteResponse(symbol: GexSymbol, base: string, key: string
   }
 
   response.strikeExpiryHeatmaps = {
-    gex: buildGexHeatmap(gexSurfacePoints),
+    gex: withSelfComputedNearestColumn(buildGexHeatmap(gexSurfacePoints), perStrike, "gex"),
     dex: fromZeroDteOnly(perStrike, "dex", `${dteHours < 24 ? "0DTE" : response.resolvedExpiry}`),
-    vex: fromVannaHeatmap(response.vannaEngine?.heatmap ?? null),
-    cex: fromCharmHeatmap(response.charmEngine?.heatmap ?? null),
-    tex: fromThetaHeatmap(response.thetaEngine?.thetaHeatmap ?? null),
+    vex: withSelfComputedNearestColumn(fromVannaHeatmap(response.vannaEngine?.heatmap ?? null), perStrike, "vex"),
+    cex: withSelfComputedNearestColumn(fromCharmHeatmap(response.charmEngine?.heatmap ?? null), perStrike, "cex"),
+    tex: withSelfComputedNearestColumn(fromThetaHeatmap(response.thetaEngine?.thetaHeatmap ?? null), perStrike, "tex"),
     vegaex: fromZeroDteOnly(perStrike, "vegaex", `${dteHours < 24 ? "0DTE" : response.resolvedExpiry}`),
   };
 

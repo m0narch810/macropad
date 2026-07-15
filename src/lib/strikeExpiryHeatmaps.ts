@@ -83,3 +83,32 @@ export function fromZeroDteOnly(perStrike: StrikeRow0DTE[], metric: keyof Pick<S
   const sorted = [...perStrike].sort((a, b) => a.strike - b.strike);
   return { columns: [{ label: columnLabel, dte: 0 }], strikes: sorted.map((r) => r.strike), values: sorted.map((r) => [r[metric]]) };
 }
+
+/**
+ * The Terminal chart's 0DTE bars come from this app's own self-computed
+ * per-strike chain (real per-contract IV/OI), not the raw cross-expiry
+ * surface endpoint - the surface is a documented magnitude/sign proxy since
+ * we don't hold per-contract data for other expirations. Left unpatched,
+ * the heatmap's nearest-expiry column (built straight from the surface)
+ * disagreed with the chart's 0DTE bars for the same strike/metric even
+ * though both claim to show "today". This swaps that one column (index 0,
+ * grids are sorted ascending by dte) for the self-computed values so the
+ * chart and heatmap agree on the expiry they share; further-out columns
+ * are untouched since no self-computed alternative exists for them.
+ */
+export function withSelfComputedNearestColumn(
+  grid: StrikeExpiryHeatmap | null,
+  perStrike: StrikeRow0DTE[],
+  metric: keyof Pick<StrikeRow0DTE, "gex" | "vex" | "cex" | "tex">
+): StrikeExpiryHeatmap | null {
+  if (!grid || grid.columns.length === 0) return grid;
+  const byStrike = new Map(perStrike.map((r) => [r.strike, r[metric]]));
+  const values = grid.values.map((row, i) => {
+    const self = byStrike.get(grid.strikes[i]);
+    if (self === undefined) return row;
+    const next = [...row];
+    next[0] = self;
+    return next;
+  });
+  return { ...grid, values };
+}

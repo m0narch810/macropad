@@ -13,8 +13,10 @@
 
 import { useEffect, useRef } from "react";
 
-const D4 = 3.1; // 4D -> 3D camera distance
-const D3 = 3.4; // 3D -> 2D camera distance
+// Gentle perspective (cameras pulled back): the projected figure swells far
+// less at extreme W/Z, so a fixed canvas never clips a tumbling corner off.
+const D4 = 3.6; // 4D -> 3D camera distance
+const D3 = 4.2; // 3D -> 2D camera distance
 
 const VERTS: [number, number, number, number][] = Array.from({ length: 16 }, (_, i) => [i & 1 ? 1 : -1, i & 2 ? 1 : -1, i & 4 ? 1 : -1, i & 8 ? 1 : -1]);
 const EDGES: [number, number][] = [];
@@ -65,7 +67,7 @@ export function TesseractMark({ size = 150 }: { size?: number }) {
       const c2 = Math.cos(a2), s2 = Math.sin(a2);
       const c3 = Math.cos(a3), s3 = Math.sin(a3);
 
-      const scale = Math.min(W, H) * 0.31;
+      const scale = Math.min(W, H) * 0.21;
       const cx = W / 2;
       const cy = H / 2;
 
@@ -77,11 +79,11 @@ export function TesseractMark({ size = 150 }: { size?: number }) {
         const z2 = z * c3 - w * s3;
         w = z * s3 + w * c3;
         z = z2;
-        const k4 = D4 / (D4 - w * 0.9);
+        const k4 = D4 / (D4 - w * 0.55);
         x *= k4;
         y *= k4;
         z *= k4;
-        const k3 = D3 / (D3 - z * 0.7);
+        const k3 = D3 / (D3 - z * 0.45);
         return { x: cx + x * k3 * scale, y: cy + y * k3 * scale, z };
       });
 
@@ -91,9 +93,9 @@ export function TesseractMark({ size = 150 }: { size?: number }) {
         const A = proj[a];
         const B = proj[b];
         const depth = (A.z + B.z) / 2; // ~[-1.4, 1.4], camera side positive
-        const alpha = Math.max(0.14, Math.min(0.9, 0.5 + depth * 0.32));
+        const alpha = Math.max(0.22, Math.min(0.95, 0.58 + depth * 0.3));
         ctx.strokeStyle = isWEdge(a, b) ? accentColor : inkColor;
-        ctx.globalAlpha = isWEdge(a, b) ? alpha * 0.9 : alpha * 0.55;
+        ctx.globalAlpha = isWEdge(a, b) ? alpha : alpha * 0.8;
         ctx.beginPath();
         ctx.moveTo(A.x, A.y);
         ctx.lineTo(B.x, B.y);
@@ -102,8 +104,8 @@ export function TesseractMark({ size = 150 }: { size?: number }) {
       ctx.globalAlpha = 1;
       for (const p of proj) {
         ctx.fillStyle = inkColor;
-        ctx.globalAlpha = Math.max(0.25, Math.min(1, 0.6 + p.z * 0.3));
-        ctx.fillRect(p.x - 1, p.y - 1, 2, 2);
+        ctx.globalAlpha = Math.max(0.35, Math.min(1, 0.65 + p.z * 0.3));
+        ctx.fillRect(p.x - 1, p.y - 1, 2.5, 2.5);
       }
       ctx.globalAlpha = 1;
     };

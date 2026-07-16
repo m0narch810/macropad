@@ -601,14 +601,14 @@ export default function DashboardShell({
             </>
           ) : activeOptionsFlow ? (
             <>
-              <header className="relative mb-8">
+              <header className="relative mb-6 flex min-h-[160px] flex-col justify-center">
                 <div className="eyebrow mb-2">Options Flow</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text={activeOptionsFlow.label} />
                 </h1>
                 {/* The page's namesake, worn as an emblem beside the title - a live 4D wireframe, not a data panel. */}
-                <div className="pointer-events-none absolute -top-12 right-0 hidden md:block">
-                  <TesseractMark size={120} />
+                <div className="pointer-events-none absolute right-0 top-1/2 hidden -translate-y-1/2 md:block">
+                  <TesseractMark size={200} />
                 </div>
               </header>
               <OptionsFlowPage view={activeOptionsFlow.id.split(":")[1] as OptionsFlowView} />

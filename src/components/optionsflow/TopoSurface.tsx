@@ -25,7 +25,7 @@ const DCOLS_MAX = 132;
 const CYCLE_MS = 16_000;
 const PIN_MS = 45_000;
 
-type TopoModeId = "gex" | "dex" | "vex" | "cex" | "tex" | "vegaex";
+export type TopoModeId = "gex" | "dex" | "vex" | "cex" | "tex" | "vegaex";
 
 interface TopoMode {
   id: TopoModeId;
@@ -274,7 +274,20 @@ void main() {
   gl_FragColor = vec4(c * uAlpha, uAlpha);
 }`;
 
-export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TENOR_LABELS }: { rows: TopoRow[]; spot: number; height?: number; tenorLabels?: readonly string[] }) {
+export default function TopoSurface({
+  rows,
+  spot,
+  height = 480,
+  tenorLabels = TENOR_LABELS,
+  metric,
+}: {
+  rows: TopoRow[];
+  spot: number;
+  height?: number;
+  tenorLabels?: readonly string[];
+  /** When set, the page's global Greek selector drives the surface: the internal metric tabs hide and auto-cycling stops. */
+  metric?: TopoModeId;
+}) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const glCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const [modeIdx, setModeIdx] = useState(0);
@@ -304,15 +317,26 @@ export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TE
   }, [rows]);
 
   const modeIds = useMemo(() => MODES.filter((m) => surfaces.has(m.id)).map((m) => m.id), [surfaces]);
-  const activeMode = MODES.find((m) => m.id === modeIds[Math.min(modeIdx, Math.max(0, modeIds.length - 1))]) ?? MODES[0];
+  // Controlled mode: the external metric wins whenever its surface exists;
+  // a missing surface (e.g. a flat Greek in a scenario mode) falls back to
+  // whatever is available rather than rendering nothing.
+  const controlled = metric !== undefined;
+  const externalIdx = controlled ? modeIds.indexOf(metric) : -1;
+  const activeIdx = externalIdx >= 0 ? externalIdx : Math.min(modeIdx, Math.max(0, modeIds.length - 1));
+  const activeMode = MODES.find((m) => m.id === modeIds[activeIdx]) ?? MODES[0];
 
   // Mutable view state shared with the imperative render loop.
   const view = useRef({ yaw: 0.62, pitch: 0.52, dragUntil: 0, fadeT: 1, lastCycle: 0, pinnedUntil: 0 });
-  const stateRef = useRef({ surfaces, modeIds, modeIdx, palIdx, spot });
+  const prevIdxRef = useRef(activeIdx);
+  const stateRef = useRef({ surfaces, modeIds, modeIdx: activeIdx, palIdx, spot, controlled, tenorLabels });
   useEffect(() => {
     // Snapshot the latest render values for the rAF loop - ref writes belong in effects, not render.
-    stateRef.current = { surfaces, modeIds, modeIdx: Math.min(modeIdx, Math.max(0, modeIds.length - 1)), palIdx, spot };
-  }, [surfaces, modeIds, modeIdx, palIdx, spot]);
+    if (prevIdxRef.current !== activeIdx) {
+      prevIdxRef.current = activeIdx;
+      view.current.fadeT = 0; // crossfade when the external selector switches the surface
+    }
+    stateRef.current = { surfaces, modeIds, modeIdx: activeIdx, palIdx, spot, controlled, tenorLabels };
+  }, [surfaces, modeIds, activeIdx, palIdx, spot, controlled, tenorLabels]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -389,6 +413,7 @@ export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TE
     };
 
     try {
+      glCanvas.style.display = ""; // undo a prior fallback-hide (e.g. effect re-run after fast refresh)
       gl = (glCanvas.getContext("webgl", { antialias: true }) || glCanvas.getContext("experimental-webgl", { antialias: true })) as WebGLRenderingContext | null;
       if (gl) {
         const mk = (type: number, src: string) => {
@@ -424,6 +449,13 @@ export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TE
       }
     } catch (err) {
       console.warn("topo: WebGL unavailable, falling back to 2D painter", err);
+      // A context that was created before setup failed (e.g. shader compile
+      // rejected by a software rasterizer) leaves the canvas with an
+      // uninitialized drawing buffer, which some compositors present as an
+      // opaque white slab over the panel. Clearing it isn't reliable on a
+      // half-dead context - hide the element instead; the 2D painter owns
+      // the whole visual in fallback mode anyway.
+      glCanvas.style.display = "none";
       gl = null;
     }
 
@@ -436,7 +468,11 @@ export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TE
       }
       if (glPalIdx !== stateRef.current.palIdx) uploadRampTex();
       gl.viewport(0, 0, glCanvas.width, glCanvas.height);
-      gl.clearColor(0, 0, 0, 0);
+      // Clear to the panel color opaquely (not transparent black): some
+      // compositors show an alpha-0 WebGL canvas as white, which reads as a
+      // glaring white slab in the dark UI.
+      const paper = hex2rgb(pal.paper);
+      gl.clearColor(paper[0] / 255, paper[1] / 255, paper[2] / 255, 1);
       gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
       gl.useProgram(glP);
       if (glSurf !== S) { // upload this surface's mesh once (rebuilt only on data/mode change)
@@ -611,7 +647,7 @@ export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TE
       ctx.textAlign = "left";
       for (const rr of [0, 5, 10, 15]) {
         const p = proj(X(CC - 1) + 0.06, floorY, Z(dispR(rr)));
-        label(tenorLabels[Math.round((rr / (ROWS - 1)) * 3)], p.px, p.py, pal.ink2);
+        label(st.tenorLabels[Math.round((rr / (ROWS - 1)) * 3)], p.px, p.py, pal.ink2);
       }
 
       // Spot column.
@@ -700,7 +736,7 @@ export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TE
       if (document.hidden || !canvas.offsetParent || !st.modeIds.length) return;
       const v = view.current;
       if (!reduced && now > v.dragUntil) v.yaw += 0.0028;
-      if (!reduced && now - v.lastCycle > CYCLE_MS && now > v.pinnedUntil && st.modeIds.length > 1) {
+      if (!reduced && !st.controlled && now - v.lastCycle > CYCLE_MS && now > v.pinnedUntil && st.modeIds.length > 1) {
         v.lastCycle = now;
         v.fadeT = 0;
         setModeIdx((i) => (i + 1) % st.modeIds.length);
@@ -747,7 +783,7 @@ export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TE
       }
       if (bp) {
         const val = S.raw[bp.r][bp.c];
-        setReadout(`$${S.cols[bp.c]} · ${fmtMag(val)} ${tenorLabels[Math.round((bp.r / (ROWS - 1)) * 3)]}`);
+        setReadout(`$${S.cols[bp.c]} · ${fmtMag(val)} ${st.tenorLabels[Math.round((bp.r / (ROWS - 1)) * 3)]}`);
       } else {
         setReadout("");
       }
@@ -776,24 +812,25 @@ export default function TopoSurface({ rows, spot, height = 480, tenorLabels = TE
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex border border-[var(--border)]">
-          {modeIds.map((id, i) => {
-            const m = MODES.find((x) => x.id === id)!;
-            return (
-              <button
-                key={id}
-                onClick={() => {
-                  setModeIdx(i);
-                  view.current.fadeT = 0;
-                  view.current.pinnedUntil = performance.now() + PIN_MS;
-                }}
-                className={`px-3 py-1 font-mono text-[0.62rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
-                  i === Math.min(modeIdx, modeIds.length - 1) ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-                }`}
-              >
-                {m.label}
-              </button>
-            );
-          })}
+          {!controlled &&
+            modeIds.map((id, i) => {
+              const m = MODES.find((x) => x.id === id)!;
+              return (
+                <button
+                  key={id}
+                  onClick={() => {
+                    setModeIdx(i);
+                    view.current.fadeT = 0;
+                    view.current.pinnedUntil = performance.now() + PIN_MS;
+                  }}
+                  className={`px-3 py-1 font-mono text-[0.62rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
+                    i === activeIdx ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                  }`}
+                >
+                  {m.label}
+                </button>
+              );
+            })}
           <button
             onClick={() => {
               const next = (palIdx + 1) % PALETTES.length;

@@ -4,9 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { GexResponse, GexSymbol } from "@/lib/gex";
 import { fmtNum, fmtRaw, fmtUsd } from "@/lib/gex";
 import { computeTopWalls, StrikeExpiryHeatmapChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
-import { MajorWallsPanel } from "@/components/optionsflow/MajorWalls";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
-import { CumulativeExposureChart } from "@/components/optionsflow/CumulativeExposureChart";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
 import { SpineProfile, type SpineAnnotation, type SpinePoint } from "@/components/optionsflow/SpineProfile";
@@ -30,6 +28,76 @@ function SymbolToggle({ symbol, onChange }: { symbol: GexSymbol; onChange: (s: G
           {s}
         </button>
       ))}
+    </div>
+  );
+}
+
+export interface SpotTick {
+  dir: "up" | "down" | null;
+  /** asOf of the update that produced this tick - keys the flash animation so it re-fires per update, not per render. */
+  at: number;
+}
+
+/** Pulsing feed indicator + seconds-since-update, self-ticking so the rest of the page doesn't re-render every second. */
+function LiveStatus({ asOf, deepReady, degraded }: { asOf: number; deepReady: boolean; degraded: boolean }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  const secs = Math.max(0, Math.floor((now - asOf) / 1000));
+  const age = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
+  const dotColor = degraded ? "var(--amber)" : "var(--up)";
+  return (
+    <div className="flex items-center gap-3 font-mono text-[0.62rem] text-[var(--text-faint)]">
+      {!deepReady && (
+        <span className="flex items-center gap-1.5 border border-[var(--border)] px-2 py-0.5 uppercase tracking-[0.1em]">
+          <span className="live-dot h-1 w-1 rounded-full" style={{ background: "var(--amber)" }} />
+          deep sync
+        </span>
+      )}
+      <span className="flex items-center gap-1.5 uppercase tracking-[0.1em]">
+        <span className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: dotColor }} />
+        {degraded ? "reconnecting" : "live"} · {age} ago
+      </span>
+    </div>
+  );
+}
+
+/** Placeholder for panels whose data rides the slow full tier - shown from first paint until the deep payload lands. */
+function DeepSyncPanel({ title, note }: { title: string; note?: string }) {
+  return (
+    <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+      <div className="flex items-center justify-between gap-2">
+        <div className="font-display text-[0.95rem] text-[var(--text)]">{title}</div>
+        <span className="eyebrow flex items-center gap-1.5">
+          <span className="live-dot h-1 w-1 rounded-full" style={{ background: "var(--amber)" }} />
+          deep sync
+        </span>
+      </div>
+      <div className="eyebrow mt-1">{note ?? "streaming the full depth computation — this view fills in as it lands"}</div>
+      <div className="mt-4 flex flex-col gap-2">
+        {[0.92, 0.64, 0.8, 0.5, 0.74, 0.6].map((w, i) => (
+          <div key={i} className="shimmer h-6" style={{ width: `${w * 100}%` }} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Collapsed utility drawer - heavy or secondary modules live here so the main screen stays a single view with no tab-switching. Content mounts only when opened (the stack panels fetch on mount). */
+function Drawer({ index, title, hint, open, onToggle, children }: { index: string; title: string; hint: string; open: boolean; onToggle: () => void; children: React.ReactNode }) {
+  return (
+    <div className="border border-[var(--border)] bg-[var(--panel)]">
+      <button onClick={onToggle} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+        <span className="flex items-baseline gap-2 font-mono text-[0.66rem] font-semibold uppercase tracking-[0.08em] text-[var(--text-dim)]">
+          <span className="text-[0.55rem] text-[var(--text-faint)]">{index}</span>
+          {title}
+          <span className="hidden font-normal normal-case tracking-normal text-[var(--text-faint)] sm:inline">— {hint}</span>
+        </span>
+        <span className="font-mono text-[0.8rem] leading-none text-[var(--text-faint)]">{open ? "−" : "+"}</span>
+      </button>
+      {open && <div className="border-t border-[var(--border)] p-4">{children}</div>}
     </div>
   );
 }
@@ -107,59 +175,6 @@ function InstrumentStrip({
   );
 }
 
-export interface SpotTick {
-  dir: "up" | "down" | null;
-  /** asOf of the update that produced this tick - keys the flash animation so it re-fires per update, not per render. */
-  at: number;
-}
-
-/** Pulsing feed indicator + seconds-since-update, self-ticking so the rest of the page doesn't re-render every second. */
-function LiveStatus({ asOf, deepReady, degraded }: { asOf: number; deepReady: boolean; degraded: boolean }) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, []);
-  const secs = Math.max(0, Math.floor((now - asOf) / 1000));
-  const age = secs < 60 ? `${secs}s` : `${Math.floor(secs / 60)}m ${secs % 60}s`;
-  const dotColor = degraded ? "var(--amber)" : "var(--up)";
-  return (
-    <div className="flex items-center gap-3 font-mono text-[0.62rem] text-[var(--text-faint)]">
-      {!deepReady && (
-        <span className="flex items-center gap-1.5 border border-[var(--border)] px-2 py-0.5 uppercase tracking-[0.1em]">
-          <span className="live-dot h-1 w-1 rounded-full" style={{ background: "var(--amber)" }} />
-          deep sync
-        </span>
-      )}
-      <span className="flex items-center gap-1.5 uppercase tracking-[0.1em]">
-        <span className="live-dot h-1.5 w-1.5 rounded-full" style={{ background: dotColor }} />
-        {degraded ? "reconnecting" : "live"} · {age} ago
-      </span>
-    </div>
-  );
-}
-
-/** Placeholder for sections whose data rides the slow full tier - shown from first paint until the deep payload lands. */
-function DeepSyncPanel({ title, note }: { title: string; note?: string }) {
-  return (
-    <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-      <div className="flex items-center justify-between gap-2">
-        <div className="font-display text-[0.95rem] text-[var(--text)]">{title}</div>
-        <span className="eyebrow flex items-center gap-1.5">
-          <span className="live-dot h-1 w-1 rounded-full" style={{ background: "var(--amber)" }} />
-          deep sync
-        </span>
-      </div>
-      <div className="eyebrow mt-1">{note ?? "streaming the full depth computation — this view fills in as it lands"}</div>
-      <div className="mt-4 flex flex-col gap-2">
-        {[0.92, 0.64, 0.8, 0.5, 0.74, 0.6].map((w, i) => (
-          <div key={i} className="shimmer h-6" style={{ width: `${w * 100}%` }} />
-        ))}
-      </div>
-    </div>
-  );
-}
-
 const PHASE_COLOR: Record<string, string> = {
   pinned: "var(--up)",
   damped: "var(--up)",
@@ -169,8 +184,10 @@ const PHASE_COLOR: Record<string, string> = {
   open_field: "var(--down)",
 };
 
+// One Greek selector drives the whole room (spine, terrain, grid) - full
+// Greek names, not the GEX/DEX/VEX ticker soup other dashboards use.
 type Metric = "gex" | "dex" | "vex" | "cex" | "tex" | "vegaex";
-const METRIC_LABEL: Record<Metric, string> = { gex: "GEX", dex: "DEX", vex: "VEX", cex: "CHEX", tex: "THETA", vegaex: "VEGA" };
+const METRIC_LABEL: Record<Metric, string> = { gex: "GAMMA", dex: "DELTA", vex: "VANNA", cex: "CHARM", tex: "THETA", vegaex: "VEGA" };
 const METRIC_ORDER: Metric[] = ["gex", "dex", "vex", "cex", "tex", "vegaex"];
 
 /** Nearest 30 strikes to spot (~±15), keeping the grid's row/column shape. */
@@ -199,24 +216,9 @@ function effectiveGexAsGrid(result: GexResponse["effectiveGex"] | undefined, mod
   };
 }
 
-// Workbench modules - short single-word callsigns for the numbered rail,
-// not the generic CHART/HEATMAP tab names every exposure dashboard uses.
-type Section = "chart" | "topo" | "heatmap" | "crossexpiry" | "crossasset" | "ivsmile" | "aiprompt";
-const SECTION_LABEL: Record<Section, string> = {
-  chart: "PROFILE",
-  topo: "TERRAIN",
-  heatmap: "GRID",
-  crossexpiry: "STACK",
-  crossasset: "ASSETS",
-  ivsmile: "SMILE",
-  aiprompt: "PROMPT",
-};
-const SECTION_ORDER: Section[] = ["chart", "topo", "heatmap", "crossexpiry", "crossasset", "ivsmile", "aiprompt"];
-
 type ChartMode = "traditional" | "effective" | "shadow";
 const CHART_MODE_LABEL: Record<ChartMode, string> = { traditional: "TRADITIONAL", effective: "EFFECTIVE", shadow: "SHADOW" };
 const CHART_MODE_ORDER: ChartMode[] = ["traditional", "effective", "shadow"];
-const CROSS_ASSET_TICKERS: GexSymbol[] = ["QQQ", "SPY", "SPX", "NDX"];
 
 function TerminalView({
   data,
@@ -237,14 +239,12 @@ function TerminalView({
   onAutoMovePct: () => void;
 }) {
   const [metric, setMetric] = useState<Metric>("gex");
-  const [section, setSection] = useState<Section>("chart");
-  const [chartView, setChartView] = useState<"bars" | "cumulative">("bars");
+  const [mode, setMode] = useState<ChartMode>("traditional");
+  const [effectiveDir, setEffectiveDir] = useState<"up" | "down" | "both">("up");
   const [chartDteIndex, setChartDteIndex] = useState(0);
   const [dteScope, setDteScope] = useState<"single" | "cumulative">("single");
-  const [chartMode, setChartMode] = useState<ChartMode>("traditional");
-  const [effectiveDir, setEffectiveDir] = useState<"up" | "down" | "both">("up");
-  const [heatmapMode, setHeatmapMode] = useState<ChartMode>("traditional");
-  const [topoMode, setTopoMode] = useState<ChartMode>("traditional");
+  const [stackOpen, setStackOpen] = useState(false);
+  const [promptOpen, setPromptOpen] = useState(false);
 
   const gammaEngine = data.gammaEngine;
 
@@ -264,25 +264,25 @@ function TerminalView({
   // for other expirations to run the same reprice on. See
   // effectiveGexEngine.ts.
   const chartDualData = useMemo(() => {
-    if (chartMode === "traditional" || effectiveDir !== "both") return [];
+    if (mode === "traditional" || effectiveDir !== "both") return [];
     const rows = data.effectiveGex?.rows ?? [];
     const mapped = rows.map((r) => ({
       strike: r.strike,
-      up: chartMode === "effective" ? r.upEffective : r.shadowGammaUp,
-      down: chartMode === "effective" ? r.downEffective : r.shadowGammaDown,
+      up: mode === "effective" ? r.upEffective : r.shadowGammaUp,
+      down: mode === "effective" ? r.downEffective : r.shadowGammaDown,
     }));
     return [...mapped].sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot)).slice(0, 30).sort((a, b) => a.strike - b.strike);
-  }, [data, chartMode, effectiveDir]);
+  }, [data, mode, effectiveDir]);
 
   const chartData = useMemo(() => {
     const windowNearest = (rows: { strike: number; value: number }[]) =>
       [...rows].sort((a, b) => Math.abs(a.strike - data.spot) - Math.abs(b.strike - data.spot)).slice(0, 30).sort((a, b) => a.strike - b.strike);
 
-    if (chartMode !== "traditional") {
+    if (mode !== "traditional") {
       if (effectiveDir === "both") return [];
       const rows = data.effectiveGex?.rows ?? [];
       const pick = (r: NonNullable<GexResponse["effectiveGex"]>["rows"][number]) =>
-        chartMode === "effective" ? (effectiveDir === "up" ? r.upEffective : r.downEffective) : effectiveDir === "up" ? r.shadowGammaUp : r.shadowGammaDown;
+        mode === "effective" ? (effectiveDir === "up" ? r.upEffective : r.downEffective) : effectiveDir === "up" ? r.shadowGammaUp : r.shadowGammaDown;
       return windowNearest(rows.map((r) => ({ strike: r.strike, value: pick(r) })));
     }
 
@@ -291,7 +291,7 @@ function TerminalView({
       // /heatmap occasionally fails the request entirely (upstream timeout)
       // even after the server's own retry - fall back to this app's
       // self-computed static GEX (always available, no external dependency)
-      // rather than showing an empty chart/no walls. GEX-only: there's no
+      // rather than showing an empty spine/no walls. GEX-only: there's no
       // fallback source for the other five metrics.
       if (metric !== "gex" || !data.effectiveGex) return [];
       return windowNearest(data.effectiveGex.rows.map((r) => ({ strike: r.strike, value: r.staticGex })));
@@ -309,23 +309,22 @@ function TerminalView({
       });
     }
     return windowNearest([...acc.entries()].map(([strike, value]) => ({ strike, value })));
-  }, [data, metric, clampedDteIndex, dteScope, chartMode, effectiveDir]);
+  }, [data, metric, clampedDteIndex, dteScope, mode, effectiveDir]);
   const walls: WallMarker[] = computeTopWalls(
-    effectiveDir === "both" ? chartDualData.map((d) => ({ strike: d.strike, value: d.up })) : chartData,
-    chartMode === "traditional" ? metric : "gex",
+    effectiveDir === "both" && mode !== "traditional" ? chartDualData.map((d) => ({ strike: d.strike, value: d.up })) : chartData,
+    mode === "traditional" ? metric : "gex",
     2
   );
-  const chartUnitLabel = chartMode === "traditional" ? METRIC_LABEL[metric] : chartMode === "effective" ? "EFF GEX" : "SHADOW γ";
+  const chartUnitLabel = mode === "traditional" ? METRIC_LABEL[metric] : mode === "effective" ? "EFF GEX" : "SHADOW γ";
 
-  // Hero tile Call Wall/Put Wall - same computeTopWalls the Chart/Heatmap
-  // graphs use (top-magnitude GEX strikes), always the traditional 0DTE GEX
-  // column regardless of whatever metric/mode the Chart tab happens to be
-  // showing right now, so the hero stat doesn't silently change meaning
-  // when someone switches the Chart to DEX or Effective mode.
+  // Strip Call Wall/Put Wall - same computeTopWalls the spine/grid use
+  // (top-magnitude GEX strikes), always the traditional 0DTE GEX column
+  // regardless of whatever Greek/mode is selected, so the headline stat
+  // doesn't silently change meaning when someone switches to DELTA.
   const heroWalls: WallMarker[] = useMemo(() => {
     const grid = data.strikeExpiryHeatmaps?.gex;
     if (!grid) {
-      // Same /heatmap-unavailable fallback as the Chart section below.
+      // Same /heatmap-unavailable fallback as the spine data above.
       if (!data.effectiveGex) return [];
       const rows = data.effectiveGex.rows
         .map((r) => ({ strike: r.strike, value: r.staticGex }))
@@ -343,48 +342,49 @@ function TerminalView({
   const heroPutWall = heroWalls.find((w) => w.label === "Put Wall")?.price ?? null;
 
   const heatmapWalls: WallMarker[] = useMemo(() => {
-    if (heatmapMode === "traditional" || !data.effectiveGex) return [];
-    const rows = data.effectiveGex.rows.map((r) => ({ strike: r.strike, value: heatmapMode === "effective" ? r.upEffective : r.shadowGammaUp }));
+    if (mode === "traditional" || !data.effectiveGex) return [];
+    const rows = data.effectiveGex.rows.map((r) => ({ strike: r.strike, value: mode === "effective" ? r.upEffective : r.shadowGammaUp }));
     return computeTopWalls(rows, "gex", 2);
-  }, [data, heatmapMode]);
+  }, [data, mode]);
 
-  // TOPO's terrain is built around the tenor axis (0DTE/1W/2W/M+) - Effective/
-  // Shadow are single 0DTE scenarios with no tenor dimension. Repurposes the
-  // first two tenor slots as the +move/-move scenarios (relabeled below) and
-  // zeroes the other two; only the GEX surface carries real data in this
-  // mode since this app doesn't compute a per-Greek scenario delta.
+  // TERRAIN's surface is built around the tenor axis (0DTE/1W/2W/M+) -
+  // Effective/Shadow are single 0DTE scenarios with no tenor dimension.
+  // Repurposes the first two tenor slots as the +move/-move scenarios
+  // (relabeled below) and zeroes the other two; only the GEX surface
+  // carries real data in this mode since this app doesn't compute a
+  // per-Greek scenario delta.
   const topoRows = useMemo(() => {
-    if (topoMode === "traditional") return data.topo ?? [];
+    if (mode === "traditional") return data.topo ?? [];
     const zero: [number, number, number, number] = [0, 0, 0, 0];
     return (data.effectiveGex?.rows ?? []).map((r) => ({
       strike: r.strike,
-      gex: [topoMode === "effective" ? r.upEffective : r.shadowGammaUp, topoMode === "effective" ? r.downEffective : r.shadowGammaDown, 0, 0] as [number, number, number, number],
+      gex: [mode === "effective" ? r.upEffective : r.shadowGammaUp, mode === "effective" ? r.downEffective : r.shadowGammaDown, 0, 0] as [number, number, number, number],
       dex: zero,
       vanna: zero,
       charm: zero,
       theta: zero,
       vega: zero,
     }));
-  }, [data, topoMode]);
+  }, [data, mode]);
   const topoTenorLabels =
-    topoMode === "traditional"
+    mode === "traditional"
       ? undefined
       : [`+${data.effectiveGex ? (data.effectiveGex.moveUpPct * 100).toFixed(1) : "—"}%`, `-${data.effectiveGex ? (data.effectiveGex.moveDownPct * 100).toFixed(1) : "—"}%`, "", ""];
 
   const phaseColor = gammaEngine ? PHASE_COLOR[gammaEngine.phase.phase] ?? "var(--text-faint)" : "var(--text-faint)";
 
-  // The spine consumes whatever the PROFILE controls select: signed mode
+  // The spine consumes whatever the Greek selector picks: signed mode
   // splits one series into call-side (right) / put-side (left) lobes;
   // scenario "both" puts the +move reprice on the right and -move on the
   // left so the asymmetry is the shape itself.
-  const scenarioBoth = chartMode !== "traditional" && effectiveDir === "both";
+  const scenarioBoth = mode !== "traditional" && effectiveDir === "both";
   const spinePoints: SpinePoint[] = useMemo(() => {
     if (scenarioBoth) {
       return chartDualData.map((d) => ({ strike: d.strike, right: Math.abs(d.up), left: Math.abs(d.down), readout: `↑${fmtUsd(d.up)} ↓${fmtUsd(d.down)}` }));
     }
-    const fmt = chartMode === "traditional" ? fmtRaw : fmtUsd;
+    const fmt = mode === "traditional" ? fmtRaw : fmtUsd;
     return chartData.map((d) => ({ strike: d.strike, right: Math.max(0, d.value), left: Math.max(0, -d.value), readout: fmt(d.value) }));
-  }, [scenarioBoth, chartDualData, chartData, chartMode]);
+  }, [scenarioBoth, chartDualData, chartData, mode]);
   const spineAnnotations: SpineAnnotation[] = [
     ...walls.map((w) => ({ label: w.label, price: w.price, color: w.color })),
     ...(data.maxPain > 0 ? [{ label: "Max Pain", price: data.maxPain, color: "var(--text-dim)" }] : []),
@@ -396,25 +396,6 @@ function TerminalView({
     ? [`−${data.effectiveGex ? fmtNum(data.effectiveGex.moveDownPct * 100, 1) : "—"}% move`, `+${data.effectiveGex ? fmtNum(data.effectiveGex.moveUpPct * 100, 1) : "—"}% move`]
     : [`− ${chartUnitLabel}`, `+ ${chartUnitLabel}`];
 
-  const metricTabs = (size: "sm" | "md") => (
-    <div className="inline-flex flex-wrap border border-[var(--border)]">
-      {METRIC_ORDER.map((m) => (
-        <button
-          key={m}
-          onClick={() => {
-            setMetric(m);
-            setChartDteIndex(0);
-          }}
-          className={`font-mono font-semibold tracking-[0.04em] transition-colors duration-150 ${size === "sm" ? "px-2.5 py-1 text-[0.62rem]" : "px-3 py-1.5 text-[0.68rem]"} ${
-            m === metric ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-          }`}
-        >
-          {METRIC_LABEL[m]}
-        </button>
-      ))}
-    </div>
-  );
-
   return (
     <div className="flex flex-col gap-4">
       <InstrumentStrip data={data} tick={tick} callWall={heroCallWall} putWall={heroPutWall} phaseColor={phaseColor} deepReady={deepReady} />
@@ -425,287 +406,209 @@ function TerminalView({
         </p>
       )}
 
-      {/* The chart room: the spine (persistent full-height exposure terrain)
-          on the left, the numbered workbench of modules on the right. The
-          spine never leaves the screen - whatever module is open, the live
-          price structure stays in view. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,340px)_1fr] lg:items-start">
-        <aside className="hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-4 lg:sticky lg:top-4">
-          <div className="flex items-baseline justify-between">
-            <span className="partno">00 · spine</span>
-            <span className="eyebrow">
-              {chartUnitLabel}
-              {chartMode === "traditional" && dteColumns.length ? ` · ${dteColumns[clampedDteIndex]?.label ?? "0DTE"}${dteScope === "cumulative" && clampedDteIndex > 0 ? " ∑" : ""}` : ""}
-            </span>
-          </div>
-          <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={560} />
-        </aside>
-
-        <div className="flex min-w-0 flex-col overflow-hidden border border-[var(--border)] bg-[var(--panel)] sm:flex-row">
-          <nav className="flex shrink-0 flex-row overflow-x-auto border-b border-[var(--border)] sm:w-[6.8rem] sm:flex-col sm:border-b-0 sm:border-r">
-            {SECTION_ORDER.map((s, i) => (
+      {/* The one control that matters: which Greek the whole room is tuned
+          to. Spine, terrain and grid all re-tune together - no tabs. */}
+      <div className="hud flex flex-wrap items-center gap-x-4 gap-y-2 border border-[var(--border)] bg-[var(--panel)] px-4 py-2.5">
+        <div className="inline-flex flex-wrap border border-[var(--border)]">
+          {METRIC_ORDER.map((m) => (
+            <button
+              key={m}
+              onClick={() => {
+                setMetric(m);
+                setChartDteIndex(0);
+              }}
+              className={`px-4 py-2 font-mono text-[0.74rem] font-bold tracking-[0.08em] transition-colors duration-150 ${
+                m === metric ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+              }`}
+            >
+              {METRIC_LABEL[m]}
+            </button>
+          ))}
+        </div>
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="inline-flex border border-[var(--border)]">
+            {CHART_MODE_ORDER.map((m) => (
               <button
-                key={s}
-                onClick={() => setSection(s)}
-                className={`flex items-baseline gap-1.5 whitespace-nowrap px-3 py-3 text-left font-mono text-[0.62rem] font-semibold tracking-[0.06em] transition-colors duration-150 sm:border-l-2 ${
-                  s === section ? "bg-[var(--panel-2)] text-[var(--text)] sm:border-[var(--accent)]" : "text-[var(--text-faint)] hover:text-[var(--text)] sm:border-transparent"
+                key={m}
+                onClick={() => setMode(m)}
+                className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
+                  m === mode ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
                 }`}
               >
-                <span className="text-[0.52rem] opacity-60">{String(i + 1).padStart(2, "0")}</span>
-                {SECTION_LABEL[s]}
+                {CHART_MODE_LABEL[m]}
               </button>
             ))}
-          </nav>
-          <div className="min-w-0 flex-1 p-4">
-
-      {section === "chart" && (
-        <div className="flex flex-col gap-4">
-          <div className="hud flex flex-col gap-4 border border-[var(--border)] bg-[var(--panel)] p-5">
-            <div className="eyebrow">profile console — these controls drive the spine</div>
-            <div className="flex flex-wrap items-center justify-between gap-2">
+          </div>
+          {mode === "traditional" ? (
+            dteColumns.length > 1 && (
+              <>
+                <div className="inline-flex border border-[var(--border)]">
+                  {(["single", "cumulative"] as const).map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setDteScope(s)}
+                      className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 ${
+                        s === dteScope ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                      }`}
+                      title={s === "single" ? "This expiration only" : "Sum of every real expiration up to this one"}
+                    >
+                      {s === "single" ? "One Expiry" : "Through"}
+                    </button>
+                  ))}
+                </div>
+                <select
+                  value={clampedDteIndex}
+                  onChange={(e) => setChartDteIndex(Number(e.target.value))}
+                  className="border border-[var(--border)] bg-[var(--panel)] px-2 py-1 font-mono text-[0.62rem] font-semibold text-[var(--text)] outline-none"
+                >
+                  {dteColumns.map((c, i) => (
+                    <option key={i} value={i}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            )
+          ) : (
+            <>
               <div className="inline-flex border border-[var(--border)]">
-                {CHART_MODE_ORDER.map((m) => (
+                {(["up", "down", "both"] as const).map((d) => (
                   <button
-                    key={m}
-                    onClick={() => setChartMode(m)}
-                    className={`px-3 py-1.5 font-mono text-[0.66rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
-                      m === chartMode ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                    key={d}
+                    onClick={() => setEffectiveDir(d)}
+                    className={`px-2.5 py-1 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 ${
+                      d === effectiveDir ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
                     }`}
                   >
-                    {CHART_MODE_LABEL[m]}
+                    {d === "up"
+                      ? `+${data.effectiveGex ? fmtNum(data.effectiveGex.moveUpPct * 100, 1) : "—"}%`
+                      : d === "down"
+                        ? `-${data.effectiveGex ? fmtNum(data.effectiveGex.moveDownPct * 100, 1) : "—"}%`
+                        : "+/- BOTH"}
                   </button>
                 ))}
               </div>
-              {chartMode === "traditional" ? metricTabs("md") : (
-                <div className="inline-flex border border-[var(--border)]">
-                  {(["up", "down", "both"] as const).map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => setEffectiveDir(d)}
-                      className={`px-2.5 py-1 font-mono text-[0.62rem] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 ${
-                        d === effectiveDir ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-                      }`}
-                    >
-                      {d === "up"
-                        ? `+${data.effectiveGex ? fmtNum(data.effectiveGex.moveUpPct * 100, 1) : "—"}%`
-                        : d === "down"
-                          ? `-${data.effectiveGex ? fmtNum(data.effectiveGex.moveDownPct * 100, 1) : "—"}%`
-                          : "+/- BOTH"}
-                    </button>
-                  ))}
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                {chartMode === "traditional" && dteColumns.length > 1 && (
-                  <>
-                    <div className="inline-flex border border-[var(--border)]">
-                      {(["single", "cumulative"] as const).map((s) => (
-                        <button
-                          key={s}
-                          onClick={() => setDteScope(s)}
-                          className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 ${
-                            s === dteScope ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-                          }`}
-                          title={s === "single" ? "This expiration only" : "Sum of every real expiration up to this one"}
-                        >
-                          {s === "single" ? "One Expiry" : "Through"}
-                        </button>
-                      ))}
-                    </div>
-                    <select
-                      value={clampedDteIndex}
-                      onChange={(e) => setChartDteIndex(Number(e.target.value))}
-                      className="border border-[var(--border)] bg-[var(--panel)] px-2 py-1 font-mono text-[0.62rem] font-semibold text-[var(--text)] outline-none"
-                    >
-                      {dteColumns.map((c, i) => (
-                        <option key={i} value={i}>
-                          {c.label}
-                        </option>
-                      ))}
-                    </select>
-                  </>
-                )}
-                {chartMode === "traditional" ? (
-                  <div className="inline-flex border border-[var(--border)]">
-                    {(["bars", "cumulative"] as const).map((v) => (
-                      <button
-                        key={v}
-                        onClick={() => setChartView(v)}
-                        className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em] transition-colors duration-150 ${
-                          v === chartView ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-                        }`}
-                      >
-                        {v === "bars" ? "spine" : v}
-                      </button>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="number"
-                      min={0.1}
-                      max={50}
-                      step={0.1}
-                      value={movePctDraft}
-                      onChange={(e) => onMovePctDraftChange(e.target.value)}
-                      placeholder="auto"
-                      className="w-16 border border-[var(--border)] bg-[var(--panel)] px-2 py-1 font-mono text-[0.62rem] font-semibold text-[var(--text)] outline-none"
-                    />
-                    <span className="font-mono text-[0.6rem] text-[var(--text-faint)]">%</span>
-                    <button onClick={onApplyMovePct} className="btn-primary px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em]">
-                      Apply
-                    </button>
-                    <button onClick={onAutoMovePct} className="btn-ghost px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em]">
-                      Auto
-                    </button>
-                  </div>
-                )}
-              </div>
-              <div className="eyebrow w-full">
-                ±15 strikes around spot
-                {chartMode === "traditional" && dteScope === "cumulative" && clampedDteIndex > 0 ? ` · summed through ${dteColumns[clampedDteIndex]?.label ?? ""}` : ""}
-                {!deepReady && chartMode === "traditional" && !data.strikeExpiryHeatmaps?.[metric]
-                  ? metric === "gex"
-                    ? " · live self-computed 0DTE — full expiry stack syncing"
-                    : " · this metric rides the full payload — syncing"
-                  : ""}
-              </div>
-              {chartMode !== "traditional" && (
-                <p className="m-0 w-full font-sans text-[0.68rem] leading-relaxed text-[var(--text-dim)]">
-                  {chartMode === "effective"
-                    ? "This guesses what would actually happen to dealer hedging if the price moved by the % above, instead of just assuming today's numbers stay the same. Pick a strike, pick a direction, and see how much bigger (or smaller) the reaction really looks once price gets there."
-                    : "This shows just the part of that reaction that comes from volatility shifting along with price, separated out from the plain price-move effect. Usually small, but it can matter more near the money."}
-                </p>
-              )}
-            </div>
-            {chartMode === "traditional" && chartView === "cumulative" && (
-              <CumulativeExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} valueFormatter={fmtRaw} />
-            )}
-          </div>
-          <MajorWallsPanel metricLabel={chartUnitLabel} walls={walls} />
-        </div>
-      )}
-
-      {section === "topo" && !deepReady && <DeepSyncPanel title="Market Topography" note="the 3D terrain is built from the full strike × expiry payload" />}
-      {section === "topo" && deepReady && (
-        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="font-display text-[0.95rem] text-[var(--text)]">Market Topography</div>
-              <div className="eyebrow mt-1">
-                {topoMode === "traditional"
-                  ? `${data.symbol} · dealer book as 3D terrain — strike × expiry tenor, one surface per Greek`
-                  : `${data.symbol} · GEX-only, this app's own 0DTE delta reprice, real $ — other Greek surfaces are flat (no scenario data computed for them)`}
-              </div>
-            </div>
-            <div className="inline-flex border border-[var(--border)]">
-              {CHART_MODE_ORDER.map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setTopoMode(m)}
-                  className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
-                    m === topoMode ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-                  }`}
-                >
-                  {CHART_MODE_LABEL[m]}
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  min={0.1}
+                  max={50}
+                  step={0.1}
+                  value={movePctDraft}
+                  onChange={(e) => onMovePctDraftChange(e.target.value)}
+                  placeholder="auto"
+                  className="w-16 border border-[var(--border)] bg-[var(--panel)] px-2 py-1 font-mono text-[0.62rem] font-semibold text-[var(--text)] outline-none"
+                />
+                <span className="font-mono text-[0.6rem] text-[var(--text-faint)]">%</span>
+                <button onClick={onApplyMovePct} className="btn-primary px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em]">
+                  Apply
                 </button>
-              ))}
-            </div>
-          </div>
-          <TopoSurface rows={topoRows} spot={data.spot} tenorLabels={topoTenorLabels} />
+                <button onClick={onAutoMovePct} className="btn-ghost px-2.5 py-1 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.05em]">
+                  Auto
+                </button>
+              </div>
+            </>
+          )}
         </div>
+      </div>
+
+      {mode !== "traditional" && (
+        <p className="m-0 font-sans text-[0.68rem] leading-relaxed text-[var(--text-dim)]">
+          {mode === "effective"
+            ? "This guesses what would actually happen to dealer hedging if the price moved by the % above, instead of just assuming today's numbers stay the same. Pick a strike, pick a direction, and see how much bigger (or smaller) the reaction really looks once price gets there."
+            : "This shows just the part of that reaction that comes from volatility shifting along with price, separated out from the plain price-move effect. Usually small, but it can matter more near the money."}
+        </p>
       )}
 
-      {section === "heatmap" && !deepReady && <DeepSyncPanel title={`${data.symbol} heatmap`} note="the strike × expiry grid is part of the full payload" />}
-      {section === "heatmap" && deepReady && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
-          <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-            <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
-              <div className="partno">
-                {data.symbol} · {heatmapMode === "traditional" ? METRIC_LABEL[metric] : heatmapMode === "effective" ? "Effective GEX" : "Shadow Gamma"} Heatmap
+      {/* The chart room: the spine (persistent full-height exposure terrain)
+          on the left, terrain + grid + smile always visible on the right.
+          No tabs - everything is on screen at once. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,340px)_1fr] lg:items-start">
+        <aside className="hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-4 lg:sticky lg:top-4">
+          <div className="flex items-baseline justify-between">
+            <span className="partno">01 · spine</span>
+            <span className="eyebrow">
+              {chartUnitLabel}
+              {mode === "traditional" && dteColumns.length ? ` · ${dteColumns[clampedDteIndex]?.label ?? "0DTE"}${dteScope === "cumulative" && clampedDteIndex > 0 ? " ∑" : ""}` : ""}
+            </span>
+          </div>
+          <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={600} />
+          {!deepReady && mode === "traditional" && !data.strikeExpiryHeatmaps?.[metric] && (
+            <p className="m-0 font-mono text-[0.58rem] leading-relaxed text-[var(--text-faint)]">
+              {metric === "gex" ? "live self-computed 0DTE — full expiry stack syncing" : "this greek rides the full payload — syncing"}
+            </p>
+          )}
+        </aside>
+
+        <div className="flex min-w-0 flex-col gap-4">
+          {deepReady || mode !== "traditional" ? (
+            <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <span className="partno">02 · terrain</span>
+                <span className="eyebrow">
+                  {mode === "traditional"
+                    ? `${data.symbol} · dealer book as 3D relief — strike × expiry tenor`
+                    : `${data.symbol} · scenario reprice as relief — GEX only, other Greeks are flat in this mode`}
+                </span>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="inline-flex border border-[var(--border)]">
-                  {CHART_MODE_ORDER.map((m) => (
-                    <button
-                      key={m}
-                      onClick={() => setHeatmapMode(m)}
-                      className={`px-2.5 py-1 font-mono text-[0.6rem] font-semibold tracking-[0.05em] transition-colors duration-150 ${
-                        m === heatmapMode ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
-                      }`}
-                    >
-                      {CHART_MODE_LABEL[m]}
-                    </button>
-                  ))}
+              <TopoSurface rows={topoRows} spot={data.spot} tenorLabels={topoTenorLabels} metric={mode === "traditional" ? metric : "gex"} height={430} />
+            </div>
+          ) : (
+            <DeepSyncPanel title="Terrain" note="the 3D relief is built from the full strike × expiry payload" />
+          )}
+
+          <div className="grid grid-cols-1 gap-4 2xl:grid-cols-[1.4fr_1fr]">
+            {deepReady || mode !== "traditional" ? (
+              <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+                <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="partno">03 · grid</span>
+                  <span className="eyebrow">
+                    {mode === "traditional" ? `${data.symbol} · ${METRIC_LABEL[metric]} by strike × expiry` : "+move / −move columns instead of a DTE axis"}
+                  </span>
                 </div>
-                {heatmapMode === "traditional" && metricTabs("sm")}
+                {mode === "traditional" ? (
+                  <StrikeExpiryHeatmapChart grid={windowHeatmap(data.strikeExpiryHeatmaps?.[metric], data.spot)} spot={data.spot} walls={walls} unitLabel={METRIC_LABEL[metric]} valueFormatter={fmtRaw} />
+                ) : (
+                  <StrikeExpiryHeatmapChart
+                    grid={windowHeatmap(effectiveGexAsGrid(data.effectiveGex, mode), data.spot)}
+                    spot={data.spot}
+                    walls={heatmapWalls}
+                    unitLabel={mode === "effective" ? "EFF GEX" : "SHADOW γ"}
+                    valueFormatter={fmtUsd}
+                  />
+                )}
               </div>
-            </div>
-            {heatmapMode !== "traditional" && <div className="eyebrow mb-3">+move / -move columns instead of a DTE axis</div>}
-            {heatmapMode === "traditional" ? (
-              <StrikeExpiryHeatmapChart grid={windowHeatmap(data.strikeExpiryHeatmaps?.[metric], data.spot)} spot={data.spot} walls={walls} unitLabel={METRIC_LABEL[metric]} valueFormatter={fmtRaw} />
             ) : (
-              <StrikeExpiryHeatmapChart
-                grid={windowHeatmap(effectiveGexAsGrid(data.effectiveGex, heatmapMode), data.spot)}
-                spot={data.spot}
-                walls={heatmapWalls}
-                unitLabel={heatmapMode === "effective" ? "EFF GEX" : "SHADOW γ"}
-                valueFormatter={fmtUsd}
-              />
+              <DeepSyncPanel title="Grid" note="the strike × expiry grid is part of the full payload" />
             )}
-          </div>
-          <MajorWallsPanel metricLabel={heatmapMode === "traditional" ? METRIC_LABEL[metric] : heatmapMode === "effective" ? "EFF GEX" : "SHADOW γ"} walls={heatmapMode === "traditional" ? walls : heatmapWalls} />
-        </div>
-      )}
 
-      {section === "crossexpiry" && (
-        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-          <div className="mb-4">
-            <div className="font-display text-[0.95rem] text-[var(--text)]">Cross-Expiry Exposure</div>
-            <div className="eyebrow mt-1">Compare positioning across expirations, Greeks, and tickers</div>
+            <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+                <span className="partno">04 · smile</span>
+                <span className="eyebrow">{data.symbol} · live-quoted 0DTE call/put IV vs fitted curve</span>
+              </div>
+              <IvSmileChart points={data.ivSmile} spot={data.spot} />
+            </div>
           </div>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            <CrossExpiryPanel defaultSymbol={data.symbol} />
-            <CrossExpiryPanel defaultSymbol={data.symbol} />
-          </div>
-        </div>
-      )}
 
-      {section === "crossasset" && (
-        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-          <div className="mb-4">
-            <div className="font-display text-[0.95rem] text-[var(--text)]">Cross-Asset Exposure</div>
-            <div className="eyebrow mt-1">QQQ, SPY, SPX, NDX side by side — same Greek, independent tickers</div>
-          </div>
-          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-            {CROSS_ASSET_TICKERS.map((sym) => (
-              <CrossExpiryPanel key={sym} defaultSymbol={sym} />
-            ))}
-          </div>
-        </div>
-      )}
+          <Drawer index="05" title="cross-expiry stack" hint="compare expirations, Greeks and tickers side by side" open={stackOpen} onToggle={() => setStackOpen((o) => !o)}>
+            <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
+              <CrossExpiryPanel defaultSymbol={data.symbol} />
+              <CrossExpiryPanel defaultSymbol={data.symbol} />
+            </div>
+          </Drawer>
 
-      {section === "ivsmile" && (
-        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-          <div className="mb-3">
-            <div className="font-display text-[0.95rem] text-[var(--text)]">IV Smile</div>
-            <div className="eyebrow mt-1">{data.symbol} · 0DTE only — each strike&apos;s real live-quoted call/put IV against this session&apos;s fitted smile curve</div>
-          </div>
-          <IvSmileChart points={data.ivSmile} spot={data.spot} />
-        </div>
-      )}
-
-      {section === "aiprompt" && !deepReady && <DeepSyncPanel title="AI Prompt" note="the prompt embeds the full analytics payload — waiting for it to land" />}
-      {section === "aiprompt" && deepReady && (
-        <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
-          <div className="mb-4">
-            <div className="font-display text-[0.95rem] text-[var(--text)]">AI Prompt</div>
-            <div className="eyebrow mt-1">{data.symbol} · copy this request&apos;s real data into a ready-made prompt for ChatGPT or any other LLM</div>
-          </div>
-          <AiPromptPanel data={data} />
-        </div>
-      )}
-          </div>
+          <Drawer index="06" title="ai prompt" hint="this request's real data as a ready-made LLM prompt" open={promptOpen} onToggle={() => setPromptOpen((o) => !o)}>
+            {deepReady ? (
+              <AiPromptPanel data={data} />
+            ) : (
+              <div className="flex flex-col gap-2">
+                {[0.9, 0.6, 0.75].map((w, i) => (
+                  <div key={i} className="shimmer h-6" style={{ width: `${w * 100}%` }} />
+                ))}
+              </div>
+            )}
+          </Drawer>
         </div>
       </div>
     </div>
@@ -714,7 +617,7 @@ function TerminalView({
 
 // Core rides /zero_dte + /gex only (~3-4s server-side) - polling it is what
 // keeps spot and every self-computed Greek live. Full is the heavy pipeline
-// (~15-20s); it hydrates the deep sections and refreshes less often.
+// (~15-20s); it hydrates the deep panels and refreshes less often.
 const CORE_POLL_MS = 10_000;
 const FULL_POLL_MS = 60_000;
 

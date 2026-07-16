@@ -8,6 +8,7 @@ import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
 import { SpineProfile, type SpineAnnotation, type SpinePoint } from "@/components/optionsflow/SpineProfile";
+import { AsciiTesseract } from "@/components/optionsflow/AsciiTesseract";
 import { IvSmileChart } from "@/components/optionsflow/IvSmileChart";
 
 export type OptionsFlowView = "terminal";
@@ -138,7 +139,7 @@ function InstrumentStrip({
         </span>
         <span
           key={tick.at}
-          className={`font-mono text-[1.2rem] font-bold leading-none text-[var(--text)] ${tick.dir === "up" ? "tick-up" : tick.dir === "down" ? "tick-down" : ""}`}
+          className={`glow-accent font-mono text-[1.35rem] font-bold leading-none text-[var(--text)] ${tick.dir === "up" ? "tick-up" : tick.dir === "down" ? "tick-down" : ""}`}
         >
           {fmtNum(data.spot, 2)}
           {tick.dir && (
@@ -418,7 +419,7 @@ function TerminalView({
                 setChartDteIndex(0);
               }}
               className={`px-4 py-2 font-mono text-[0.74rem] font-bold tracking-[0.08em] transition-colors duration-150 ${
-                m === metric ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                m === metric ? "bg-[var(--accent)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
               }`}
             >
               {METRIC_LABEL[m]}
@@ -524,15 +525,20 @@ function TerminalView({
           on the left, terrain + grid + smile always visible on the right.
           No tabs - everything is on screen at once. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,340px)_1fr] lg:items-start">
-        <aside className="hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-4 lg:sticky lg:top-4">
+        <aside className="blueprint hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-4 lg:sticky lg:top-4">
           <div className="flex items-baseline justify-between">
+            <span className="partno">00 · tesseract</span>
+            <span className="eyebrow">4-cube · double rotation</span>
+          </div>
+          <AsciiTesseract height={165} />
+          <div className="flex items-baseline justify-between border-t border-[var(--border)] pt-2">
             <span className="partno">01 · spine</span>
             <span className="eyebrow">
               {chartUnitLabel}
               {mode === "traditional" && dteColumns.length ? ` · ${dteColumns[clampedDteIndex]?.label ?? "0DTE"}${dteScope === "cumulative" && clampedDteIndex > 0 ? " ∑" : ""}` : ""}
             </span>
           </div>
-          <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={600} />
+          <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={520} />
           {!deepReady && mode === "traditional" && !data.strikeExpiryHeatmaps?.[metric] && (
             <p className="m-0 font-mono text-[0.58rem] leading-relaxed text-[var(--text-faint)]">
               {metric === "gex" ? "live self-computed 0DTE — full expiry stack syncing" : "this greek rides the full payload — syncing"}
@@ -542,7 +548,7 @@ function TerminalView({
 
         <div className="flex min-w-0 flex-col gap-4">
           {deepReady || mode !== "traditional" ? (
-            <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
+            <div className="blueprint hud border border-[var(--border)] bg-[var(--panel)] p-5">
               <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
                 <span className="partno">02 · terrain</span>
                 <span className="eyebrow">

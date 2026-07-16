@@ -42,7 +42,7 @@ const DOCS_ID = "docs";
 // landing on a "coming soon" screen until the feature ships.
 const OPTIONS_FLOW_PREFIX = "options-flow";
 const OPTIONS_FLOW_PAGES = [
-  { id: "options-flow:terminal", label: "SPINE", blurb: "Live dealer structure on the spine — every Greek, wall, and regime in one room." },
+  { id: "options-flow:terminal", label: "TESSERACT", blurb: "The whole dealer book in one room — spine, 3D terrain, grid and smile, one Greek dial." },
 ];
 
 const SHORT_LABEL: Record<string, string> = {

@@ -1,22 +1,14 @@
 "use client";
 
 /**
- * The tesseract, woven into the page rather than parked in it. One shared
- * 4D engine - a real hypercube (16 vertices, 32 edges) under a continuous
- * SO(4) double rotation, perspective-projected 4D -> 3D -> 2D - drives two
- * renderings:
- *
- *   TesseractField - the page's atmosphere: a viewport-sized hairline
- *   wireframe tumbling slowly behind every panel (fixed, faint, pointer-
- *   transparent). Its inner<->outer binding edges take the LIVE REGIME
- *   color, so the whole page quietly carries the gamma regime. Sized from
- *   the viewport each frame, so it is responsive by construction.
- *
- *   TesseractMark - the same object small and bright, used as the working
- *   spinner in loading / deep-sync states.
- *
- * Every frame is computed - there is no keyframe loop and nothing ever
- * visibly resets. Reduced motion gets a static frame; hidden tabs idle.
+ * The tesseract as the app's working spinner: a real 4D hypercube (16
+ * vertices, 32 edges) under a continuous SO(4) double rotation, perspective-
+ * projected 4D -> 3D -> 2D and drawn as crisp hairline wireframe. It turns
+ * wherever the terminal is working - the loading skeleton and the deep-sync
+ * placeholders - and nowhere else (a full-page ambient version read as
+ * awkward, and a corner emblem as out of place; motion belongs where the
+ * user expects motion). Every frame is computed - no keyframe loop, nothing
+ * ever visibly resets. Reduced motion gets a static frame; hidden tabs idle.
  */
 
 import { useEffect, useRef } from "react";
@@ -73,90 +65,7 @@ function resolveColor(c: string | undefined, fallback: string): string {
   return v || fallback;
 }
 
-/** The page atmosphere: fixed, viewport-sized, faint. `tone` (any CSS color or var()) tints the W-spanning edges - pass the live regime color. */
-export function TesseractField({ tone }: { tone?: string }) {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const tRef = useRef(0.7); // persists across effect re-runs so a regime change never snaps the rotation
-
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const ink = resolveColor("var(--text)", "#f4f4f5");
-    const toneColor = resolveColor(tone, resolveColor("var(--accent)", ink));
-
-    const draw = () => {
-      const dpr = devicePixelRatio || 1;
-      const W = canvas.offsetWidth;
-      const H = canvas.offsetHeight;
-      if (!W || !H) return;
-      if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
-        canvas.width = W * dpr;
-        canvas.height = H * dpr;
-      }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.clearRect(0, 0, W, H);
-
-      // Biased toward the content area (right of the sidebar), scaled from
-      // the viewport - portrait and landscape both keep the figure on-page.
-      const scale = Math.min(W, H) * 0.46;
-      const cx = W * 0.62;
-      const cy = H * 0.44;
-      const proj = projectVerts(tRef.current, cx, cy, scale);
-
-      ctx.lineWidth = 1;
-      ctx.lineCap = "round";
-      for (const [a, b] of EDGES) {
-        const A = proj[a];
-        const B = proj[b];
-        const depth = (A.z + B.z) / 2;
-        const base = Math.max(0.05, Math.min(0.2, 0.12 + depth * 0.06));
-        ctx.strokeStyle = isWEdge(a, b) ? toneColor : ink;
-        ctx.globalAlpha = isWEdge(a, b) ? Math.min(0.36, base * 2) : base;
-        ctx.beginPath();
-        ctx.moveTo(A.x, A.y);
-        ctx.lineTo(B.x, B.y);
-        ctx.stroke();
-      }
-      // Vertices as tiny surveyor crosses - blueprint voice, not glowing dots.
-      ctx.strokeStyle = ink;
-      for (const p of proj) {
-        ctx.globalAlpha = Math.max(0.06, Math.min(0.22, 0.13 + p.z * 0.05));
-        ctx.beginPath();
-        ctx.moveTo(p.x - 3, p.y);
-        ctx.lineTo(p.x + 3, p.y);
-        ctx.moveTo(p.x, p.y - 3);
-        ctx.lineTo(p.x, p.y + 3);
-        ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-    };
-
-    if (reduced) {
-      draw();
-      return;
-    }
-
-    let raf = 0;
-    const frame = () => {
-      raf = requestAnimationFrame(frame);
-      // NOTE: offsetParent is always null for position:fixed elements - do
-      // not use it as a visibility guard here or no frame ever draws.
-      if (document.hidden) return;
-      tRef.current += 0.0035;
-      draw();
-    };
-    raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
-  }, [tone]);
-
-  return <canvas ref={canvasRef} className="pointer-events-none fixed inset-0 z-0 h-full w-full" aria-hidden="true" />;
-}
-
-/** The same object small and bright - the working spinner for loading / deep-sync states. */
+/** The working spinner for loading / deep-sync states. */
 export function TesseractMark({ size = 150 }: { size?: number }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const tRef = useRef(0.7);

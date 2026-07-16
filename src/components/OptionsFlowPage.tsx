@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { GexResponse, GexSymbol } from "@/lib/gex";
 import { fmtNum, fmtRaw, fmtUsd } from "@/lib/gex";
-import { computeTopWalls, StrikeExpiryHeatmapChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
+import { computeTopWalls, StrikeExpiryHeatmapChart, TerminalDualBarChart, TerminalExposureChart, type WallMarker } from "@/components/optionsflow/TerminalChart";
 import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
 import { SpineProfile, type SpineAnnotation, type SpinePoint } from "@/components/optionsflow/SpineProfile";
-import { TesseractField, TesseractMark } from "@/components/optionsflow/TesseractMark";
+import { TesseractMark } from "@/components/optionsflow/TesseractMark";
 import { IvSmileChart } from "@/components/optionsflow/IvSmileChart";
 
 export type OptionsFlowView = "terminal";
@@ -244,6 +244,9 @@ function TerminalView({
 }) {
   const [metric, setMetric] = useState<Metric>("gex");
   const [mode, setMode] = useState<ChartMode>("traditional");
+  // The per-strike panel offers both forms: the spine (this terminal's own
+  // mirrored-terrain read) and the industry-standard diverging bars.
+  const [strikeView, setStrikeView] = useState<"spine" | "bars">("spine");
   const [effectiveDir, setEffectiveDir] = useState<"up" | "down" | "both">("up");
   const [chartDteIndex, setChartDteIndex] = useState(0);
   const [dteScope, setDteScope] = useState<"single" | "cumulative">("single");
@@ -401,7 +404,7 @@ function TerminalView({
     : [`− ${chartUnitLabel}`, `+ ${chartUnitLabel}`];
 
   return (
-    <div className="relative z-10 flex flex-col gap-4">
+    <div className="flex flex-col gap-4">
       <InstrumentStrip data={data} tick={tick} callWall={heroCallWall} putWall={heroPutWall} phaseColor={phaseColor} deepReady={deepReady} />
 
       {gammaEngine && (
@@ -527,16 +530,37 @@ function TerminalView({
       {/* The chart room: the spine (persistent full-height exposure terrain)
           on the left, terrain + grid + smile always visible on the right.
           No tabs - everything is on screen at once. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,340px)_1fr] lg:items-start">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(320px,400px)_1fr] lg:items-start">
         <aside className="blueprint hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-4 lg:sticky lg:top-4">
-          <div className="flex items-baseline justify-between">
-            <span className="partno">01 · spine</span>
-            <span className="eyebrow">
-              {chartUnitLabel}
-              {mode === "traditional" && dteColumns.length ? ` · ${dteColumns[clampedDteIndex]?.label ?? "0DTE"}${dteScope === "cumulative" && clampedDteIndex > 0 ? " ∑" : ""}` : ""}
-            </span>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="partno">01 · {strikeView === "spine" ? "spine" : "bars"}</span>
+            <div className="flex items-center gap-2">
+              <span className="eyebrow">
+                {chartUnitLabel}
+                {mode === "traditional" && dteColumns.length ? ` · ${dteColumns[clampedDteIndex]?.label ?? "0DTE"}${dteScope === "cumulative" && clampedDteIndex > 0 ? " ∑" : ""}` : ""}
+              </span>
+              <div className="inline-flex border border-[var(--border)]">
+                {(["spine", "bars"] as const).map((v) => (
+                  <button
+                    key={v}
+                    onClick={() => setStrikeView(v)}
+                    className={`px-2 py-0.5 font-mono text-[0.55rem] font-semibold uppercase tracking-[0.06em] transition-colors duration-150 ${
+                      v === strikeView ? "bg-[var(--text)] text-[var(--bg)]" : "text-[var(--text-dim)] hover:text-[var(--text)]"
+                    }`}
+                  >
+                    {v}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
-          <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={600} />
+          {strikeView === "spine" ? (
+            <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={540} />
+          ) : scenarioBoth ? (
+            <TerminalDualBarChart data={chartDualData} unitLabel={chartUnitLabel} spot={data.spot} walls={walls} height={540} valueFormatter={fmtUsd} />
+          ) : (
+            <TerminalExposureChart data={chartData} unitLabel={chartUnitLabel} spot={data.spot} walls={walls} height={540} valueFormatter={mode === "traditional" ? fmtRaw : fmtUsd} />
+          )}
           {!deepReady && mode === "traditional" && !data.strikeExpiryHeatmaps?.[metric] && (
             <p className="m-0 font-mono text-[0.58rem] leading-relaxed text-[var(--text-faint)]">
               {metric === "gex" ? "live self-computed 0DTE — full expiry stack syncing" : "this greek rides the full payload — syncing"}
@@ -555,7 +579,7 @@ function TerminalView({
                     : `${data.symbol} · scenario reprice as relief — GEX only, other Greeks are flat in this mode`}
                 </span>
               </div>
-              <TopoSurface rows={topoRows} spot={data.spot} tenorLabels={topoTenorLabels} metric={mode === "traditional" ? metric : "gex"} height={430} />
+              <TopoSurface rows={topoRows} spot={data.spot} tenorLabels={topoTenorLabels} metric={mode === "traditional" ? metric : "gex"} height={360} />
             </div>
           ) : (
             <DeepSyncPanel title="Terrain" note="the 3D relief is built from the full strike × expiry payload" />
@@ -724,22 +748,16 @@ function FlowSession({ symbol, onSymbolChange }: { symbol: GexSymbol; onSymbolCh
   }, [core, full]);
   const deepReady = !!full;
   const hardError = error !== null && !data;
-  const fieldTone = data?.gammaEngine ? PHASE_COLOR[data.gammaEngine.phase.phase] : undefined;
 
   return (
     <>
-      {/* The namesake, woven through the page: a viewport-sized 4D wireframe
-          tumbling behind every panel, its binding edges tinted by the live
-          gamma regime. Content sits above it on z-10. */}
-      <TesseractField tone={fieldTone} />
-
-      <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <SymbolToggle symbol={symbol} onChange={onSymbolChange} />
         {data && <LiveStatus asOf={data.asOf} deepReady={deepReady} degraded={degraded} />}
       </div>
 
       {!data && !hardError && (
-        <div className="relative z-10 grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
           <div className="hud flex flex-col gap-3 border border-[var(--border)] bg-[var(--panel)] p-5">
             <div className="shimmer h-10 w-44" />
             <div className="shimmer h-3 w-28" />
@@ -756,7 +774,7 @@ function FlowSession({ symbol, onSymbolChange }: { symbol: GexSymbol; onSymbolCh
       )}
 
       {hardError && (
-        <div className="relative z-10 border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
+        <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
           ERR: {error}
         </div>
       )}

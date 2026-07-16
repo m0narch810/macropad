@@ -600,7 +600,7 @@ export default function DashboardShell({
             </>
           ) : activeOptionsFlow ? (
             <>
-              <header className="relative z-10 mb-8">
+              <header className="mb-8">
                 <div className="eyebrow mb-2">Options Flow</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text={activeOptionsFlow.label} />

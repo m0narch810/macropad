@@ -8,7 +8,6 @@ import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
 import { SpineProfile, type SpineAnnotation, type SpinePoint } from "@/components/optionsflow/SpineProfile";
-import { AsciiTesseract } from "@/components/optionsflow/AsciiTesseract";
 import { IvSmileChart } from "@/components/optionsflow/IvSmileChart";
 
 export type OptionsFlowView = "terminal";
@@ -527,18 +526,13 @@ function TerminalView({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(280px,340px)_1fr] lg:items-start">
         <aside className="blueprint hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-4 lg:sticky lg:top-4">
           <div className="flex items-baseline justify-between">
-            <span className="partno">00 · tesseract</span>
-            <span className="eyebrow">4-cube · double rotation</span>
-          </div>
-          <AsciiTesseract height={165} />
-          <div className="flex items-baseline justify-between border-t border-[var(--border)] pt-2">
             <span className="partno">01 · spine</span>
             <span className="eyebrow">
               {chartUnitLabel}
               {mode === "traditional" && dteColumns.length ? ` · ${dteColumns[clampedDteIndex]?.label ?? "0DTE"}${dteScope === "cumulative" && clampedDteIndex > 0 ? " ∑" : ""}` : ""}
             </span>
           </div>
-          <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={520} />
+          <SpineProfile points={spinePoints} spot={data.spot} tickDir={tick.dir} annotations={spineAnnotations} band={spineBand} lobeLabels={spineLobeLabels} height={600} />
           {!deepReady && mode === "traditional" && !data.strikeExpiryHeatmaps?.[metric] && (
             <p className="m-0 font-mono text-[0.58rem] leading-relaxed text-[var(--text-faint)]">
               {metric === "gex" ? "live self-computed 0DTE — full expiry stack syncing" : "this greek rides the full payload — syncing"}

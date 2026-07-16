@@ -8,6 +8,7 @@ import { CrossExpiryPanel } from "@/components/optionsflow/CrossExpiryPanel";
 import TopoSurface from "@/components/optionsflow/TopoSurface";
 import { AiPromptPanel } from "@/components/optionsflow/AiPromptPanel";
 import { SpineProfile, type SpineAnnotation, type SpinePoint } from "@/components/optionsflow/SpineProfile";
+import { TesseractField, TesseractMark } from "@/components/optionsflow/TesseractMark";
 import { IvSmileChart } from "@/components/optionsflow/IvSmileChart";
 
 export type OptionsFlowView = "terminal";
@@ -64,7 +65,7 @@ function LiveStatus({ asOf, deepReady, degraded }: { asOf: number; deepReady: bo
   );
 }
 
-/** Placeholder for panels whose data rides the slow full tier - shown from first paint until the deep payload lands. */
+/** Placeholder for panels whose data rides the slow full tier - shown from first paint until the deep payload lands. The tumbling 4-cube is the app's working spinner. */
 function DeepSyncPanel({ title, note }: { title: string; note?: string }) {
   return (
     <div className="hud border border-[var(--border)] bg-[var(--panel)] p-5">
@@ -76,10 +77,13 @@ function DeepSyncPanel({ title, note }: { title: string; note?: string }) {
         </span>
       </div>
       <div className="eyebrow mt-1">{note ?? "streaming the full depth computation — this view fills in as it lands"}</div>
-      <div className="mt-4 flex flex-col gap-2">
-        {[0.92, 0.64, 0.8, 0.5, 0.74, 0.6].map((w, i) => (
-          <div key={i} className="shimmer h-6" style={{ width: `${w * 100}%` }} />
-        ))}
+      <div className="mt-4 flex items-center gap-5">
+        <TesseractMark size={96} />
+        <div className="flex flex-1 flex-col gap-2">
+          {[0.85, 0.55, 0.7, 0.45].map((w, i) => (
+            <div key={i} className="shimmer h-6" style={{ width: `${w * 100}%` }} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -397,7 +401,7 @@ function TerminalView({
     : [`− ${chartUnitLabel}`, `+ ${chartUnitLabel}`];
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="relative z-10 flex flex-col gap-4">
       <InstrumentStrip data={data} tick={tick} callWall={heroCallWall} putWall={heroPutWall} phaseColor={phaseColor} deepReady={deepReady} />
 
       {gammaEngine && (
@@ -720,16 +724,22 @@ function FlowSession({ symbol, onSymbolChange }: { symbol: GexSymbol; onSymbolCh
   }, [core, full]);
   const deepReady = !!full;
   const hardError = error !== null && !data;
+  const fieldTone = data?.gammaEngine ? PHASE_COLOR[data.gammaEngine.phase.phase] : undefined;
 
   return (
     <>
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* The namesake, woven through the page: a viewport-sized 4D wireframe
+          tumbling behind every panel, its binding edges tinted by the live
+          gamma regime. Content sits above it on z-10. */}
+      <TesseractField tone={fieldTone} />
+
+      <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
         <SymbolToggle symbol={symbol} onChange={onSymbolChange} />
         {data && <LiveStatus asOf={data.asOf} deepReady={deepReady} degraded={degraded} />}
       </div>
 
       {!data && !hardError && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
+        <div className="relative z-10 grid grid-cols-1 gap-4 lg:grid-cols-[1.6fr_1fr]">
           <div className="hud flex flex-col gap-3 border border-[var(--border)] bg-[var(--panel)] p-5">
             <div className="shimmer h-10 w-44" />
             <div className="shimmer h-3 w-28" />
@@ -739,16 +749,14 @@ function FlowSession({ symbol, onSymbolChange }: { symbol: GexSymbol; onSymbolCh
               ))}
             </div>
           </div>
-          <div className="hud flex flex-col gap-2 border border-[var(--border)] bg-[var(--panel)] p-5">
-            {[0.85, 0.6, 0.75, 0.5, 0.7].map((w, i) => (
-              <div key={i} className="shimmer h-5" style={{ width: `${w * 100}%` }} />
-            ))}
+          <div className="hud flex items-center justify-center border border-[var(--border)] bg-[var(--panel)] p-5">
+            <TesseractMark size={130} />
           </div>
         </div>
       )}
 
       {hardError && (
-        <div className="border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
+        <div className="relative z-10 border border-[var(--border)] bg-[var(--panel)] p-8 text-center font-mono text-[0.8rem]" style={{ color: "var(--down)" }}>
           ERR: {error}
         </div>
       )}

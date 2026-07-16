@@ -17,7 +17,6 @@ import BoardPage from "@/components/BoardPage";
 import TerminalPage from "@/components/TerminalPage";
 import DocumentationPage from "@/components/DocumentationPage";
 import OptionsFlowPage, { type OptionsFlowView } from "@/components/OptionsFlowPage";
-import { TesseractMark } from "@/components/optionsflow/TesseractMark";
 import { MARKET_SYMBOLS } from "@/lib/markets";
 import { getSignTone } from "@/lib/bias";
 import SignOutButton from "@/components/marketing/SignOutButton";
@@ -601,15 +600,11 @@ export default function DashboardShell({
             </>
           ) : activeOptionsFlow ? (
             <>
-              <header className="relative mb-6 flex min-h-[160px] flex-col justify-center">
+              <header className="relative z-10 mb-8">
                 <div className="eyebrow mb-2">Options Flow</div>
                 <h1 className="font-display m-0 text-balance text-[2rem] leading-none sm:text-[2.6rem]">
                   <Scramble text={activeOptionsFlow.label} />
                 </h1>
-                {/* The page's namesake, worn as an emblem beside the title - a live 4D wireframe, not a data panel. */}
-                <div className="pointer-events-none absolute right-0 top-1/2 hidden -translate-y-1/2 md:block">
-                  <TesseractMark size={200} />
-                </div>
               </header>
               <OptionsFlowPage view={activeOptionsFlow.id.split(":")[1] as OptionsFlowView} />
             </>
